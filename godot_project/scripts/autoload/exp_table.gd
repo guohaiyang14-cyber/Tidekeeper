@@ -40,31 +40,40 @@ func _load_table() -> void:
 	print("[ExpTable] 经验表加载完成: %d 级 (max_level=%d)" % [_levels.size(), _max_level])
 
 
-## 查询升到 level 级所需经验（n≥30 取 E(30)）
+## 查询在 level 级升到下一级所需经验 E(level)（§6.2 / §9.2）
+## 玩家从 1 级开始：首次升级需 E(1)=22；满级返回 0
 func get_exp(level: int) -> int:
-	if level <= 1:
+	if level < 1 or level >= _max_level:
 		return 0
-	var clamped: int = mini(level, _max_level)
-	var entry: Dictionary = _levels.get(str(clamped), {})
+	var entry: Dictionary = _levels.get(str(level), {})
 	return int(entry.get("exp_required", 0))
 
 
-## 查询升到 level 级的累计经验
+## 表内累计：sum(E(1)..E(level)) = 从 1 级 0 经验升到 (level+1) 所需总经验
 func get_cumulative_exp(level: int) -> int:
+	if level < 1:
+		return 0
 	var clamped: int = mini(level, _max_level)
 	var entry: Dictionary = _levels.get(str(clamped), {})
 	return int(entry.get("cumulative_exp", 0))
 
 
-## 根据当前累计经验反查等级
-func get_level_from_exp(cumulative_exp: int) -> int:
+## 从 1 级 0 经验升到 target_level 所需总经验
+func get_exp_to_reach(target_level: int) -> int:
+	if target_level <= 1:
+		return 0
+	return get_cumulative_exp(target_level - 1)
+
+
+## 根据累计获得经验反查当前等级（1 级起，满级封顶）
+func get_level_from_exp(total_exp: int) -> int:
 	var level: int = 1
-	for i in range(1, _max_level + 1):
-		if get_cumulative_exp(i) <= cumulative_exp:
-			level = i
+	for i in range(1, _max_level):
+		if get_cumulative_exp(i) <= total_exp:
+			level = i + 1
 		else:
 			break
-	return level
+	return mini(level, _max_level)
 
 
 ## 最大等级上限

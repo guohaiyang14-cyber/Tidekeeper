@@ -1,0 +1,14 @@
+# Tidekeeper (.cursorrules)
+
+开始任务前按类型阅读 tools/ 下 skill：
+
+- 功能开发 → tools/SKILL.md（tidekeeper-godot-dev）
+- 重构文档 → tools/SKILL_refactor-docs.md（tidekeeper-refactor-docs）
+- 重构代码 → tools/SKILL_refactor-code.md（tidekeeper-refactor-code）
+- 代码审查 → tools/SKILL_code-review.md（tidekeeper-code-review）
+
+同步：powershell -ExecutionPolicy Bypass -File tools/sync_skills.ps1
+入口：AGENTS.md / CLAUDE.md
+规则：.cursor/rules/tidekeeper-godot-dev.mdc
+
+红线：Godot 4.7.1；对象池禁运行时 instantiate；只读 config/；exp_table 禁手改；MVP 无侵蚀/契约/无尽/每日挑战/精炼 III

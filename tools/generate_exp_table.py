@@ -79,18 +79,18 @@ def main() -> None:
     all_pass = True
     for level, expected in checks:
         actual = exp_table[level]['exp_required']
-        status = "✅" if actual == expected else "❌"
+        status = "[OK]" if actual == expected else "[FAIL]"
         if actual != expected:
             all_pass = False
-        print(f"  {status} 第 {level} 级: {actual} (预期 {expected})")
+        print(f"  {status} Lv {level}: {actual} (expected {expected})")
     
     # 导出 JSON
     output = {
         "metadata": {
-            "formula": "E(n) = floor(22 × 1.11^(n-1) + 3×(n-1))",
+            "formula": "E(n) = floor(22 * 1.11^(n-1) + 3*(n-1))",
             "max_level": 30,
             "generated_by": "generate_exp_table.py",
-            "note": "禁止手动修改此文件，如需调整请修改脚本后重新生成"
+            "note": "Do not edit by hand; regenerate via this script"
         },
         "levels": exp_table
     }
@@ -105,14 +105,14 @@ def main() -> None:
         json.dump(output, f, ensure_ascii=False, indent=2)
     
     print()
-    print(f"已导出到: {output_path}")
+    print(f"Exported: {output_path}")
     
     if all_pass:
         print()
-        print("✅ 所有校验通过！")
+        print("[OK] all checks passed")
     else:
         print()
-        print("⚠️  部分校验未通过，请检查公式参数！")
+        print("[WARN] some checks failed — verify formula params")
 
 
 if __name__ == "__main__":

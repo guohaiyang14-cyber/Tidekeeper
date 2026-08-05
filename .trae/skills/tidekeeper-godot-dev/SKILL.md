@@ -11,11 +11,23 @@ description: "Godot 4 + GDScript dev assistant for Tidekeeper roguelite. Invoke 
 
 | IDE | 方式 |
 |-----|------|
-| Trae | 自动加载（`.trae/skills/` 硬链接到本文件） |
-| Cursor / Copilot / Claude | 对话开始时引用："请先阅读 tools/SKILL.md 了解项目约定" |
-| 通用 | 在 `.cursorrules` / `CLAUDE.md` / `AGENTS.md` 中添加：`开始任务前读取 tools/SKILL.md` |
+| Trae | 自动加载（`.trae/skills/` 硬链接；`tools/sync_skills.ps1`） |
+| Cursor | `.cursor/rules/tidekeeper-godot-dev.mdc` + `.cursor/skills/<name>/` + `.cursorrules` |
+| Claude | 根目录 `CLAUDE.md` |
+| 通用 agent | 根目录 `AGENTS.md` |
+| 手动 | 「请先阅读 tools/SKILL.md」 |
 
-> 本文件是项目唯一专用 skill。Trae 内置 skill（code-review / debugger / brainstorming / git-commit / image-generate）由 Trae 自动调度，其他 IDE 参考各自工具文档。
+### 项目 Skill 一览（正文均在 `tools/`）
+
+| Skill | 源文件 | 用途 |
+|-------|--------|------|
+| `tidekeeper-godot-dev` | `tools/SKILL.md` | **主开发约定**（写功能必读） |
+| `tidekeeper-refactor-docs` | `tools/SKILL_refactor-docs.md` | 重构 / 对齐文档 |
+| `tidekeeper-refactor-code` | `tools/SKILL_refactor-code.md` | 重构代码（行为守恒） |
+| `tidekeeper-code-review` | `tools/SKILL_code-review.md` | 代码审查（默认只报告） |
+
+> 约定变更只改 `tools/SKILL*.md`，然后运行 `tools/sync_skills.ps1` 同步 Trae + Cursor。
+> Trae 内置 skill（code-review / debugger 等）由 Trae 自动调度。
 
 ## 一、项目基线
 
@@ -95,7 +107,7 @@ func take_damage(amount):
 ```gdscript
 # ✅ 用 @onready + $ 语法
 @onready var sprite: Sprite2D = $Sprite2D
-@onvar var health_bar: ProgressBar = $UI/HealthBar
+@onready var health_bar: ProgressBar = $UI/HealthBar
 
 # ❌ 禁止 get_node() 字符串拼接
 get_node("Sprite2D")

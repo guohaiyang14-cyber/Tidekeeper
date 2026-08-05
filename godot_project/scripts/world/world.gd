@@ -10,6 +10,11 @@ class_name World
 # 子节点引用
 @onready var player: Node2D = $Player
 @onready var day_night: DayNightStateMachine = $DayNightStateMachine
+@onready var enemy_pool: ObjectPool = $EnemyPool
+@onready var projectile_pool: ObjectPool = $ProjectilePool
+@onready var particle_pool: ObjectPool = $ParticlePool
+@onready var pickup_pool: ObjectPool = $PickupPool
+@onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 
@@ -18,6 +23,11 @@ func _ready() -> void:
 	print("[World] 初始化中...")
 	# 验证配置加载
 	_verify_config()
+	# 开局：重置局内状态后再进昼夜循环
+	var character_id: String = "watcher"
+	if player is Player:
+		character_id = (player as Player).character_id
+	GameState.start_new_run(character_id)
 	# 启动昼夜状态机
 	day_night.start_run()
 	# 连接信号
@@ -25,7 +35,14 @@ func _ready() -> void:
 	day_night.night_tick.connect(_on_night_tick)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_win.connect(_on_game_win)
-	print("[World] 就绪 — 第 %d 夜开始" % day_night.get_current_night())
+	print("[World] 就绪 — 第 %d 夜开始 (pools=%d/%d/%d/%d hash_cell=%.0f)" % [
+		day_night.get_current_night(),
+		enemy_pool.pool_size if enemy_pool else 0,
+		projectile_pool.pool_size if projectile_pool else 0,
+		particle_pool.pool_size if particle_pool else 0,
+		pickup_pool.pool_size if pickup_pool else 0,
+		spatial_hash_holder.get_hash().get_cell_size() if spatial_hash_holder else 0.0,
+	])
 
 
 func _process(_delta: float) -> void:
@@ -49,7 +66,7 @@ func _verify_config() -> void:
 	assert(not ConfigLoader.bosses.is_empty(), "[World] bosses.json 未加载")
 	assert(not ConfigLoader.events.is_empty(), "[World] events.json 未加载")
 	assert(ExpTable.get_max_level() == 30, "[World] 经验表未加载或 max_level != 30")
-	print("[World] 配置自检通过 ✓")
+	print("[World] 配置自检通过 [OK]")
 
 
 # ============================================================================

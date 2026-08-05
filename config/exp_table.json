@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "formula": "E(n) = floor(22 × 1.11^(n-1) + 3×(n-1))",
+    "formula": "E(n) = floor(22 * 1.11^(n-1) + 3*(n-1))",
     "max_level": 30,
     "generated_by": "generate_exp_table.py",
-    "note": "禁止手动修改此文件，如需调整请修改脚本后重新生成"
+    "note": "Do not edit by hand; regenerate via this script"
   },
   "levels": {
     "1": {

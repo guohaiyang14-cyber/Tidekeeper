@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-  Sync tools/SKILL*.md to .trae/skills/<name>/SKILL.md (hardlinks)
+  Sync tools/SKILL*.md to Trae + Cursor skill directories (hardlinks)
 
 .DESCRIPTION
   Scans tools/ for SKILL*.md files, reads frontmatter name field,
-  creates hardlinks in .trae/skills/<name>/.
+  creates hardlinks in:
+    - .trae/skills/<name>/SKILL.md
+    - .cursor/skills/<name>/SKILL.md
   To add a new skill: create tools/SKILL_<name>.md, run this script.
 
 .EXAMPLE
@@ -14,16 +16,14 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $toolsDir = Join-Path $repoRoot "tools"
-$skillsDir = Join-Path $repoRoot ".trae\skills"
+$targets = @(
+    (Join-Path $repoRoot ".trae\skills"),
+    (Join-Path $repoRoot ".cursor\skills")
+)
 
 Write-Output "=== Skill Sync ==="
 Write-Output "Source:  $toolsDir"
-Write-Output "Target:  $skillsDir"
 Write-Output ""
-
-if (-not (Test-Path $skillsDir)) {
-    New-Item -ItemType Directory -Force -Path $skillsDir | Out-Null
-}
 
 # 1. Scan SKILL*.md files
 $skillFiles = Get-ChildItem -Path $toolsDir -Filter "SKILL*.md" -File
@@ -32,65 +32,85 @@ if ($skillFiles.Count -eq 0) {
     exit 0
 }
 
-# 2. Parse frontmatter name field
+# 2. Parse frontmatter name field (quoted or bare)
 $skillMap = @{}
 foreach ($file in $skillFiles) {
     $content = Get-Content $file.FullName -Raw
     if ($content -match 'name:\s*"([^"]+)"') {
         $skillName = $matches[1]
-        $skillMap[$skillName] = $file.FullName
-        Write-Output "Found: $skillName -> $($file.Name)"
+    } elseif ($content -match 'name:\s*([a-z0-9-]+)') {
+        $skillName = $matches[1]
     } else {
         Write-Output "SKIP:  $($file.Name) (no frontmatter name)"
+        continue
     }
+    $skillMap[$skillName] = $file.FullName
+    Write-Output "Found: $skillName -> $($file.Name)"
 }
 Write-Output ""
 
-# 3. Clean stale hardlinks (skill removed from tools/)
-$existingDirs = Get-ChildItem -Path $skillsDir -Directory -ErrorAction SilentlyContinue
-foreach ($dir in $existingDirs) {
-    $skillName = $dir.Name
-    if (-not $skillMap.ContainsKey($skillName)) {
-        $staleFile = Join-Path $dir.FullName "SKILL.md"
-        if (Test-Path $staleFile) { Remove-Item $staleFile -Force }
-        Remove-Item $dir.FullName -Force
-        Write-Output "Cleaned stale: $skillName"
-    }
-}
+function Sync-SkillDir {
+    param(
+        [string]$SkillsDir,
+        [hashtable]$Map
+    )
 
-# 4. Create/update hardlinks
-$synced = 0
-$skipped = 0
-foreach ($skillName in $skillMap.Keys) {
-    $sourceFile = $skillMap[$skillName]
-    $targetDir = Join-Path $skillsDir $skillName
-    $targetFile = Join-Path $targetDir "SKILL.md"
-
-    if (-not (Test-Path $targetDir)) {
-        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+    if (-not (Test-Path $SkillsDir)) {
+        New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
     }
 
-    $needUpdate = $true
-    if (Test-Path $targetFile) {
-        $sourceHash = (Get-FileHash $sourceFile).Hash
-        $targetHash = (Get-FileHash $targetFile).Hash
-        if ($sourceHash -eq $targetHash) {
-            $needUpdate = $false
-            $skipped++
-            Write-Output "  OK   $skillName (already synced)"
+    Write-Output "Target: $SkillsDir"
+
+    # Clean stale
+    $existingDirs = Get-ChildItem -Path $SkillsDir -Directory -ErrorAction SilentlyContinue
+    foreach ($dir in $existingDirs) {
+        $skillName = $dir.Name
+        if (-not $Map.ContainsKey($skillName)) {
+            $staleFile = Join-Path $dir.FullName "SKILL.md"
+            if (Test-Path $staleFile) { Remove-Item $staleFile -Force }
+            Remove-Item $dir.FullName -Force -Recurse
+            Write-Output "  Cleaned stale: $skillName"
         }
     }
 
-    if ($needUpdate) {
-        if (Test-Path $targetFile) { Remove-Item $targetFile -Force }
-        New-Item -ItemType HardLink -Path $targetFile -Target $sourceFile | Out-Null
-        $synced++
-        Write-Output "  SYNC $skillName"
+    $synced = 0
+    $skipped = 0
+    foreach ($skillName in $Map.Keys) {
+        $sourceFile = $Map[$skillName]
+        $targetDir = Join-Path $SkillsDir $skillName
+        $targetFile = Join-Path $targetDir "SKILL.md"
+
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+        }
+
+        $needUpdate = $true
+        if (Test-Path $targetFile) {
+            $sourceHash = (Get-FileHash $sourceFile).Hash
+            $targetHash = (Get-FileHash $targetFile).Hash
+            if ($sourceHash -eq $targetHash) {
+                $needUpdate = $false
+                $skipped++
+                Write-Output "  OK   $skillName"
+            }
+        }
+
+        if ($needUpdate) {
+            if (Test-Path $targetFile) { Remove-Item $targetFile -Force }
+            New-Item -ItemType HardLink -Path $targetFile -Target $sourceFile | Out-Null
+            $synced++
+            Write-Output "  SYNC $skillName"
+        }
     }
+
+    Write-Output "  -> synced=$synced skipped=$skipped"
+    Write-Output ""
 }
 
-Write-Output ""
+foreach ($dir in $targets) {
+    Sync-SkillDir -SkillsDir $dir -Map $skillMap
+}
+
 Write-Output "=== Report ==="
-Write-Output "Synced:  $synced"
-Write-Output "Skipped: $skipped"
-Write-Output "Total:   $($skillMap.Count) skill(s)"
+Write-Output "Total skills: $($skillMap.Count)"
+Write-Output ($skillMap.Keys | Sort-Object | ForEach-Object { "  - $_" })

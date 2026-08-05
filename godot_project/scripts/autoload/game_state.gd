@@ -31,8 +31,8 @@ var stardust: int = 0
 var refine_essence: int = 0
 
 # 武器槽 / 被动槽（SKILL.md §5.2：上限 4 武器 / 6 被动）
-var weapon_slots: Array = []  # 最大 4 个 weapon_id
-var passive_slots: Array = []  # 最大 6 个 passive_id
+var weapon_slots: Array[String] = []
+var passive_slots: Array[String] = []
 const MAX_WEAPON_SLOTS: int = 4
 const MAX_PASSIVE_SLOTS: int = 6
 
@@ -103,11 +103,13 @@ func end_night() -> void:
 	print("[GameState] 第 %d 夜结束 → 抉择之昼" % current_night)
 
 
-## 增加经验（自动处理升级）
+## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
 func add_exp(amount: int) -> void:
 	player_exp += amount
 	while player_level < ExpTable.get_max_level():
-		var need: int = ExpTable.get_exp(player_level + 1)
+		var need: int = ExpTable.get_exp(player_level)
+		if need <= 0:
+			break
 		if player_exp >= need:
 			player_exp -= need
 			player_level += 1

@@ -51,21 +51,21 @@ def analyze_risk() -> None:
     
     if percent_paths:
         for id, data in percent_paths:
-            print(f"  ⚠️  #{id} {data['name']}")
-            print(f"     - 类型：{data['type']}")
+            print(f"  [WARN] #{id} {data['name']}")
+            print(f"     - type: {data['type']}")
             percent_val = data.get("percent_damage_per_sec", 0)
-            print(f"     - 百分比伤害：{percent_val*100:.0f}%/秒")
-            print(f"     - 问题：百分比伤害对 Boss 可能过于有效")
+            print(f"     - percent damage: {percent_val*100:.0f}%/s")
+            print(f"     - issue: percent damage may be too strong vs Boss")
             if percent_val >= 0.02:
-                print(f"     - 文档状态：❌ 仍为 {percent_val*100:.0f}%/秒，建议降低")
+                print(f"     - doc status: [FAIL] still {percent_val*100:.0f}%/s, lower it")
             else:
-                print(f"     - 文档状态：✅ 已降至 {percent_val*100:.0f}%/秒，合理")
+                print(f"     - doc status: [OK] reduced to {percent_val*100:.0f}%/s")
         print()
-        print("  【建议】")
-        print("  - 确认文档中的数值是否已更新为 1%/秒")
-        print("  - 如仍为 2%/秒，需立即修正文档")
+        print("  [Advice]")
+        print("  - confirm doc value is 1%/s")
+        print("  - if still 2%/s, fix the design doc immediately")
     else:
-        print("  ✅ 无路径包含百分比伤害")
+        print("  [OK] no percent-damage paths")
     print()
     
     # 检查项 2：真实伤害
@@ -75,31 +75,31 @@ def analyze_risk() -> None:
     
     if true_paths:
         for id, data in true_paths:
-            print(f"  ⚠️  #{id} {data['name']}")
-            print(f"     - 类型：{data['type']}")
+            print(f"  [WARN] #{id} {data['name']}")
+            print(f"     - type: {data['type']}")
             # 查找真实伤害所在的精炼等级
             for refine_level in ["refine_I", "refine_II", "refine_III"]:
                 if refine_level in data and "真实伤害" in data[refine_level].get("desc", ""):
                     level_display = refine_level.replace("refine_", "精炼 ")
-                    print(f"     - 真实伤害位置：{level_display}")
-                    print(f"     - {level_display} 描述：{data[refine_level]['desc']}")
-                    print(f"     - 风险等级：{data[refine_level].get('risk', '未设置')}")
+                    print(f"     - true damage at: {level_display}")
+                    print(f"     - {level_display} desc: {data[refine_level]['desc']}")
+                    print(f"     - risk: {data[refine_level].get('risk', 'unset')}")
                     if "notes" in data[refine_level]:
-                        print(f"     - 备注：{data[refine_level]['notes']}")
+                        print(f"     - notes: {data[refine_level]['notes']}")
                     break
-            print(f"     - 问题：真实伤害忽略 Boss 减伤/护甲，可能过于有效")
-            print(f"     - 建议：对 Boss 真实伤害上限设为 30%")
+            print(f"     - issue: true damage ignores Boss armor")
+            print(f"     - advice: cap Boss true damage at 30%")
     else:
-        print("  ✅ 无路径包含真实伤害")
+        print("  [OK] no true-damage paths")
     print()
     
     # 检查项 3：AOE 缩放
     print("【3. AOE 缩放检查】")
     print()
     aoe_paths = [(k, v) for k, v in REFINE_PATHS.items() if v.get("has_aoe_scaling", False)]
-    print(f"  含 AOE 缩放的路径数：{len(aoe_paths)}")
-    print("  ✅ AOE 缩放路径需要在多目标场景下计算 DPS，但对 Boss（单目标）无额外优势")
-    print("  ✅ 这是正常设计，无需特殊处理")
+    print(f"  AOE-scaling path count: {len(aoe_paths)}")
+    print("  [OK] AOE scaling needs multi-target DPS; no extra Boss edge")
+    print("  [OK] expected design, no special action")
     print()
     
     # 检查项 4：持续实体生成
@@ -108,9 +108,9 @@ def analyze_risk() -> None:
     for id, data in REFINE_PATHS.items():
         desc = data["refine_III"]["desc"]
         if "生成" in desc or "召唤" in desc or "雷云" in desc:
-            print(f"  ⚠️  #{id} {data['name']}")
-            print(f"     - 描述：{desc}")
-            print(f"     - 实体数量估算：需在开发时验证是否超过 350~450 上限")
+            print(f"  [WARN] #{id} {data['name']}")
+            print(f"     - desc: {desc}")
+            print(f"     - entity count: verify vs 350~450 cap during implementation")
     print()
     
     # 检查项 5：DPS 倍率
@@ -119,8 +119,8 @@ def analyze_risk() -> None:
     
     for id, data in REFINE_PATHS.items():
         dps_mult = calculate_path_dps_mult(data)
-        status = "✅" if dps_mult <= 3.5 else "❌"
-        print(f"  {status} #{id} {data['name'][:20]}... DPS倍率 {dps_mult:.2f}×")
+        status = "[OK]" if dps_mult <= 3.5 else "[FAIL]"
+        print(f"  {status} #{id} {data['name'][:20]}... DPS mult {dps_mult:.2f}x")
     print()
     
     print("=" * 80)
@@ -135,29 +135,29 @@ def analyze_risk() -> None:
         for id, data in percent_paths:
             percent_val = data.get("percent_damage_per_sec", 0)
             if percent_val >= 0.02:
-                risks.append(("高", f"#{id} {data['name']}：百分比伤害仍为 {percent_val*100:.0f}%/秒，建议降低"))
+                risks.append(("高", f"#{id} {data['name']}: percent still {percent_val*100:.0f}%/s"))
             else:
-                risks.append(("低", f"#{id} {data['name']}：百分比伤害已降至 {percent_val*100:.0f}%/秒，合理"))
+                risks.append(("低", f"#{id} {data['name']}: percent reduced to {percent_val*100:.0f}%/s"))
     
     if true_paths:
-        risks.append(("中", "#7 永恒锚轮：真实伤害（精炼 II）需对 Boss 设置上限（文档已补充说明）"))
+        risks.append(("中", "#7 永恒锚轮: true damage (II) needs Boss cap (doc note present)"))
     
     if risks:
         for level, risk in risks:
-            print(f"  【{level}】 {risk}")
+            print(f"  [{level}] {risk}")
     else:
-        print("  ✅ 无显著风险")
+        print("  [OK] no significant risks")
     
     print()
     print("=" * 80)
     print()
     print("【建议行动】")
     print()
-    print("1. ✅ 已完成：文档 B.10 百分比伤害已更新为 1%/秒")
-    print("2. ✅ 已完成：#7 永恒锚轮真实伤害已添加 Boss 上限说明")
-    print("3. 【开发阶段】验证 #4/#6/#8 的实体生成数量是否超过上限")
-    print("4. 【调优阶段】实测 #10 锚压：按 CD×持续覆盖率建模（见 refine_dps_simulation.py）")
-    print("5. Boss 底血以主文档 §9.4（吞噬之星 7000）为准，勿再用 50 万假设值做绝对结论")
+    print("1. [OK] done: doc B.10 percent damage updated to 1%/s")
+    print("2. [OK] done: #7 true damage Boss cap note added")
+    print("3. [DEV] verify entity spawn counts for #4/#6/#8 vs cap")
+    print("4. [TUNE] measure #10 anchor press via CD*duration (see refine_dps_simulation.py)")
+    print("5. Boss HP baseline: GDD §9.4 Devouring Star 7000 — do not use 500k assumptions")
 
 
 # ============================================================
