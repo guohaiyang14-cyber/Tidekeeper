@@ -1,0 +1,159 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §5.3 敌人 + §9.4 MVP 底数表 + §8.2 数值公式",
+    "mvp_scope": "9 种敌人（基础数值，运行时按 §8.2 公式缩放）",
+    "ai_update_groups": {
+      "1": "每帧（远程：潮汐召唤师）",
+      "2": "每 2 帧（近战：小水鬼/铁壳蟹/深潜者/渊潮长枪兵/暗礁巨人）",
+      "4": "每 4 帧（小怪/召唤物：水母浮游/爆炸贝/鸦群）"
+    },
+    "difficulty_formula": {
+      "health": "base_health × region_coeff × (1 + 0.10 × night) × (1 + 0.15 × floor(night/5))",
+      "damage": "base_damage × (1 + 0.04 × night)",
+      "count": "base_count × (1 + 0.06 × night) × (1 + 0.20 × floor(night/5))",
+      "region_coeff_mvp": 1.0,
+      "note": "MVP 仅靠本公式 + 天灾夜尖峰调难度；调参改表不改公式"
+    },
+    "density_budget": "同屏 350~450（PC 60fps）；前 5 夜峰值 60，第 10 夜 200，第 15 夜 320，第 20 夜 450 + Boss",
+    "note": "运行时只读；行为类型对应 enemy_*_behavior.gd 实现"
+  },
+  "enemies": {
+    "small_goblin": {
+      "id": "small_goblin",
+      "name": "小水鬼",
+      "behavior": "直线冲撞，基础数量单位",
+      "behavior_type": "charge_linear",
+      "danger": 1,
+      "danger_label": "★",
+      "spawn_night": 1,
+      "base_health": 18,
+      "base_contact_damage": 8,
+      "update_group": 2,
+      "notes": "数量单位"
+    },
+    "iron_crab": {
+      "id": "iron_crab",
+      "name": "铁壳蟹",
+      "behavior": "慢速近战，高血量，破甲",
+      "behavior_type": "slow_melee_armor_break",
+      "danger": 2,
+      "danger_label": "★★",
+      "spawn_night": 2,
+      "base_health": 55,
+      "base_contact_damage": 12,
+      "update_group": 2,
+      "notes": "高血；破甲"
+    },
+    "jellyfish_drifter": {
+      "id": "jellyfish_drifter",
+      "name": "水母浮游",
+      "behavior": "远程弹幕，移动缓慢",
+      "behavior_type": "ranged_barrage",
+      "danger": 2,
+      "danger_label": "★★",
+      "spawn_night": 3,
+      "base_health": 22,
+      "base_contact_damage": 6,
+      "ranged_projectile_damage": 6,
+      "update_group": 4,
+      "notes": "远程；接触伤害 6（弹幕）"
+    },
+    "deep_diver": {
+      "id": "deep_diver",
+      "name": "深潜者",
+      "behavior": "潜地 3 秒后从玩家脚下突袭",
+      "behavior_type": "burrow_ambush",
+      "danger": 3,
+      "danger_label": "★★★",
+      "spawn_night": 4,
+      "base_health": 35,
+      "base_contact_damage": 18,
+      "update_group": 2,
+      "burrow_duration": 3.0,
+      "notes": "突袭"
+    },
+    "bomb_shell": {
+      "id": "bomb_shell",
+      "name": "爆炸贝",
+      "behavior": "自爆，范围伤害，血量低",
+      "behavior_type": "self_destruct",
+      "danger": 2,
+      "danger_label": "★★",
+      "spawn_night": 5,
+      "base_health": 16,
+      "base_contact_damage": 25,
+      "self_destruct_damage": 25,
+      "update_group": 4,
+      "notes": "低血；自爆"
+    },
+    "raven_flock": {
+      "id": "raven_flock",
+      "name": "鸦群",
+      "behavior": "飞行，无视地形，速度快",
+      "behavior_type": "flying_swarm",
+      "danger": 3,
+      "danger_label": "★★★",
+      "spawn_night": 7,
+      "base_health": 20,
+      "base_contact_damage": 10,
+      "update_group": 4,
+      "flags": ["flying", "ignore_terrain"],
+      "notes": "飞行"
+    },
+    "tide_summoner": {
+      "id": "tide_summoner",
+      "name": "潮汐召唤师",
+      "behavior": "不主动近战，召唤小水鬼",
+      "behavior_type": "summoner",
+      "danger": 4,
+      "danger_label": "★★★★",
+      "spawn_night": 8,
+      "base_health": 70,
+      "base_contact_damage": 5,
+      "update_group": 1,
+      "summons": "small_goblin",
+      "notes": "召唤为主"
+    },
+    "abyssal_pikeman": {
+      "id": "abyssal_pikeman",
+      "name": "渊潮长枪兵",
+      "behavior": "冲锋型，冲锋时免伤 50%",
+      "behavior_type": "charge_damage_reduction",
+      "danger": 4,
+      "danger_label": "★★★★",
+      "spawn_night": 11,
+      "base_health": 90,
+      "base_contact_damage": 20,
+      "update_group": 2,
+      "charge_damage_reduction": 0.5,
+      "notes": "冲锋；冲锋时免伤 50%"
+    },
+    "reef_giant": {
+      "id": "reef_giant",
+      "name": "暗礁巨人",
+      "behavior": "体型大，受伤分摊给周围小怪",
+      "behavior_type": "damage_share",
+      "danger": 5,
+      "danger_label": "★★★★★",
+      "spawn_night": 14,
+      "base_health": 220,
+      "base_contact_damage": 16,
+      "update_group": 2,
+      "damage_share": true,
+      "notes": "分摊"
+    }
+  },
+  "affixes": {
+    "_meta": {
+      "doc_source": "§5.4 精英与词缀",
+      "rule": "精英 = 基础敌人 × 词缀（2~3 个），提供 3 倍潮币"
+    },
+    "split": { "name": "分裂", "effect": "死亡时分裂为 2 只低血同种", "counter": "范围伤" },
+    "teleport": { "name": "传送", "effect": "每 5 秒短距传送", "counter": "预判落点" },
+    "thorns": { "name": "荆棘", "effect": "近战反伤 30%", "counter": "远程" },
+    "swift": { "name": "迅捷", "effect": "移速 +40%", "counter": "减速/定身" },
+    "regen": { "name": "再生", "effect": "脱战 5 秒回复 30% 血", "counter": "不脱战" },
+    "chain": { "name": "锁链", "effect": "被攻击时绑定玩家 0.5 秒", "counter": "保持距离" }
+  }
+}

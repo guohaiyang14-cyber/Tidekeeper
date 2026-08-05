@@ -1,0 +1,160 @@
+{
+  "metadata": {
+    "formula": "E(n) = floor(22 × 1.11^(n-1) + 3×(n-1))",
+    "max_level": 30,
+    "generated_by": "generate_exp_table.py",
+    "note": "禁止手动修改此文件，如需调整请修改脚本后重新生成"
+  },
+  "levels": {
+    "1": {
+      "level": 1,
+      "exp_required": 22,
+      "cumulative_exp": 22
+    },
+    "2": {
+      "level": 2,
+      "exp_required": 27,
+      "cumulative_exp": 49
+    },
+    "3": {
+      "level": 3,
+      "exp_required": 33,
+      "cumulative_exp": 82
+    },
+    "4": {
+      "level": 4,
+      "exp_required": 39,
+      "cumulative_exp": 121
+    },
+    "5": {
+      "level": 5,
+      "exp_required": 45,
+      "cumulative_exp": 166
+    },
+    "6": {
+      "level": 6,
+      "exp_required": 52,
+      "cumulative_exp": 218
+    },
+    "7": {
+      "level": 7,
+      "exp_required": 59,
+      "cumulative_exp": 277
+    },
+    "8": {
+      "level": 8,
+      "exp_required": 66,
+      "cumulative_exp": 343
+    },
+    "9": {
+      "level": 9,
+      "exp_required": 74,
+      "cumulative_exp": 417
+    },
+    "10": {
+      "level": 10,
+      "exp_required": 83,
+      "cumulative_exp": 500
+    },
+    "11": {
+      "level": 11,
+      "exp_required": 92,
+      "cumulative_exp": 592
+    },
+    "12": {
+      "level": 12,
+      "exp_required": 102,
+      "cumulative_exp": 694
+    },
+    "13": {
+      "level": 13,
+      "exp_required": 112,
+      "cumulative_exp": 806
+    },
+    "14": {
+      "level": 14,
+      "exp_required": 124,
+      "cumulative_exp": 930
+    },
+    "15": {
+      "level": 15,
+      "exp_required": 136,
+      "cumulative_exp": 1066
+    },
+    "16": {
+      "level": 16,
+      "exp_required": 150,
+      "cumulative_exp": 1216
+    },
+    "17": {
+      "level": 17,
+      "exp_required": 164,
+      "cumulative_exp": 1380
+    },
+    "18": {
+      "level": 18,
+      "exp_required": 180,
+      "cumulative_exp": 1560
+    },
+    "19": {
+      "level": 19,
+      "exp_required": 197,
+      "cumulative_exp": 1757
+    },
+    "20": {
+      "level": 20,
+      "exp_required": 216,
+      "cumulative_exp": 1973
+    },
+    "21": {
+      "level": 21,
+      "exp_required": 237,
+      "cumulative_exp": 2210
+    },
+    "22": {
+      "level": 22,
+      "exp_required": 259,
+      "cumulative_exp": 2469
+    },
+    "23": {
+      "level": 23,
+      "exp_required": 284,
+      "cumulative_exp": 2753
+    },
+    "24": {
+      "level": 24,
+      "exp_required": 311,
+      "cumulative_exp": 3064
+    },
+    "25": {
+      "level": 25,
+      "exp_required": 341,
+      "cumulative_exp": 3405
+    },
+    "26": {
+      "level": 26,
+      "exp_required": 373,
+      "cumulative_exp": 3778
+    },
+    "27": {
+      "level": 27,
+      "exp_required": 409,
+      "cumulative_exp": 4187
+    },
+    "28": {
+      "level": 28,
+      "exp_required": 449,
+      "cumulative_exp": 4636
+    },
+    "29": {
+      "level": 29,
+      "exp_required": 492,
+      "cumulative_exp": 5128
+    },
+    "30": {
+      "level": 30,
+      "exp_required": 540,
+      "cumulative_exp": 5668
+    }
+  }
+}

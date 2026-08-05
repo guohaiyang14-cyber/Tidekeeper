@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §5.5 Boss + §9.4 MVP 底数表 + §8.3 天灾夜规则",
+    "mvp_scope": "3 个 Boss，仅出现在天灾夜（第 10/15/20 夜）",
+    "rule": "第 5 夜不是 Boss 夜（巨钳王仅为精英夜命名精英）",
+    "difficulty_formula": "Boss 不走 §8.2 公式，base_health 直接为表中数值",
+    "evolution_drop": "Boss 必掉 1 个进化道具（第 15/20 夜额外见 §6.5）；不计入当夜精英上限",
+    "stardust_drop": {
+      "10": 1,
+      "15": 2,
+      "20": 3
+    },
+    "note": "运行时只读；阶段技另由 boss_*_controller.gd 编排"
+  },
+  "bosses": {
+    "jellyfish_queen": {
+      "id": "jellyfish_queen",
+      "name": "深渊水母后",
+      "night": 10,
+      "base_health": 2400,
+      "contact_damage": null,
+      "exam_point": "弹幕环 + 分裂小水母，考验转火",
+      "mechanics": [
+        { "key": "barrage_ring", "desc": "环形弹幕" },
+        { "key": "split_jellyfish", "desc": "分裂小水母" }
+      ],
+      "additional_rule": "全场敌人 +1 词缀",
+      "phase_design_hint": "单阶段（MVP）；阶段技按周期触发"
+    },
+    "tide_archon": {
+      "id": "tide_archon",
+      "name": "潮汐执政官",
+      "night": 15,
+      "base_health": 4200,
+      "contact_damage": null,
+      "exam_point": "传送 + 全屏潮汐波（躲进灯塔光晕）",
+      "mechanics": [
+        { "key": "teleport", "desc": "短距传送" },
+        { "key": "tidal_wave", "desc": "全屏潮汐波；玩家需躲入灯塔光晕减伤" }
+      ],
+      "additional_rule": "强制「潮汐夹击」（两侧夹击；不含宝箱翻倍）；封测可叠侵蚀",
+      "naming_note": "第 15 夜天灾规则称「潮汐夹击」，效果仅两侧夹击；该夜事件池排除「潮汐反转」事件卡，避免叠乘",
+      "phase_design_hint": "单阶段（MVP）；阶段技按周期触发"
+    },
+    "devouring_star": {
+      "id": "devouring_star",
+      "name": "吞噬之星",
+      "night": 20,
+      "base_health": 7000,
+      "contact_damage": null,
+      "exam_point": "多阶段（护盾 → 狂暴 → 分身）",
+      "mechanics": [
+        { "key": "shield_phase", "desc": "阶段一：护盾" },
+        { "key": "enrage_phase", "desc": "阶段二：狂暴" },
+        { "key": "clone_phase", "desc": "阶段三：分身" }
+      ],
+      "additional_rule": "终局高压",
+      "phase_design_hint": "三阶段分池；阶段切换由血量阈值触发（建议 70%/35%）"
+    }
+  }
+}

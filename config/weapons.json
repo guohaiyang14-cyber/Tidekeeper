@@ -1,0 +1,166 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §9.4 MVP 武器 + 附录 A.1 进化路径",
+    "max_weapon_level": 7,
+    "slot_limit": 4,
+    "mvp_scope": "8 种武器 / 8 条进化路径（路径 #9、#10 为内容扩充阶段，不在本表）",
+    "note": "运行时只读；调参改表不改公式。武器等级上限见 §6.3，槽位上限见 §6.1"
+  },
+  "weapons": {
+    "harpoon": {
+      "id": "harpoon",
+      "name": "鱼叉枪",
+      "attack_type": "定向弹幕",
+      "behavior_type": "directional_pierce",
+      "base_damage": 12,
+      "attack_rate": 1.2,
+      "max_level": 7,
+      "level_1_trait": "5 弹道、穿透 2",
+      "notes": "定向；MVP 起步值",
+      "evolution": {
+        "name": "深渊鱼叉",
+        "required_passive": "潮汐罗盘",
+        "passive_series": "潮汐",
+        "passive_effect_hint": "攻速",
+        "trait": "自动追踪、命中弹射",
+        "refine_path_id": 1
+      }
+    },
+    "holy_fire": {
+      "id": "holy_fire",
+      "name": "灯塔圣火",
+      "attack_type": "范围型",
+      "behavior_type": "area_burn",
+      "base_damage": 8,
+      "attack_rate": 0.8,
+      "max_level": 7,
+      "level_1_trait": "范围 +80%",
+      "notes": "范围灼烧",
+      "evolution": {
+        "name": "永昼圣火",
+        "required_passive": "燃灯油",
+        "passive_series": "灯塔",
+        "passive_effect_hint": "燃烧",
+        "trait": "持续灼烧地面 5 秒",
+        "refine_path_id": 2,
+        "naming_note": "进化钥被动「燃灯油」≠ 局外升级树「灯油」，实现/本地化须分 key"
+      }
+    },
+    "anchor_hammer": {
+      "id": "anchor_hammer",
+      "name": "锚锤",
+      "attack_type": "爆发近战",
+      "behavior_type": "melee_burst",
+      "base_damage": 28,
+      "attack_rate": 0.55,
+      "max_level": 7,
+      "level_1_trait": "命中范围 +60%",
+      "notes": "近战爆发",
+      "evolution": {
+        "name": "风暴之锚",
+        "required_passive": "铁链",
+        "passive_series": "灯塔",
+        "passive_effect_hint": "范围",
+        "trait": "链式闪电（2 次跳转；相对上一跳 ×0.6，递减 40%/跳）",
+        "refine_path_id": 3
+      }
+    },
+    "spore": {
+      "id": "spore",
+      "name": "水母孢子",
+      "attack_type": "召唤型",
+      "behavior_type": "summon_jellyfish",
+      "base_damage": 6,
+      "attack_rate": null,
+      "max_level": 7,
+      "level_1_trait": "3 个召唤物",
+      "notes": "召唤物 DPS 口径；同时 1 只",
+      "evolution": {
+        "name": "水母巢",
+        "required_passive": "腐殖质",
+        "passive_series": "灯塔",
+        "passive_effect_hint": "持续伤",
+        "trait": "召唤物死亡时爆炸",
+        "refine_path_id": 4
+      }
+    },
+    "storm_cloud": {
+      "id": "storm_cloud",
+      "name": "雷暴云",
+      "attack_type": "范围型",
+      "behavior_type": "area_lightning",
+      "base_damage": 22,
+      "attack_rate": 0.33,
+      "max_level": 7,
+      "level_1_trait": "3 秒一道落雷",
+      "notes": "约 3 秒一击，满级改落雷节奏",
+      "evolution": {
+        "name": "湮灭雷暴",
+        "required_passive": "风暴瓶",
+        "passive_series": "潮汐",
+        "passive_effect_hint": "减 CD",
+        "trait": "落雷连锁 2 次（相对上一击 ×0.7，递减 30%/次）",
+        "refine_path_id": 5
+      }
+    },
+    "jellyfish_cannon": {
+      "id": "jellyfish_cannon",
+      "name": "水母炮",
+      "attack_type": "定向弹幕",
+      "behavior_type": "ring_barrage",
+      "base_damage": 9,
+      "attack_rate": 1.0,
+      "max_level": 7,
+      "level_1_trait": "4 道环形弹幕、命中减速 20%",
+      "notes": "环形弹幕",
+      "evolution": {
+        "name": "深渊水母王",
+        "required_passive": "深海之眼",
+        "passive_series": "潮汐",
+        "passive_effect_hint": "暴击率",
+        "trait": "6 道螺旋弹幕 + 中等漩涡吸附 + 每轮至多 1 次 50% 暴击定身（0.6 秒）",
+        "refine_path_id": 6,
+        "impl_note": "定身「每轮至多 1 次」=1.0s 时间窗，武器维护冷却；弹幕数仅提高触发机会"
+      }
+    },
+    "anchor_chain": {
+      "id": "anchor_chain",
+      "name": "锚链",
+      "attack_type": "环绕型",
+      "behavior_type": "orbit_tick",
+      "base_damage": 7,
+      "attack_rate": 1.5,
+      "max_level": 7,
+      "level_1_trait": "3 圈环绕锚链、中等伤害",
+      "notes": "环绕 tick",
+      "evolution": {
+        "name": "永恒锚轮",
+        "required_passive": "珊瑚屏障",
+        "passive_series": "礁石",
+        "passive_effect_hint": "伤害反弹",
+        "trait": "6 圈递增伤害（+15%/层）+ 近战反弹 30%",
+        "refine_path_id": 7
+      }
+    },
+    "albatross": {
+      "id": "albatross",
+      "name": "信天翁",
+      "attack_type": "召唤型",
+      "behavior_type": "summon_dive",
+      "base_damage": 10,
+      "attack_rate": null,
+      "max_level": 7,
+      "level_1_trait": "2 只信天翁跟随、俯冲",
+      "notes": "召唤俯冲；同时 1 只",
+      "evolution": {
+        "name": "永恒鸥群",
+        "required_passive": "经验囊",
+        "passive_series": "夜风",
+        "passive_effect_hint": "经验获取",
+        "trait": "4 只信天翁 + 1 只鸥王（2.5×伤害）+ 击杀额外经验珠",
+        "refine_path_id": 8
+      }
+    }
+  }
+}

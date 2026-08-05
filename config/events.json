@@ -1,0 +1,93 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §5.6 事件（抉择之昼）+ §5.5 命名约定",
+    "mvp_scope": "7 张事件卡（内容扩充阶段补齐至 12 张）",
+    "trigger_context": "抉择之昼随机 1 张事件卡，可跳过",
+    "naming_note": "「潮汐反转」= 抉择之昼事件卡（夹击 + 宝箱翻倍）；「潮汐夹击」= 第 15 夜天灾规则（仅夹击）。两者实现 key 必须区分",
+    "exclusion_rule": "第 15 夜事件池排除「潮汐反转」(tidal_reversal)，避免叠乘",
+    "note": "运行时只读；effects 中的字段名与 modifier 系统对齐（命令/可序列化修改器，便于存档回放）"
+  },
+  "events": {
+    "storm": {
+      "id": "storm",
+      "name": "暴风雨",
+      "risk_reward": "高风险高回报",
+      "effects": {
+        "enemy_move_speed_mult": 1.30,
+        "night_drop_mult": 1.50
+      },
+      "applies_to": "current_night",
+      "notes": "全场敌人 +30% 移速；本夜掉落 +50%"
+    },
+    "tidal_reversal": {
+      "id": "tidal_reversal",
+      "name": "潮汐反转",
+      "risk_reward": "改变战场形态",
+      "effects": {
+        "spawn_pattern": "two_sided_flank",
+        "chest_drop_mult": 2.0
+      },
+      "applies_to": "current_night",
+      "excluded_nights": [15],
+      "exclusion_reason": "第 15 夜天灾已强制「潮汐夹击」两侧夹击，叠乘宝箱翻倍会破坏平衡",
+      "notes": "敌人从两侧夹击；宝箱翻倍（仅事件版）"
+    },
+    "eclipse": {
+      "id": "eclipse",
+      "name": "月食",
+      "risk_reward": "压迫感 + 加速成长",
+      "effects": {
+        "vision_radius_mult": 0.70,
+        "exp_gain_mult": 2.0
+      },
+      "applies_to": "current_night",
+      "notes": "视野缩小 30%；经验获取 +100%"
+    },
+    "lost_ship": {
+      "id": "lost_ship",
+      "name": "迷途航船",
+      "risk_reward": "强收益有代价",
+      "effects": {
+        "grant_random_epic_weapon": true,
+        "weapon_slot_lock_nights": 3
+      },
+      "applies_to": "next_nights",
+      "notes": "免费 1 件随机史诗武器；一个武器槽锁定 3 夜"
+    },
+    "fish_migration": {
+      "id": "fish_migration",
+      "name": "鱼群回游",
+      "risk_reward": "快速成型",
+      "effects": {
+        "spawn_elite_wave": true,
+        "drop_evolution_item": 1
+      },
+      "applies_to": "instant",
+      "evolution_drop_constraint": "受同夜「玩家持有未使用进化道具 ≤2」软上限约束（§5.4）",
+      "notes": "立即刷一波精英；掉落 1 个进化道具"
+    },
+    "lighthouse_resonance": {
+      "id": "lighthouse_resonance",
+      "name": "灯塔共鸣",
+      "risk_reward": "站位互换",
+      "effects": {
+        "attack_speed_mult": 1.40,
+        "move_speed_mult": 0.80
+      },
+      "applies_to": "current_night",
+      "notes": "本夜攻速 +40%，移速 -20%"
+    },
+    "stardust_rain": {
+      "id": "stardust_rain",
+      "name": "星尘雨",
+      "risk_reward": "局外收益",
+      "effects": {
+        "tidecoin_mult": 1.80,
+        "end_of_night_stardust_bonus": true
+      },
+      "applies_to": "current_night",
+      "notes": "本夜潮币 +80%；结束时额外星尘"
+    }
+  }
+}
