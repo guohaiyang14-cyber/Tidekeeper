@@ -14,6 +14,7 @@ class_name World
 @onready var projectile_pool: ObjectPool = $ProjectilePool
 @onready var particle_pool: ObjectPool = $ParticlePool
 @onready var pickup_pool: ObjectPool = $PickupPool
+@onready var pickup_system: PickupSystem = $PickupSystem
 @onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
@@ -35,26 +36,29 @@ func _ready() -> void:
 	day_night.night_tick.connect(_on_night_tick)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_win.connect(_on_game_win)
-	print("[World] 就绪 — 第 %d 夜开始 (pools=%d/%d/%d/%d hash_cell=%.0f)" % [
+	print("[World] 就绪 — 第 %d 夜开始 (pools=%d/%d/%d/%d gems=%d hash_cell=%.0f)" % [
 		day_night.get_current_night(),
 		enemy_pool.pool_size if enemy_pool else 0,
 		projectile_pool.pool_size if projectile_pool else 0,
 		particle_pool.pool_size if particle_pool else 0,
 		pickup_pool.pool_size if pickup_pool else 0,
+		pickup_system.active_gem_count() if pickup_system else 0,
 		spatial_hash_holder.get_hash().get_cell_size() if spatial_hash_holder else 0.0,
 	])
 
 
 func _process(_delta: float) -> void:
-	# 调试信息（W1 临时，W2+ 移到 HUD）
+	# 调试信息（W2 临时，W11 移到正式 HUD）
 	if debug_label:
-		debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %d/%d" % [
+		debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %d/%d  |  经验: %d  |  珠: %d" % [
 			day_night.get_current_night(),
 			_phase_label(day_night.get_phase()),
 			day_night.get_night_remaining(),
 			GameState.player_level,
 			GameState.player_health,
 			GameState.player_max_health,
+			GameState.player_exp,
+			pickup_system.active_gem_count() if pickup_system else 0,
 		]
 
 
@@ -96,9 +100,23 @@ func _on_game_win() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# 抉择之昼按 skip 键进入下一夜（W1 空循环用）
+	# 抉择之昼按 skip 键进入下一夜
 	if event.is_action_pressed("skip") and day_night.get_phase() == DayNightStateMachine.Phase.DAY:
 		day_night.skip_day_phase()
+	# W2 调试：按 interact(E) 在玩家周围生成经验珠（随机品质）
+	if event.is_action_pressed("interact") and pickup_system and player:
+		# 围绕玩家生成 6 颗，展示不同品质颜色
+		var count: int = 6
+		var base_angle: float = RNG.randf_range(0.0, TAU)
+		for i in count:
+			var angle: float = base_angle + (TAU / count) * i
+			var spawn_dist: float = 50.0 + RNG.randf_range(-5.0, 5.0)
+			var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * spawn_dist
+			var gem: ExpGem = pickup_system.spawn_exp_gem(pos, 5)
+			if gem:
+				print("[World] 生成 %s 经验珠 (%d exp) @ %s" % [
+					ExpGem.QUALITY_NAMES[gem.get_quality()], gem.exp_value, pos,
+				])
 
 
 ## 阶段标签（调试用）

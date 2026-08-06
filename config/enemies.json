@@ -16,6 +16,7 @@
       "note": "MVP 仅靠本公式 + 天灾夜尖峰调难度；调参改表不改公式"
     },
     "density_budget": "同屏 350~450（PC 60fps）；前 5 夜峰值 60，第 10 夜 200，第 15 夜 320，第 20 夜 450 + Boss",
+    "exp_drop_note": "base_exp 为击杀掉落经验珠的基础经验值；W2 调参，对齐 §6.2 升级曲线 E(1)=22",
     "note": "运行时只读；行为类型对应 enemy_*_behavior.gd 实现"
   },
   "enemies": {
@@ -29,6 +30,7 @@
       "spawn_night": 1,
       "base_health": 18,
       "base_contact_damage": 8,
+      "base_exp": 2,
       "update_group": 2,
       "notes": "数量单位"
     },
@@ -42,6 +44,7 @@
       "spawn_night": 2,
       "base_health": 55,
       "base_contact_damage": 12,
+      "base_exp": 5,
       "update_group": 2,
       "notes": "高血；破甲"
     },
@@ -55,6 +58,7 @@
       "spawn_night": 3,
       "base_health": 22,
       "base_contact_damage": 6,
+      "base_exp": 4,
       "ranged_projectile_damage": 6,
       "update_group": 4,
       "notes": "远程；接触伤害 6（弹幕）"
@@ -69,6 +73,7 @@
       "spawn_night": 4,
       "base_health": 35,
       "base_contact_damage": 18,
+      "base_exp": 8,
       "update_group": 2,
       "burrow_duration": 3.0,
       "notes": "突袭"
@@ -83,6 +88,7 @@
       "spawn_night": 5,
       "base_health": 16,
       "base_contact_damage": 25,
+      "base_exp": 5,
       "self_destruct_damage": 25,
       "update_group": 4,
       "notes": "低血；自爆"
@@ -97,6 +103,7 @@
       "spawn_night": 7,
       "base_health": 20,
       "base_contact_damage": 10,
+      "base_exp": 7,
       "update_group": 4,
       "flags": ["flying", "ignore_terrain"],
       "notes": "飞行"
@@ -111,6 +118,7 @@
       "spawn_night": 8,
       "base_health": 70,
       "base_contact_damage": 5,
+      "base_exp": 12,
       "update_group": 1,
       "summons": "small_goblin",
       "notes": "召唤为主"
@@ -125,6 +133,7 @@
       "spawn_night": 11,
       "base_health": 90,
       "base_contact_damage": 20,
+      "base_exp": 15,
       "update_group": 2,
       "charge_damage_reduction": 0.5,
       "notes": "冲锋；冲锋时免伤 50%"
@@ -139,6 +148,7 @@
       "spawn_night": 14,
       "base_health": 220,
       "base_contact_damage": 16,
+      "base_exp": 30,
       "update_group": 2,
       "damage_share": true,
       "notes": "分摊"

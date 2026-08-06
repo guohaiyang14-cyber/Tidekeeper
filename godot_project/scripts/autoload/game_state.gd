@@ -15,6 +15,8 @@ signal night_ended(night: int)
 signal day_started()
 signal game_over(reason: String)
 signal game_win()
+signal exp_gained(amount: int, total_exp: int)
+signal level_up(new_level: int)
 
 # 局内状态
 var current_night: int = 0
@@ -106,6 +108,7 @@ func end_night() -> void:
 ## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
 func add_exp(amount: int) -> void:
 	player_exp += amount
+	exp_gained.emit(amount, player_exp)
 	while player_level < ExpTable.get_max_level():
 		var need: int = ExpTable.get_exp(player_level)
 		if need <= 0:
@@ -113,6 +116,8 @@ func add_exp(amount: int) -> void:
 		if player_exp >= need:
 			player_exp -= need
 			player_level += 1
+			level_up.emit(player_level)
+			print("[GameState] 升级！Lv%d (剩余经验 %d)" % [player_level, player_exp])
 		else:
 			break
 

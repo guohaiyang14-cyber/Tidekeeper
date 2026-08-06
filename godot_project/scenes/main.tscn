@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -9,6 +9,8 @@
 [ext_resource type="Script" path="res://scripts/core/pickup_pool.gd" id="7_pickup_pool"]
 [ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="8_hash"]
 [ext_resource type="PackedScene" path="res://scenes/poolable_stub.tscn" id="9_stub"]
+[ext_resource type="PackedScene" path="res://scenes/exp_gem.tscn" id="10_exp_gem"]
+[ext_resource type="Script" path="res://scripts/pickup/pickup_system.gd" id="11_pickup_sys"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -38,8 +40,11 @@ pool_size = 32
 
 [node name="PickupPool" type="Node" parent="."]
 script = ExtResource("7_pickup_pool")
-scene = ExtResource("9_stub")
-pool_size = 32
+scene = ExtResource("10_exp_gem")
+pool_size = 150
+
+[node name="PickupSystem" type="Node2D" parent="."]
+script = ExtResource("11_pickup_sys")
 
 [node name="SpatialHashHolder" type="Node" parent="."]
 script = ExtResource("8_hash")
