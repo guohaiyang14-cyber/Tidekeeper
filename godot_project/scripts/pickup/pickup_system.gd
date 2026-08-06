@@ -144,6 +144,11 @@ func _load_config() -> void:
 	_scatter_range = float(cfg.get("scatter_range", _scatter_range))
 	_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
 	_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
+	# 品质数组长度必须与 Quality 枚举（4）一致，否则 _roll_quality 索引越界
+	if _quality_weights.size() != 4 or _quality_exp_mult.size() != 4:
+		push_warning("[PickupSystem] quality_weights/exp_mult 长度应为 4，回退默认值")
+		_quality_weights = [65.0, 25.0, 8.0, 2.0]
+		_quality_exp_mult = [1.0, 2.0, 5.0, 10.0]
 
 
 func _to_float_array(raw: Variant, fallback: Array[float]) -> Array[float]:

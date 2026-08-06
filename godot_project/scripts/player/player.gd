@@ -13,10 +13,7 @@ class_name Player
 ## 基础移速（§5.2：4.2 单位/秒）
 @export var base_move_speed: float = 4.2
 
-## 基础拾取半径默认值（§5.2：经验珠自动吸附范围，夜明珠被动可扩大）
-const DEFAULT_PICKUP_RADIUS: float = 60.0
-
-## 基础拾取半径（可通过 Inspector 调整）
+## 基础拾取半径（§5.2：经验珠自动吸附范围，夜明珠被动可扩大；运行时由 pickups.json 覆盖）
 @export var base_pickup_radius: float = 60.0
 
 ## 移速加成软上限（§5.2：+60%）
