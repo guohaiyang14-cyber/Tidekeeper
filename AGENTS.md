@@ -36,8 +36,13 @@
 - 只读 `config/`；`exp_table.json` 禁手改
 - MVP 不做侵蚀 / 契约 / 无尽 / 每日挑战 / 精炼 III
 
+## 环境配置
+
+- **Godot 引擎**: `E:\Godot\Godot_v4.7.1-stable_win64_console.exe`
+
 ## 单测
 
 ```bash
-godot --headless --path godot_project res://scenes/tests/w1_unit_tests.tscn
+# 使用绝对路径运行单元测试
+& "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --path godot_project res://scenes/tests/w1_unit_tests.tscn
 ```
