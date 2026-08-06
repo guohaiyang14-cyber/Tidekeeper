@@ -18,6 +18,7 @@ var enemies: Dictionary = {}
 var bosses: Dictionary = {}
 var events: Dictionary = {}
 var affixes: Dictionary = {}
+var pickups: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -45,6 +46,7 @@ func _load_all() -> void:
 	enemies = _load_json("enemies.json", true)
 	bosses = _load_json("bosses.json", true)
 	events = _load_json("events.json", true)
+	pickups = _load_json("pickups.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -54,12 +56,13 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d pickups=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
 		events.get("events", {}).size(),
 		affixes.size() - 1 if affixes.has("_meta") else affixes.size(),
+		"ok" if pickups.has("exp_gem") else "missing",
 	])
 
 
@@ -153,3 +156,7 @@ func get_affix(affix_id: String) -> Dictionary:
 ## 获取难度公式元数据（§8.2）
 func get_difficulty_formula() -> Dictionary:
 	return enemies.get("metadata", {}).get("difficulty_formula", {})
+
+## 获取经验珠拾取参数（W2）
+func get_exp_gem_config() -> Dictionary:
+	return pickups.get("exp_gem", {})

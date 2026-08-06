@@ -43,13 +43,11 @@ func _setup_scene() -> void:
 	add_child(_pool)
 	await get_tree().process_frame
 
-	# 创建 PickupSystem（手动接线，不用 @onready）
+	# 创建 PickupSystem（手动接线，不用场景路径）
 	_pickup_system = PickupSystem.new()
 	_pickup_system.name = "TestPickupSystem"
 	add_child(_pickup_system)
-	# 手动注入引用（绕过 @onready 的路径查找）
-	_pickup_system.set("_pool", _pool)
-	_pickup_system.set("_player", _player)
+	_pickup_system.bind(_pool, _player)
 
 	print("[Test] 场景搭建完成: player=%s pool=%d" % [
 		_player.global_position, _pool.available_count(),
@@ -109,6 +107,22 @@ func _test_spawn_and_collect() -> void:
 
 	_assert(_pickup_system.active_gem_count() == 0, "移动后远珠被收集")
 	_assert(GameState.player_exp == _expected_exp_near + _expected_exp_far, "经验总计 %d" % (_expected_exp_near + _expected_exp_far))
+
+	print("[Test] === 阶段5：spawn_exp_gems 总经验守恒（单次品质 × 拆分）===")
+	_pickup_system.clear_all()
+	var batch_base: int = 10
+	var batch_count: int = 3
+	var far_batch: Vector2 = _player.global_position + Vector2(300, 0)
+	_pickup_system.spawn_exp_gems(far_batch, batch_base, batch_count)
+	_assert(_pickup_system.active_gem_count() == batch_count, "批量生成 %d 颗" % batch_count)
+	var batch_total: int = _pickup_system.active_exp_total()
+	var valid_mult: bool = (
+		batch_total == batch_base
+		or batch_total == batch_base * 2
+		or batch_total == batch_base * 5
+		or batch_total == batch_base * 10
+	)
+	_assert(valid_mult, "批量总经验=%d 为 base×品质倍率" % batch_total)
 
 	_print_result()
 	await get_tree().process_frame

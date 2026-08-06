@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §5.2 拾取 + W2 经验珠品质调参",
+    "note": "运行时只读；品质权重/倍率与吸附参数改表不改脚本"
+  },
+  "exp_gem": {
+    "default_pickup_radius": 60.0,
+    "collect_radius": 10.0,
+    "attract_speed": 120.0,
+    "scatter_range": 12.0,
+    "quality_weights": [65.0, 25.0, 8.0, 2.0],
+    "quality_exp_mult": [1.0, 2.0, 5.0, 10.0]
+  }
+}

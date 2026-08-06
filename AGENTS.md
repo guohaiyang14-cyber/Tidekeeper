@@ -38,11 +38,11 @@
 
 ## 环境配置
 
-- **Godot 引擎**: `E:\Godot\Godot_v4.7.1-stable_win64_console.exe`
+- **Godot 引擎**（本机示例，可按安装路径替换）: `E:\Godot\Godot_v4.7.1-stable_win64_console.exe`
 
 ## 单测
 
 ```bash
-# 使用绝对路径运行单元测试
+# 使用本机 Godot 绝对路径（示例）
 & "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --path godot_project res://scenes/tests/w1_unit_tests.tscn
 ```

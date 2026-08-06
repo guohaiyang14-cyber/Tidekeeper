@@ -1,7 +1,7 @@
 # ============================================================================
 # PickupSystem — 拾取系统（W2）
 # 职责：管理经验珠的生成、吸附检测、飞行、收集
-# 数据源：§5.2 拾取（自动吸附）、玩家拾取半径（Player.get_pickup_radius）
+# 数据源：config/pickups.json + Player.get_pickup_radius()
 # 红线：走对象池（PickupPool）；不用 Physics2D，纯距离判定
 # 架构：World 子节点，持有 PickupPool 引用 + Player 引用
 # W2 范围：经验珠；潮币（靠近拾取）为 W4 商店系统
@@ -12,37 +12,35 @@ extends Node2D
 ## 经验珠收集信号（UI 可连接显示经验变化）
 signal exp_collected(amount: int)
 
-## 玩家进入此距离时，经验珠开始吸附（由 Player.pickup_radius 决定）
-## 收集距离（珠子离玩家足够近时回收并加经验）
-const COLLECT_RADIUS: float = 10.0
+## 对象池引用（主场景 @onready；测试可用 bind()）
+@onready var _pool: ObjectPool = get_node_or_null("../PickupPool") as ObjectPool
 
-## 基础吸附飞行速度（像素/秒）
-const ATTRACT_SPEED_BASE: float = 120.0
-
-## 品质概率权重（索引对应 ExpGem.Quality：普通65% / 精良25% / 稀有8% / 史诗2%）
-const QUALITY_WEIGHTS: Array[float] = [65.0, 25.0, 8.0, 2.0]
-
-## 品质经验倍率（普通1× / 精良2× / 稀有5× / 史诗10×）
-const QUALITY_EXP_MULT: Array[float] = [1.0, 2.0, 5.0, 10.0]
-
-## 拾取半径倍率（夜明珠被动可扩大，W7 被动系统接入）
-var _pickup_radius_mult: float = 1.0
-
-## 对象池引用（World 注入）
-@onready var _pool: ObjectPool = get_node_or_null("../PickupPool")
-
-## 玩家引用（World 注入）
-@onready var _player: Node2D = get_node_or_null("../Player")
+## 玩家引用（主场景 @onready；测试可用 bind()）
+@onready var _player: Player = get_node_or_null("../Player") as Player
 
 ## 活跃经验珠列表（用于每帧更新）
 var _active_gems: Array[ExpGem] = []
 
+## 自 config/pickups.json 加载的运行时参数
+var _collect_radius: float = 10.0
+var _attract_speed: float = 120.0
+var _scatter_range: float = 12.0
+var _quality_weights: Array[float] = [65.0, 25.0, 8.0, 2.0]
+var _quality_exp_mult: Array[float] = [1.0, 2.0, 5.0, 10.0]
+
 
 func _ready() -> void:
+	_load_config()
 	print("[PickupSystem] 就绪 (pool=%s player=%s)" % [
 		_pool.name if _pool else "null",
 		_player.name if _player else "null",
 	])
+
+
+## 测试 / 手动注入引用（绕过场景路径）
+func bind(pool: ObjectPool, player: Player) -> void:
+	_pool = pool
+	_player = player
 
 
 func _process(delta: float) -> void:
@@ -50,7 +48,7 @@ func _process(delta: float) -> void:
 		return
 
 	var player_pos: Vector2 = _player.global_position
-	var pickup_radius: float = _get_effective_pickup_radius()
+	var pickup_radius: float = _player.get_pickup_radius()
 
 	# 倒序遍历以便安全删除已收集的珠子
 	var i: int = _active_gems.size() - 1
@@ -67,12 +65,12 @@ func _process(delta: float) -> void:
 			# 已吸附：飞向玩家 + 检查收集
 			gem.update_attract(player_pos, delta)
 			var new_dist: float = gem.global_position.distance_to(player_pos)
-			if new_dist <= COLLECT_RADIUS:
+			if new_dist <= _collect_radius:
 				_collect(gem, i)
 		else:
 			# 未吸附：检查是否进入拾取半径
 			if dist <= pickup_radius:
-				gem.start_attract(player_pos, ATTRACT_SPEED_BASE)
+				gem.start_attract(player_pos, _attract_speed)
 
 		i -= 1
 
@@ -81,43 +79,30 @@ func _process(delta: float) -> void:
 # 公共接口
 # ============================================================================
 
-## 生成经验珠（敌人死亡时调用；品质随机决定，影响经验倍率）
+## 生成经验珠（敌人死亡时调用；品质随机决定经验倍率）
 func spawn_exp_gem(pos: Vector2, base_exp: int) -> ExpGem:
-	if _pool == null:
-		push_error("[PickupSystem] PickupPool 未就绪")
-		return null
-	var gem: ExpGem = _pool.acquire() as ExpGem
-	if gem == null:
-		return null
-	# 随机品质 + 经验倍率
 	var quality: ExpGem.Quality = _roll_quality()
-	var final_exp: int = roundi(float(base_exp) * QUALITY_EXP_MULT[quality])
-	gem.global_position = pos
-	gem.exp_value = final_exp
-	gem.set_quality(quality)
-	_active_gems.append(gem)
-	return gem
+	var final_exp: int = maxi(1, roundi(float(base_exp) * _quality_exp_mult[quality]))
+	return _spawn_gem(pos, final_exp, quality)
 
 
-## 批量生成经验珠（大额掉落时拆分为多颗，视觉更好）
+## 批量生成：对整次掉落只滚一次品质，再拆成多颗（总经验 = total_exp × 倍率）
 func spawn_exp_gems(pos: Vector2, total_exp: int, gem_count: int = 3) -> void:
-	if total_exp <= 0:
+	if total_exp <= 0 or gem_count <= 0:
 		return
-	var per_gem: int = maxi(1, total_exp / gem_count)
-	var remainder: int = total_exp - per_gem * gem_count
+	var quality: ExpGem.Quality = _roll_quality()
+	var final_total: int = maxi(1, roundi(float(total_exp) * _quality_exp_mult[quality]))
+	var per_gem: int = final_total / gem_count
+	var remainder: int = final_total % gem_count
 	for i in gem_count:
-		var value: int = per_gem + (remainder if i == 0 else 0)
-		# 在掉落点附近散开
+		var value: int = per_gem + (1 if i < remainder else 0)
+		if value <= 0:
+			continue
 		var offset: Vector2 = Vector2(
-			RNG.randf_range(-12.0, 12.0),
-			RNG.randf_range(-12.0, 12.0)
+			RNG.randf_range(-_scatter_range, _scatter_range),
+			RNG.randf_range(-_scatter_range, _scatter_range)
 		)
-		spawn_exp_gem(pos + offset, value)
-
-
-## 设置拾取半径倍率（夜明珠被动调用）
-func set_pickup_radius_mult(mult: float) -> void:
-	_pickup_radius_mult = mult
+		_spawn_gem(pos + offset, value, quality)
 
 
 ## 清除所有活跃经验珠（场景重置 / 新局）
@@ -136,27 +121,64 @@ func active_gem_count() -> int:
 	return _active_gems.size()
 
 
+## 当前活跃珠经验总和（测试 / 调试用）
+func active_exp_total() -> int:
+	var total: int = 0
+	for gem in _active_gems:
+		if is_instance_valid(gem):
+			total += gem.exp_value
+	return total
+
+
 # ============================================================================
 # 内部方法
 # ============================================================================
 
-## 随机滚动品质（使用确定性 RNG，权重见 QUALITY_WEIGHTS）
+func _load_config() -> void:
+	var cfg: Dictionary = ConfigLoader.get_exp_gem_config()
+	if cfg.is_empty():
+		push_warning("[PickupSystem] pickups.json.exp_gem 缺失，使用内置回退值")
+		return
+	_collect_radius = float(cfg.get("collect_radius", _collect_radius))
+	_attract_speed = float(cfg.get("attract_speed", _attract_speed))
+	_scatter_range = float(cfg.get("scatter_range", _scatter_range))
+	_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
+	_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
+
+
+func _to_float_array(raw: Variant, fallback: Array[float]) -> Array[float]:
+	if raw is Array:
+		var out: Array[float] = []
+		for v in raw as Array:
+			out.append(float(v))
+		if not out.is_empty():
+			return out
+	return fallback
+
+
+func _spawn_gem(pos: Vector2, exp_value: int, quality: ExpGem.Quality) -> ExpGem:
+	if _pool == null:
+		push_error("[PickupSystem] PickupPool 未就绪")
+		return null
+	var gem: ExpGem = _pool.acquire() as ExpGem
+	if gem == null:
+		return null
+	gem.global_position = pos
+	gem.exp_value = exp_value
+	gem.set_quality(quality)
+	_active_gems.append(gem)
+	return gem
+
+
+## 随机滚动品质（确定性 RNG，权重见 pickups.json）
 func _roll_quality() -> ExpGem.Quality:
 	var roll: float = RNG.randf_range(0.0, 100.0)
 	var cumulative: float = 0.0
-	for i in QUALITY_WEIGHTS.size():
-		cumulative += QUALITY_WEIGHTS[i]
+	for i in _quality_weights.size():
+		cumulative += _quality_weights[i]
 		if roll <= cumulative:
 			return i as ExpGem.Quality
 	return ExpGem.Quality.COMMON
-
-
-## 获取有效拾取半径（Player 基础半径 × 被动倍率）
-func _get_effective_pickup_radius() -> float:
-	var base: float = Player.DEFAULT_PICKUP_RADIUS
-	if _player != null and _player.has_method("get_pickup_radius"):
-		base = _player.get_pickup_radius()
-	return base * _pickup_radius_mult
 
 
 ## 收集经验珠

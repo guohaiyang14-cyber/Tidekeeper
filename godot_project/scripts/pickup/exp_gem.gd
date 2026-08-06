@@ -97,6 +97,7 @@ func _draw() -> void:
 func _on_acquire() -> void:
 	_state = State.IDLE
 	_quality = Quality.COMMON
+	exp_value = 1
 	_attract_speed = 0.0
 	_target_pos = Vector2.ZERO
 	queue_redraw()
@@ -106,7 +107,9 @@ func _on_acquire() -> void:
 func _on_release() -> void:
 	_state = State.IDLE
 	_quality = Quality.COMMON
+	exp_value = 1
 	_attract_speed = 0.0
+	_target_pos = Vector2.ZERO
 	queue_redraw()
 
 

@@ -31,8 +31,9 @@ var _pickup_radius_mult: float = 1.0
 
 
 func _ready() -> void:
-	# 从配置加载角色基础属性（§9.4 角色表）
+	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
+	_apply_pickup_config()
 	print("[Player] 就绪: character=%s move_speed=%.1f pickup_radius=%.0f" % [
 		character_id, base_move_speed, base_pickup_radius,
 	])
@@ -54,6 +55,13 @@ func _apply_character_stats() -> void:
 			base_move_speed = 4.2
 		_:
 			push_warning("[Player] 未知角色 %s，使用默认属性" % character_id)
+
+
+## 从 pickups.json 读取默认拾取半径
+func _apply_pickup_config() -> void:
+	var cfg: Dictionary = ConfigLoader.get_exp_gem_config()
+	if cfg.has("default_pickup_radius"):
+		base_pickup_radius = float(cfg["default_pickup_radius"])
 
 
 ## 处理移动输入（WASD，§5.2）
@@ -93,6 +101,7 @@ func get_pickup_radius() -> float:
 ## 设置拾取半径倍率（夜明珠被动 / 灯塔光环局外升级调用）
 func set_pickup_radius_mult(mult: float) -> void:
 	_pickup_radius_mult = mult
+	queue_redraw()
 
 
 func _draw() -> void:

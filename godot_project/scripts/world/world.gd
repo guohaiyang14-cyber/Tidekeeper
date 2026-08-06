@@ -69,6 +69,7 @@ func _verify_config() -> void:
 	assert(not ConfigLoader.enemies.is_empty(), "[World] enemies.json 未加载")
 	assert(not ConfigLoader.bosses.is_empty(), "[World] bosses.json 未加载")
 	assert(not ConfigLoader.events.is_empty(), "[World] events.json 未加载")
+	assert(not ConfigLoader.pickups.is_empty(), "[World] pickups.json 未加载")
 	assert(ExpTable.get_max_level() == 30, "[World] 经验表未加载或 max_level != 30")
 	print("[World] 配置自检通过 [OK]")
 
