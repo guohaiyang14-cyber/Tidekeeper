@@ -114,3 +114,6 @@ saves/
 # agent 临时工作文件
 .agent_tmp/
 *.agent_diff
+
+# WorkBuddy agent 内部数据（记忆/日志/技能），不入库
+.workbuddy-ai/

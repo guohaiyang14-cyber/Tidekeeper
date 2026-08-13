@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="8_hash"]
 [ext_resource type="PackedScene" path="res://scenes/poolable_stub.tscn" id="9_stub"]
 [ext_resource type="PackedScene" path="res://scenes/exp_gem.tscn" id="10_exp_gem"]
+[ext_resource type="PackedScene" path="res://scenes/upgrade_ui.tscn" id="12_upgrade_ui"]
 [ext_resource type="Script" path="res://scripts/pickup/pickup_system.gd" id="11_pickup_sys"]
 
 [node name="Main" type="Node2D"]
@@ -90,6 +91,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="UpgradeUI" parent="UI" instance=ExtResource("12_upgrade_ui")]
+visible = false
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(640, 360)

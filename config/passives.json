@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §6.4 被动与槽位（4 通用被动为 MVP 范围；8 进化钥被动为 W10 内容）",
+    "max_passive_level": 5,
+    "slot_limit": 6,
+    "mvp_scope": "4 通用被动（夜明珠/护身符/潮信铃/灯芯石）",
+    "note": "运行时只读。原型阶段数值为占位，待 W12 被动系统统一校准（§6.4 要求 W12 前补齐通用被动完整表）"
+  },
+  "passives": {
+    "pearl": {
+      "id": "pearl",
+      "name": "夜明珠",
+      "series": "夜风",
+      "category": "通用被动",
+      "max_level": 5,
+      "description": "拾取半径 +15%（每级 +15%）",
+      "effect_hint": "拾取/经验"
+    },
+    "amulet": {
+      "id": "amulet",
+      "name": "护身符",
+      "series": "礁石",
+      "category": "通用被动",
+      "max_level": 5,
+      "description": "受到伤害 -6%（每级 -6%）",
+      "effect_hint": "防御/减伤"
+    },
+    "tide_bell": {
+      "id": "tide_bell",
+      "name": "潮信铃",
+      "series": "潮汐",
+      "category": "通用被动",
+      "max_level": 5,
+      "description": "攻速 +8%（每级 +8%）",
+      "effect_hint": "攻速/暴击"
+    },
+    "lamp_core": {
+      "id": "lamp_core",
+      "name": "灯芯石",
+      "series": "灯塔",
+      "category": "通用被动",
+      "max_level": 5,
+      "description": "伤害 +8%（每级 +8%）",
+      "effect_hint": "伤害/范围"
+    }
+  }
+}

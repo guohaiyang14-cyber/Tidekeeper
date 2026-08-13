@@ -29,6 +29,7 @@ func _ready() -> void:
 	if player is Player:
 		character_id = (player as Player).character_id
 	GameState.start_new_run(character_id)
+	UpgradeManager.reset()
 	# 启动昼夜状态机
 	day_night.start_run()
 	# 连接信号
@@ -69,7 +70,9 @@ func _verify_config() -> void:
 	assert(not ConfigLoader.enemies.is_empty(), "[World] enemies.json 未加载")
 	assert(not ConfigLoader.bosses.is_empty(), "[World] bosses.json 未加载")
 	assert(not ConfigLoader.events.is_empty(), "[World] events.json 未加载")
+	assert(not ConfigLoader.passives.is_empty(), "[World] passives.json 未加载")
 	assert(not ConfigLoader.pickups.is_empty(), "[World] pickups.json 未加载")
+	assert(ConfigLoader.get_upgrade_config().has("reroll_cost"), "[World] upgrade.json 未加载")
 	assert(ExpTable.get_max_level() == 30, "[World] 经验表未加载或 max_level != 30")
 	print("[World] 配置自检通过 [OK]")
 

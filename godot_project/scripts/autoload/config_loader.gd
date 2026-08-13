@@ -18,7 +18,9 @@ var enemies: Dictionary = {}
 var bosses: Dictionary = {}
 var events: Dictionary = {}
 var affixes: Dictionary = {}
+var passives: Dictionary = {}
 var pickups: Dictionary = {}
+var upgrade: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -46,7 +48,9 @@ func _load_all() -> void:
 	enemies = _load_json("enemies.json", true)
 	bosses = _load_json("bosses.json", true)
 	events = _load_json("events.json", true)
+	passives = _load_json("passives.json", true)
 	pickups = _load_json("pickups.json", true)
+	upgrade = _load_json("upgrade.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -56,13 +60,15 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d pickups=%s" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d pickups=%s upgrade=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
 		events.get("events", {}).size(),
 		affixes.size() - 1 if affixes.has("_meta") else affixes.size(),
+		passives.get("passives", {}).size(),
 		"ok" if pickups.has("exp_gem") else "missing",
+		"ok" if upgrade.has("reroll_cost") else "missing",
 	])
 
 
@@ -93,6 +99,7 @@ func _validate_counts() -> void:
 		["enemies", "enemies", 9],
 		["bosses", "bosses", 3],
 		["events", "events", 7],
+		["passives", "passives", 4],
 	]
 	for check in checks:
 		var table_key: String = check[0]
@@ -160,3 +167,27 @@ func get_difficulty_formula() -> Dictionary:
 ## 获取经验珠拾取参数（W2）
 func get_exp_gem_config() -> Dictionary:
 	return pickups.get("exp_gem", {})
+
+## 获取被动数据（按 id）
+func get_passive(passive_id: String) -> Dictionary:
+	return passives.get("passives", {}).get(passive_id, {})
+
+## 获取全部被动 id 列表
+func get_all_passive_ids() -> Array:
+	return passives.get("passives", {}).keys()
+
+## 获取被动系名列表（去重，来自 passives.json）
+func get_all_passive_series() -> Array[String]:
+	var seen: Dictionary = {}
+	var result: Array[String] = []
+	for p in passives.get("passives", {}).values():
+		var series: String = str(p.get("series", ""))
+		if series == "" or seen.has(series):
+			continue
+		seen[series] = true
+		result.append(series)
+	return result
+
+## 三选一数值配置（§6.2）
+func get_upgrade_config() -> Dictionary:
+	return upgrade

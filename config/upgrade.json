@@ -1,0 +1,14 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §6.2 三选一 + 实现疑点清单 Q14",
+    "note": "已持有武器升级/进化候选延后至 W5（GameState 武器等级就位后接入）"
+  },
+  "max_offers": 3,
+  "reroll_cost": 10,
+  "weight_weapon": 10,
+  "weight_passive": 8,
+  "weapon_pity_threshold": 2,
+  "series_pity_threshold": 3,
+  "series_pity_mult": 3
+}
