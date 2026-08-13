@@ -319,4 +319,15 @@ func acquire() -> EnemyBase:
 
 func release(enemy: EnemyBase) -> void:
     enemy.release()
+
+## 十一、Headless 测试与 .godot 缓存（高频坑）
+
+> 本会话（W5）实测踩坑，反复出现，务必记牢。
+
+- **class_name 注册依赖缓存**：Godot headless **不会**自动扫描注册「未被 autoload/场景直接引用」的脚本 `class_name`（缓存文件 `.godot/global_script_class_cache.cfg` 由编辑器生成）。新增脚本后用代码 `.new()` 会报 `Could not resolve script` / `Could not find type X`。修复：跑一次 `godot --headless --editor --quit --path godot_project` 重建缓存。
+- **严禁 `rm -rf .godot` 后只跑 `--quit-after`**：删缓存会让全项目 class_name 失效（满屏 "Could not find type"）；`--quit-after` 不扫描脚本、无法重建。正确顺序：先 `--editor --quit`（或 `--import`）重建缓存，再跑业务场景。
+- **`preload` 自依赖强制注册**：凡用 `.new()` 实例化某 class 的脚本，在文件顶部 `const _X = preload("res://.../x.gd")`，确保 headless 强制加载并注册 class_name（例：weapon_manager.gd 顶部 preload 三种武器类）。
+- **单测帧时间确定性**：headless 默认 fps 高，`await get_tree().process_frame` 固定帧数 ≠ 固定时长。攻击间隔长的武器（如圣火 1.25s）在 150 帧内可能不触发。运行单测**务必加 `--fixed-fps 60`**（150 帧 = 2.5s），断言才稳定可复现。
+- **单测场景运行范式**：`godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/<name>.tscn`；autoload 单例（ConfigLoader/GameState/RNG…）随场景自动加载；测试内 `await get_tree().process_frame` 推进帧，结束 `get_tree().quit(0/1)`（0=全过 / 1=有失败）。
+- **Godot 路径（本机示例）**：`E:\Godot\Godot_v4.7.1-stable_win64_console.exe`。
 ```
