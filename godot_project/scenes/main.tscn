@@ -124,6 +124,7 @@ mouse_filter = 2
 visible = false
 
 [node name="ShopUI" type="Control" parent="UI"]
+script = ExtResource("22_shopui")
 visible = false
 layout_mode = 3
 anchors_preset = 15
