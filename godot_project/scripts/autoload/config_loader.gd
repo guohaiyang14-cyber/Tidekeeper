@@ -119,6 +119,10 @@ func _validate_counts() -> void:
 func get_weapon(weapon_id: String) -> Dictionary:
 	return weapons.get("weapons", {}).get(weapon_id, {})
 
+## 武器等级上限（来自 weapons.json metadata.max_weapon_level，§6.3）
+func get_max_weapon_level() -> int:
+	return int(weapons.get("metadata", {}).get("max_weapon_level", 7))
+
 ## 获取全部武器 id 列表
 func get_all_weapon_ids() -> Array:
 	return weapons.get("weapons", {}).keys()

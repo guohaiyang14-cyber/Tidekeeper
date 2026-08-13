@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -12,6 +12,9 @@
 [ext_resource type="PackedScene" path="res://scenes/exp_gem.tscn" id="10_exp_gem"]
 [ext_resource type="PackedScene" path="res://scenes/upgrade_ui.tscn" id="12_upgrade_ui"]
 [ext_resource type="Script" path="res://scripts/pickup/pickup_system.gd" id="11_pickup_sys"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="13_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/projectile.tscn" id="14_proj"]
+[ext_resource type="Script" path="res://scripts/combat/weapon_manager.gd" id="15_wm"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -26,12 +29,12 @@ script = ExtResource("2_dnm")
 
 [node name="EnemyPool" type="Node" parent="."]
 script = ExtResource("4_enemy_pool")
-scene = ExtResource("9_stub")
+scene = ExtResource("13_enemy")
 pool_size = 16
 
 [node name="ProjectilePool" type="Node" parent="."]
 script = ExtResource("5_proj_pool")
-scene = ExtResource("9_stub")
+scene = ExtResource("14_proj")
 pool_size = 32
 
 [node name="ParticlePool" type="Node" parent="."]
@@ -50,6 +53,9 @@ script = ExtResource("11_pickup_sys")
 [node name="SpatialHashHolder" type="Node" parent="."]
 script = ExtResource("8_hash")
 cell_size = 80.0
+
+[node name="WeaponManager" type="Node" parent="."]
+script = ExtResource("15_wm")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

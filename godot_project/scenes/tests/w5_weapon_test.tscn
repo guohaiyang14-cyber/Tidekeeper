@@ -1,0 +1,32 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/w5_weapon_test.gd" id="1_test"]
+[ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="2_hash"]
+[ext_resource type="Script" path="res://scripts/combat/weapon_manager.gd" id="3_wm"]
+[ext_resource type="Script" path="res://scripts/core/enemy_pool.gd" id="4_epool"]
+[ext_resource type="Script" path="res://scripts/core/projectile_pool.gd" id="5_ppool"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="6_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/projectile.tscn" id="7_proj"]
+
+[node name="W5WeaponTest" type="Node2D"]
+script = ExtResource("1_test")
+
+[node name="SpatialHashHolder" type="Node" parent="."]
+script = ExtResource("2_hash")
+cell_size = 80.0
+
+[node name="Player" type="Node2D" parent="."]
+position = Vector2(0, 0)
+
+[node name="WeaponManager" type="Node" parent="."]
+script = ExtResource("3_wm")
+
+[node name="EnemyPool" type="Node" parent="."]
+script = ExtResource("4_epool")
+scene = ExtResource("6_enemy")
+pool_size = 16
+
+[node name="ProjectilePool" type="Node" parent="."]
+script = ExtResource("5_ppool")
+scene = ExtResource("7_proj")
+pool_size = 32

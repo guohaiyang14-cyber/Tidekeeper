@@ -35,6 +35,9 @@ var refine_essence: int = 0
 # 武器槽 / 被动槽（SKILL.md §5.2：上限 4 武器 / 6 被动）
 var weapon_slots: Array[String] = []
 var passive_slots: Array[String] = []
+# 武器等级：id → 等级（1~max_weapon_level），重复获得已持有武器则升级（W5）
+var weapon_levels: Dictionary[String, int] = {}
+var max_weapon_level: int = 7
 const MAX_WEAPON_SLOTS: int = 4
 const MAX_PASSIVE_SLOTS: int = 6
 
@@ -77,6 +80,11 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 
 	weapon_slots.clear()
 	passive_slots.clear()
+	weapon_levels.clear()
+	# 武器等级上限来自 config（避免硬编码，§6.3）
+	var cfg_max_lv: int = ConfigLoader.get_max_weapon_level()
+	if cfg_max_lv > 0:
+		max_weapon_level = cfg_max_lv
 	refine_ii_count = 0
 
 	# 种子
@@ -122,14 +130,25 @@ func add_exp(amount: int) -> void:
 			break
 
 
-## 添加武器到槽位（返回是否成功）
+## 添加或升级武器（返回是否成功）
+## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_weapon_level），满级返回 false
 func add_weapon(weapon_id: String) -> bool:
+	if weapon_id in weapon_slots:
+		var lv: int = weapon_levels.get(weapon_id, 1)
+		if lv >= max_weapon_level:
+			return false  # 已满级，无法再升级
+		weapon_levels[weapon_id] = lv + 1
+		return true
 	if weapon_slots.size() >= MAX_WEAPON_SLOTS:
 		return false
-	if weapon_id in weapon_slots:
-		return false
 	weapon_slots.append(weapon_id)
+	weapon_levels[weapon_id] = 1
 	return true
+
+
+## 获取武器当前等级（未持有返回 0）
+func get_weapon_level(weapon_id: String) -> int:
+	return weapon_levels.get(weapon_id, 0)
 
 
 ## 添加被动到槽位（返回是否成功）

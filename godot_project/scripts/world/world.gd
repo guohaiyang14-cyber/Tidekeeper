@@ -7,6 +7,9 @@
 extends Node2D
 class_name World
 
+# 显式预加载 EnemyBase，确保 headless 下 class_name 注册（刷怪类型依赖）
+const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
+
 # 子节点引用
 @onready var player: Node2D = $Player
 @onready var day_night: DayNightStateMachine = $DayNightStateMachine
@@ -16,6 +19,7 @@ class_name World
 @onready var pickup_pool: ObjectPool = $PickupPool
 @onready var pickup_system: PickupSystem = $PickupSystem
 @onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
+@onready var weapon_manager: WeaponManager = $WeaponManager
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 
@@ -30,13 +34,19 @@ func _ready() -> void:
 		character_id = (player as Player).character_id
 	GameState.start_new_run(character_id)
 	UpgradeManager.reset()
-	# 启动昼夜状态机
-	day_night.start_run()
-	# 连接信号
+	# 空间哈希加入 group，供敌人/武器/弹道通过 group 查找（避免硬编码路径）
+	spatial_hash_holder.add_to_group("spatial_hash")
+	# 武器管理器接线（玩家位置 / 哈希 / 弹道池）
+	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
+	# 先连接信号，再启动昼夜状态机（否则首夜 phase_changed 发射时监听器尚未挂载，导致首夜不刷怪）
 	day_night.phase_changed.connect(_on_phase_changed)
 	day_night.night_tick.connect(_on_night_tick)
 	GameState.game_over.connect(_on_game_over)
 	GameState.game_win.connect(_on_game_win)
+	# 升级结算后同步武器实例（获得/升级武器）
+	UpgradeManager.upgrade_resolved.connect(_on_upgrade_resolved)
+	# 启动昼夜状态机（首夜 phase_changed 将触发刷怪）
+	day_night.start_run()
 	print("[World] 就绪 — 第 %d 夜开始 (pools=%d/%d/%d/%d gems=%d hash_cell=%.0f)" % [
 		day_night.get_current_night(),
 		enemy_pool.pool_size if enemy_pool else 0,
@@ -85,6 +95,7 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 	match phase:
 		DayNightStateMachine.Phase.NIGHT:
 			print("[World] → 夜晚阶段")
+			_spawn_night_wave()
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过）")
 		DayNightStateMachine.Phase.TRANSITION:
@@ -101,6 +112,26 @@ func _on_game_over(reason: String) -> void:
 
 func _on_game_win() -> void:
 	print("[World] 通关！")
+
+
+## 升级结算后同步武器实例（获得/升级武器）
+func _on_upgrade_resolved(_offer: Dictionary, _is_skip: bool) -> void:
+	weapon_manager.sync_from_game_state()
+
+
+## 夜晚刷怪（原型占位：每夜生成少量敌人作为武器靶；完整潮汐刷怪见 W2–W3）
+func _spawn_night_wave() -> void:
+	if enemy_pool == null or player == null:
+		return
+	var count: int = 8
+	for i in count:
+		var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+		if e == null:
+			break
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var dist: float = 180.0 + RNG.randf_range(0.0, 220.0)
+		var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * dist
+		e.spawn_at(pos, player)
 
 
 func _unhandled_input(event: InputEvent) -> void:
