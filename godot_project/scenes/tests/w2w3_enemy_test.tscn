@@ -1,0 +1,79 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/w2w3_enemy_test.gd" id="1_test"]
+[ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="2_hash"]
+[ext_resource type="Script" path="res://scripts/core/enemy_spawner.gd" id="3_spawner"]
+[ext_resource type="Script" path="res://scripts/core/enemy_pool.gd" id="4_epool"]
+[ext_resource type="Script" path="res://scripts/core/coin_pool.gd" id="5_coinpool"]
+[ext_resource type="Script" path="res://scripts/core/enemy_projectile_pool.gd" id="6_eprojpool"]
+[ext_resource type="Script" path="res://scripts/core/pickup_pool.gd" id="7_ppool"]
+[ext_resource type="Script" path="res://scripts/pickup/pickup_system.gd" id="8_pickup"]
+[ext_resource type="Script" path="res://scripts/core/shop_manager.gd" id="9_shop"]
+[ext_resource type="Script" path="res://scripts/core/shop_ui.gd" id="10_shopui"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="11_enemy"]
+[ext_resource type="PackedScene" path="res://scripts/pickup/coin.tscn" id="12_coin"]
+[ext_resource type="PackedScene" path="res://scripts/combat/enemy_projectile.tscn" id="13_eproj"]
+[ext_resource type="PackedScene" path="res://scenes/exp_gem.tscn" id="14_expgem"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="15_player"]
+
+[node name="W2W3EnemyTest" type="Node2D"]
+script = ExtResource("1_test")
+
+[node name="SpatialHashHolder" type="Node" parent="."]
+script = ExtResource("2_hash")
+cell_size = 80.0
+groups = ["spatial_hash"]
+
+[node name="Player" parent="." instance=ExtResource("15_player")]
+position = Vector2(0, 0)
+
+[node name="EnemyPool" type="Node" parent="."]
+script = ExtResource("4_epool")
+scene = ExtResource("11_enemy")
+pool_size = 40
+
+[node name="CoinPool" type="Node" parent="."]
+script = ExtResource("5_coinpool")
+scene = ExtResource("12_coin")
+pool_size = 60
+
+[node name="EnemyProjectilePool" type="Node" parent="."]
+script = ExtResource("6_eprojpool")
+scene = ExtResource("13_eproj")
+pool_size = 60
+groups = ["enemy_projectile_pool"]
+
+[node name="PickupPool" type="Node" parent="."]
+script = ExtResource("7_ppool")
+scene = ExtResource("14_expgem")
+pool_size = 60
+
+[node name="PickupSystem" type="Node2D" parent="."]
+script = ExtResource("8_pickup")
+
+[node name="EnemySpawner" type="Node2D" parent="."]
+script = ExtResource("3_spawner")
+
+[node name="ShopManager" type="Node" parent="."]
+script = ExtResource("9_shop")
+
+[node name="ShopUI" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("10_shopui")
+
+[node name="VBox" type="VBoxContainer" parent="ShopUI"]
+layout_mode = 1
+offset_left = 40.0
+offset_top = 120.0
+offset_right = 520.0
+offset_bottom = 620.0
+
+[node name="CoinLabel" type="Label" parent="ShopUI/VBox"]
+layout_mode = 2
+text = "潮币：0"

@@ -8,16 +8,30 @@
       "2": "每 2 帧（近战：小水鬼/铁壳蟹/深潜者/渊潮长枪兵/暗礁巨人）",
       "4": "每 4 帧（小怪/召唤物：水母浮游/爆炸贝/鸦群）"
     },
+    "difficulty": {
+      "health_per_night": 0.10,
+      "health_per_5nights": 0.15,
+      "damage_per_night": 0.04,
+      "region_coeff": 1.0
+    },
     "difficulty_formula": {
-      "health": "base_health × region_coeff × (1 + 0.10 × night) × (1 + 0.15 × floor(night/5))",
-      "damage": "base_damage × (1 + 0.04 × night)",
+      "health": "base_health × region_coeff × (1 + health_per_night × night) × (1 + health_per_5nights × floor(night/5))",
+      "damage": "base_damage × (1 + damage_per_night × night)",
       "count": "base_count × (1 + 0.06 × night) × (1 + 0.20 × floor(night/5))",
-      "region_coeff_mvp": 1.0,
-      "note": "MVP 仅靠本公式 + 天灾夜尖峰调难度；调参改表不改公式"
+      "note": "系数见本块 difficulty；调参改表不改脚本"
     },
     "density_budget": "同屏 350~450（PC 60fps）；前 5 夜峰值 60，第 10 夜 200，第 15 夜 320，第 20 夜 450 + Boss",
+    "spawn": {
+      "base_count": 10,
+      "per_night": 3,
+      "interval_start": 2.0,
+      "interval_dense": 0.8,
+      "interval_pressure": 0.4,
+      "sparse_seconds": 12.0
+    },
     "exp_drop_note": "base_exp 为击杀掉落经验珠的基础经验值；W2 调参，对齐 §6.2 升级曲线 E(1)=22",
-    "note": "运行时只读；行为类型对应 enemy_*_behavior.gd 实现"
+    "coin_drop_note": "原型潮币掉落 = max(1, round(base_exp))；完整掉落表见 §5.2",
+    "note": "运行时只读；行为类型对应 EnemyBase 分派实现；运行期参数（move_speed 等）在此表"
   },
   "enemies": {
     "small_goblin": {
@@ -32,6 +46,8 @@
       "base_contact_damage": 8,
       "base_exp": 2,
       "update_group": 2,
+      "move_speed": 70.0,
+      "contact_radius": 18.0,
       "notes": "数量单位"
     },
     "iron_crab": {
@@ -46,6 +62,8 @@
       "base_contact_damage": 12,
       "base_exp": 5,
       "update_group": 2,
+      "move_speed": 35.0,
+      "contact_radius": 22.0,
       "notes": "高血；破甲"
     },
     "jellyfish_drifter": {
@@ -60,7 +78,10 @@
       "base_contact_damage": 6,
       "base_exp": 4,
       "ranged_projectile_damage": 6,
+      "fire_interval": 2.0,
       "update_group": 4,
+      "move_speed": 30.0,
+      "contact_radius": 16.0,
       "notes": "远程；接触伤害 6（弹幕）"
     },
     "deep_diver": {
@@ -76,6 +97,8 @@
       "base_exp": 8,
       "update_group": 2,
       "burrow_duration": 3.0,
+      "move_speed": 110.0,
+      "contact_radius": 18.0,
       "notes": "突袭"
     },
     "bomb_shell": {
@@ -90,7 +113,10 @@
       "base_contact_damage": 25,
       "base_exp": 5,
       "self_destruct_damage": 25,
+      "explode_radius": 42.0,
       "update_group": 4,
+      "move_speed": 75.0,
+      "contact_radius": 16.0,
       "notes": "低血；自爆"
     },
     "raven_flock": {
@@ -105,6 +131,8 @@
       "base_contact_damage": 10,
       "base_exp": 7,
       "update_group": 4,
+      "move_speed": 130.0,
+      "contact_radius": 16.0,
       "flags": ["flying", "ignore_terrain"],
       "notes": "飞行"
     },
@@ -121,6 +149,8 @@
       "base_exp": 12,
       "update_group": 1,
       "summons": "small_goblin",
+      "move_speed": 25.0,
+      "contact_radius": 16.0,
       "notes": "召唤为主"
     },
     "abyssal_pikeman": {
@@ -136,6 +166,8 @@
       "base_exp": 15,
       "update_group": 2,
       "charge_damage_reduction": 0.5,
+      "move_speed": 85.0,
+      "contact_radius": 20.0,
       "notes": "冲锋；冲锋时免伤 50%"
     },
     "reef_giant": {
@@ -151,6 +183,8 @@
       "base_exp": 30,
       "update_group": 2,
       "damage_share": true,
+      "move_speed": 28.0,
+      "contact_radius": 26.0,
       "notes": "分摊"
     }
   },

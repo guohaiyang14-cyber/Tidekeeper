@@ -44,5 +44,7 @@
 
 ```bash
 # 使用本机 Godot 绝对路径（示例）
-& "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --path godot_project res://scenes/tests/w1_unit_tests.tscn
+# 必须带 --fixed-fps 60：headless 下 delta 非确定（每帧真实耗时波动），
+# 不固定帧率会导致依赖攻击/刷怪节奏的断言偶发失败（如 w5 area_burn）。
+& "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --fixed-fps 60 --path godot_project res://scenes/tests/w1_unit_tests.tscn
 ```

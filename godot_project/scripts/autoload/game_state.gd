@@ -161,6 +161,38 @@ func add_passive(passive_id: String) -> bool:
 	return true
 
 
+## 潮币变化信号（商店/掉落 UI 用）
+signal tidecoins_changed(new_total: int)
+
+
+## 玩家受伤（敌人接触/弹幕/自爆调用）；归零触发游戏结束
+func damage_player(amount: int) -> void:
+	if amount <= 0:
+		return
+	player_health -= amount
+	if player_health <= 0:
+		player_health = 0
+		trigger_game_over("hp_zero")
+		return
+
+
+## 增加潮币（击杀掉落拾取时调用）
+func add_tidecoins(amount: int) -> void:
+	if amount <= 0:
+		return
+	tidecoins += amount
+	tidecoins_changed.emit(tidecoins)
+
+
+## 花费潮币（商店购买时调用）；余额不足返回 false 且不扣减
+func spend_tidecoins(amount: int) -> bool:
+	if amount <= 0 or tidecoins < amount:
+		return false
+	tidecoins -= amount
+	tidecoins_changed.emit(tidecoins)
+	return true
+
+
 ## 判定游戏结束
 func trigger_game_over(reason: String = "death") -> void:
 	game_over.emit(reason)

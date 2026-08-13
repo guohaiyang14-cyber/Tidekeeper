@@ -131,6 +131,14 @@ func get_all_weapon_ids() -> Array:
 func get_enemy(enemy_id: String) -> Dictionary:
 	return enemies.get("enemies", {}).get(enemy_id, {})
 
+## 敌人难度系数（来自 enemies.json metadata.difficulty）
+func get_enemy_difficulty() -> Dictionary:
+	return enemies.get("metadata", {}).get("difficulty", {})
+
+## 敌人刷怪参数（来自 enemies.json metadata.spawn）
+func get_enemy_spawn() -> Dictionary:
+	return enemies.get("metadata", {}).get("spawn", {})
+
 ## 获取全部敌人 id 列表
 func get_all_enemy_ids() -> Array:
 	return enemies.get("enemies", {}).keys()

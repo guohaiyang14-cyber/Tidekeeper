@@ -20,6 +20,11 @@ const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 @onready var pickup_system: PickupSystem = $PickupSystem
 @onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
 @onready var weapon_manager: WeaponManager = $WeaponManager
+@onready var enemy_spawner: EnemySpawner = $EnemySpawner
+@onready var enemy_projectile_pool: ObjectPool = $EnemyProjectilePool
+@onready var coin_pool: ObjectPool = $CoinPool
+@onready var shop_manager: ShopManager = $ShopManager
+@onready var shop_ui: ShopUI = $UI/ShopUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 
@@ -38,6 +43,14 @@ func _ready() -> void:
 	spatial_hash_holder.add_to_group("spatial_hash")
 	# 武器管理器接线（玩家位置 / 哈希 / 弹道池）
 	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
+	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）
+	enemy_spawner.setup(enemy_pool, player, pickup_system)
+	# 商店接线（ShopManager ↔ ShopUI 双向）
+	shop_manager.setup(shop_ui)
+	shop_ui.setup(shop_manager)
+	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
+	player.add_to_group("player")
+	enemy_projectile_pool.add_to_group("enemy_projectile_pool")
 	# 先连接信号，再启动昼夜状态机（否则首夜 phase_changed 发射时监听器尚未挂载，导致首夜不刷怪）
 	day_night.phase_changed.connect(_on_phase_changed)
 	day_night.night_tick.connect(_on_night_tick)
@@ -94,10 +107,15 @@ func _verify_config() -> void:
 func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 	match phase:
 		DayNightStateMachine.Phase.NIGHT:
-			print("[World] → 夜晚阶段")
-			_spawn_night_wave()
+			print("[World] → 夜晚阶段 (第 %d 夜)" % day_night.get_current_night())
+			enemy_spawner.start_night(day_night.get_current_night())
 		DayNightStateMachine.Phase.DAY:
-			print("[World] → 抉择之昼（按 skip 跳过）")
+			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
+			# 进昼清场（原型：玩家安全购物），并开商店
+			enemy_spawner.stop()
+			enemy_spawner.clear_all()
+			pickup_system.clear_all()
+			shop_manager.open_shop()
 		DayNightStateMachine.Phase.TRANSITION:
 			pass  # 过渡帧，无需处理
 
@@ -108,10 +126,14 @@ func _on_night_tick(remaining: float) -> void:
 
 func _on_game_over(reason: String) -> void:
 	print("[World] 游戏结束: %s" % reason)
+	enemy_spawner.stop()
+	enemy_spawner.clear_all()
 
 
 func _on_game_win() -> void:
 	print("[World] 通关！")
+	enemy_spawner.stop()
+	enemy_spawner.clear_all()
 
 
 ## 升级结算后同步武器实例（获得/升级武器）
@@ -119,24 +141,10 @@ func _on_upgrade_resolved(_offer: Dictionary, _is_skip: bool) -> void:
 	weapon_manager.sync_from_game_state()
 
 
-## 夜晚刷怪（原型占位：每夜生成少量敌人作为武器靶；完整潮汐刷怪见 W2–W3）
-func _spawn_night_wave() -> void:
-	if enemy_pool == null or player == null:
-		return
-	var count: int = 8
-	for i in count:
-		var e: EnemyBase = enemy_pool.acquire() as EnemyBase
-		if e == null:
-			break
-		var angle: float = RNG.randf_range(0.0, TAU)
-		var dist: float = 180.0 + RNG.randf_range(0.0, 220.0)
-		var pos: Vector2 = player.global_position + Vector2(cos(angle), sin(angle)) * dist
-		e.spawn_at(pos, player)
-
-
 func _unhandled_input(event: InputEvent) -> void:
 	# 抉择之昼按 skip 键进入下一夜
 	if event.is_action_pressed("skip") and day_night.get_phase() == DayNightStateMachine.Phase.DAY:
+		shop_ui.close()
 		day_night.skip_day_phase()
 	# W2 调试：按 interact(E) 在玩家周围生成经验珠（随机品质）
 	if event.is_action_pressed("interact") and pickup_system and player:

@@ -15,11 +15,17 @@ signal exp_collected(amount: int)
 ## 对象池引用（主场景 @onready；测试可用 bind()）
 @onready var _pool: ObjectPool = get_node_or_null("../PickupPool") as ObjectPool
 
+## 潮币池引用（W4 商店闭环）
+@onready var _coin_pool: ObjectPool = get_node_or_null("../CoinPool") as ObjectPool
+
 ## 玩家引用（主场景 @onready；测试可用 bind()）
 @onready var _player: Player = get_node_or_null("../Player") as Player
 
 ## 活跃经验珠列表（用于每帧更新）
 var _active_gems: Array[ExpGem] = []
+
+## 活跃潮币列表（用于每帧更新）
+var _active_coins: Array[Coin] = []
 
 ## 自 config/pickups.json 加载的运行时参数
 var _collect_radius: float = 10.0
@@ -43,13 +49,24 @@ func bind(pool: ObjectPool, player: Player) -> void:
 	_player = player
 
 
-func _process(delta: float) -> void:
-	if _player == null or _active_gems.is_empty():
-		return
+## 注入潮币池（测试用）
+func bind_coin_pool(pool: ObjectPool) -> void:
+	_coin_pool = pool
 
+
+func _process(delta: float) -> void:
+	if _player == null:
+		return
 	var player_pos: Vector2 = _player.global_position
 	var pickup_radius: float = _player.get_pickup_radius()
 
+	if not _active_gems.is_empty():
+		_process_gems(delta, player_pos, pickup_radius)
+	if not _active_coins.is_empty():
+		_process_coins(delta, player_pos, pickup_radius)
+
+
+func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> void:
 	# 倒序遍历以便安全删除已收集的珠子
 	var i: int = _active_gems.size() - 1
 	while i >= 0:
@@ -105,15 +122,58 @@ func spawn_exp_gems(pos: Vector2, total_exp: int, gem_count: int = 3) -> void:
 		_spawn_gem(pos + offset, value, quality)
 
 
-## 清除所有活跃经验珠（场景重置 / 新局）
+## 生成潮币（敌人死亡时调用；amount 为掉落实 value）
+func spawn_coin(pos: Vector2, amount: int) -> Coin:
+	if _coin_pool == null or amount <= 0:
+		return null
+	var coin: Coin = _coin_pool.acquire() as Coin
+	if coin == null:
+		return null
+	coin.global_position = pos
+	coin.value = amount
+	_active_coins.append(coin)
+	return coin
+
+
+## 潮币每帧更新（吸引 + 收集 → 入账）
+func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float) -> void:
+	var i: int = _active_coins.size() - 1
+	while i >= 0:
+		var coin: Coin = _active_coins[i]
+		if not is_instance_valid(coin):
+			_active_coins.remove_at(i)
+			i -= 1
+			continue
+		var dist: float = coin.global_position.distance_to(player_pos)
+		if coin.is_attracted():
+			coin.update_attract(player_pos, delta)
+			if coin.global_position.distance_to(player_pos) <= _collect_radius:
+				GameState.add_tidecoins(coin.value)
+				_active_coins.remove_at(i)
+				_coin_pool.release(coin)
+		else:
+			if dist <= pickup_radius:
+				coin.start_attract(player_pos, _attract_speed)
+		i -= 1
+
+
+## 当前活跃潮币数（调试用）
+func active_coin_count() -> int:
+	return _active_coins.size()
+
+
+## 清除所有活跃经验珠 / 潮币（场景重置 / 新局）
 func clear_all() -> void:
-	if _pool == null:
-		_active_gems.clear()
-		return
-	for gem in _active_gems:
-		if is_instance_valid(gem):
-			_pool.release(gem)
+	if _pool != null:
+		for gem in _active_gems:
+			if is_instance_valid(gem):
+				_pool.release(gem)
 	_active_gems.clear()
+	if _coin_pool != null:
+		for coin in _active_coins:
+			if is_instance_valid(coin):
+				_coin_pool.release(coin)
+	_active_coins.clear()
 
 
 ## 当前活跃经验珠数（调试 / 性能监控用）

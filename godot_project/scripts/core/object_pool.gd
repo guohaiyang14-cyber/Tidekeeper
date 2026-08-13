@@ -87,6 +87,11 @@ func active_count() -> int:
 	return _active.size()
 
 
+## 当前活跃节点列表（测试 / 调试用；返回副本避免外部修改内部数组）
+func get_active() -> Array[Node]:
+	return _active.duplicate()
+
+
 ## 可用节点数
 func available_count() -> int:
 	return _pool.size()
