@@ -27,7 +27,26 @@
       "interval_start": 2.0,
       "interval_dense": 0.8,
       "interval_pressure": 0.4,
-      "sparse_seconds": 12.0
+      "sparse_seconds": 12.0,
+      "ring_min": 180.0,
+      "ring_extra": 220.0,
+      "elite_offset_y": -200.0,
+      "boss_offset_y": -220.0,
+      "retry_delay": 0.1
+    },
+    "elite": {
+      "base_enemy_id": "iron_crab",
+      "id": "giant_claw_king",
+      "name": "巨钳王",
+      "health_mult": 3,
+      "exp_mult": 3,
+      "contact_damage_mult": 2,
+      "note": "倍率在 configure() 后仍叠 §8.2 夜晚缩放，实战为正常缩放后约 health_mult×"
+    },
+    "combat": {
+      "contact_interval": 0.5,
+      "burrow_cooldown": 2.0,
+      "burrow_initial_delay": 1.0
     },
     "exp_drop_note": "base_exp 为击杀掉落经验珠的基础经验值；W2 调参，对齐 §6.2 升级曲线 E(1)=22",
     "coin_drop_note": "原型潮币掉落 = max(1, round(base_exp))；完整掉落表见 §5.2",
@@ -97,6 +116,8 @@
       "base_exp": 8,
       "update_group": 2,
       "burrow_duration": 3.0,
+      "burrow_cooldown": 2.0,
+      "burrow_initial_delay": 1.0,
       "move_speed": 110.0,
       "contact_radius": 18.0,
       "notes": "突袭"

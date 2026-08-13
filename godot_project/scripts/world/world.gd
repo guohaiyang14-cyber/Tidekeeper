@@ -111,10 +111,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			enemy_spawner.start_night(day_night.get_current_night())
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
-			# 进昼清场（原型：玩家安全购物），并开商店
-			enemy_spawner.stop()
-			enemy_spawner.clear_all()
-			pickup_system.clear_all()
+			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全
+			_clear_night_entities()
 			shop_manager.open_shop()
 		DayNightStateMachine.Phase.TRANSITION:
 			pass  # 过渡帧，无需处理
@@ -126,14 +124,21 @@ func _on_night_tick(remaining: float) -> void:
 
 func _on_game_over(reason: String) -> void:
 	print("[World] 游戏结束: %s" % reason)
-	enemy_spawner.stop()
-	enemy_spawner.clear_all()
+	_clear_night_entities()
 
 
 func _on_game_win() -> void:
 	print("[World] 通关！")
+	_clear_night_entities()
+
+
+## 停止刷怪并回收敌人 / 敌方弹道 / 拾取物
+func _clear_night_entities() -> void:
 	enemy_spawner.stop()
 	enemy_spawner.clear_all()
+	if enemy_projectile_pool != null:
+		enemy_projectile_pool.release_all()
+	pickup_system.clear_all()
 
 
 ## 升级结算后同步武器实例（获得/升级武器）

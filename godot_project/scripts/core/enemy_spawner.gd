@@ -40,6 +40,8 @@ var _spawn_timer: float = 0.0
 var _remaining: int = 0
 var _elapsed: float = 0.0
 var _night_duration: float = NIGHT_DURATION_NORMAL
+## start_night 缓存的 metadata.spawn（避免每帧/每次刷怪反复查表）
+var _spawn_meta: Dictionary = {}
 
 # 当前夜可刷敌人定义缓存
 var _eligible: Array[Dictionary] = []
@@ -74,13 +76,14 @@ func start_night(night: int) -> void:
 		return
 	_night = night
 	_night_duration = _get_night_duration(night)
+	_spawn_meta = ConfigLoader.get_enemy_spawn()
 	_elapsed = 0.0
 	_spawn_timer = 0.0
 	_remaining = _compute_count(night)
 	_eligible = _build_eligible(night)
 	_spawning = true
 	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d)" % [night, _remaining, _eligible.size()])
-	# 精英 / Boss 占位（开局立即登场）
+	# 精英 / Boss 占位（开局立即登场；同样受 MAX_ENEMIES 约束）
 	if night == 5:
 		_spawn_elite(night)
 	elif night in [10, 15, 20]:
@@ -99,6 +102,11 @@ func clear_all() -> void:
 		enemy_pool.release_all()
 
 
+## 本夜剩余刷怪配额（测试 / 调试）
+func get_remaining() -> int:
+	return _remaining
+
+
 func _process(delta: float) -> void:
 	if not _spawning or enemy_pool == null or target == null:
 		return
@@ -108,59 +116,86 @@ func _process(delta: float) -> void:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0:
-		_spawn_one()
-		_remaining -= 1
-		if _remaining <= 0:
-			_spawning = false
+		if _spawn_one():
+			_remaining -= 1
+			if _remaining <= 0:
+				_spawning = false
+			else:
+				_spawn_timer = _current_interval(_elapsed)
 		else:
-			_spawn_timer = _current_interval(_elapsed)
+			# 达上限 / 池耗尽 / 无候选：不扣配额，短退避后重试（避免每帧空转）
+			_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
 
 
 # ============================================================================
 # 刷怪实现
 # ============================================================================
 
-func _spawn_one() -> void:
-	if enemy_pool.active_count() >= MAX_ENEMIES:
-		return
+## 成功刷出一只返回 true（失败不扣 _remaining）
+func _spawn_one() -> bool:
+	if not _can_spawn_more():
+		return false
 	var def: Dictionary = _pick_enemy_def()
 	if def.is_empty():
-		return
+		return false
 	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
 	if e == null:
-		return
+		return false
 	e.configure(def, _night)
+	var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
+	var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
 	var angle: float = RNG.randf_range(0.0, TAU)
-	var dist: float = 180.0 + RNG.randf_range(0.0, 220.0)
+	var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
 	var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
 	e.spawn_at(pos, target)
 	_connect_died(e)
+	return true
 
 
-## 精英夜：巨钳王 = 强化铁壳蟹（base_health×3 / base_exp×3 / contact_damage×2）
-## 注：该 3× 在 configure() 后仍会叠加 §8.2 夜晚缩放，故实战为「正常缩放后约 3×」
+## 同屏未达上限且池仍有可用实例
+func _can_spawn_more() -> bool:
+	if enemy_pool == null:
+		return false
+	if enemy_pool.active_count() >= MAX_ENEMIES:
+		return false
+	return enemy_pool.available_count() > 0
+
+
+## 精英夜：巨钳王 = 强化铁壳蟹（倍率见 metadata.elite；叠 §8.2 后约为表内倍率）
 func _spawn_elite(night: int) -> void:
-	var base: Dictionary = ConfigLoader.get_enemy("iron_crab")
+	if not _can_spawn_more():
+		push_warning("[EnemySpawner] 同屏已满，跳过精英登场")
+		return
+	var elite: Dictionary = ConfigLoader.get_enemy_elite()
+	var base_id: String = String(elite.get("base_enemy_id", "iron_crab"))
+	var base: Dictionary = ConfigLoader.get_enemy(base_id)
 	if base.is_empty():
 		return
+	var hp_m: int = int(elite.get("health_mult", 3))
+	var exp_m: int = int(elite.get("exp_mult", 3))
+	var dmg_m: int = int(elite.get("contact_damage_mult", 2))
 	var edata: Dictionary = base.duplicate()
-	edata["id"] = "giant_claw_king"
-	edata["name"] = "巨钳王"
-	edata["base_health"] = int(base.get("base_health", 55)) * 3
-	edata["base_exp"] = int(base.get("base_exp", 5)) * 3
-	edata["base_contact_damage"] = int(base.get("base_contact_damage", 12)) * 2
+	edata["id"] = String(elite.get("id", "giant_claw_king"))
+	edata["name"] = String(elite.get("name", "巨钳王"))
+	edata["base_health"] = int(base.get("base_health", 55)) * hp_m
+	edata["base_exp"] = int(base.get("base_exp", 5)) * exp_m
+	edata["base_contact_damage"] = int(base.get("base_contact_damage", 12)) * dmg_m
 	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
 	if e == null:
 		return
 	e.configure(edata, night)
-	var pos: Vector2 = target.global_position + Vector2(0.0, -200.0)
+	var offset_y: float = float(_spawn_meta.get("elite_offset_y", -200.0))
+	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
 	e.spawn_at(pos, target)
 	_connect_died(e)
-	print("[EnemySpawner] 精英登场：巨钳王")
+	print("[EnemySpawner] 精英登场：%s" % edata.get("name", "精英"))
 
 
 ## 天灾夜：Boss 占位（configure_boss，不走 §8.2 缩放）
 func _spawn_boss(night: int) -> void:
+	if not _can_spawn_more():
+		push_warning("[EnemySpawner] 同屏已满，跳过 Boss 登场")
+		return
 	var b: Dictionary = ConfigLoader.get_boss_by_night(night)
 	if b.is_empty():
 		return
@@ -168,7 +203,8 @@ func _spawn_boss(night: int) -> void:
 	if e == null:
 		return
 	e.configure_boss(b)
-	var pos: Vector2 = target.global_position + Vector2(0.0, -220.0)
+	var offset_y: float = float(_spawn_meta.get("boss_offset_y", -220.0))
+	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
 	e.spawn_at(pos, target)
 	_connect_died(e)
 	print("[EnemySpawner] 天灾夜 Boss 登场：%s" % b.get("name", "未知"))
@@ -195,20 +231,18 @@ func _on_enemy_died(enemy: EnemyBase) -> void:
 
 ## 本夜总刷怪数（来自 metadata.spawn 的 base_count / per_night，封顶 MAX_ENEMIES）
 func _compute_count(night: int) -> int:
-	var meta: Dictionary = ConfigLoader.get_enemy_spawn()
-	var base_count: int = int(meta.get("base_count", 10))
-	var per_night: int = int(meta.get("per_night", 3))
+	var base_count: int = int(_spawn_meta.get("base_count", 10))
+	var per_night: int = int(_spawn_meta.get("per_night", 3))
 	var count: int = base_count + per_night * (night - 1)
 	return mini(count, MAX_ENEMIES)
 
 
 ## 当前夜密度曲线间隔（秒）：前 sparse 秒稀疏 → 0.6×时长密集 → 末段加压
 func _current_interval(elapsed: float) -> float:
-	var meta: Dictionary = ConfigLoader.get_enemy_spawn()
-	var sparse: float = float(meta.get("sparse_seconds", 12.0))
-	var interval_start: float = float(meta.get("interval_start", 2.0))
-	var interval_dense: float = float(meta.get("interval_dense", 0.8))
-	var interval_pressure: float = float(meta.get("interval_pressure", 0.4))
+	var sparse: float = float(_spawn_meta.get("sparse_seconds", 12.0))
+	var interval_start: float = float(_spawn_meta.get("interval_start", 2.0))
+	var interval_dense: float = float(_spawn_meta.get("interval_dense", 0.8))
+	var interval_pressure: float = float(_spawn_meta.get("interval_pressure", 0.4))
 	if elapsed < sparse:
 		return interval_start
 	if elapsed < _night_duration * 0.6:

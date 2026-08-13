@@ -119,11 +119,11 @@ func _build_items() -> Array[Dictionary]:
 	return candidates.slice(0, take)
 
 
-## 确定性洗牌（RNG）
+## 确定性 Fisher–Yates 洗牌（RNG）
 func _shuffle(arr: Array[Dictionary]) -> void:
 	var n: int = arr.size()
-	for i in n:
-		var j: int = RNG.randi_range(0, n - 1)
+	for i in range(n - 1, 0, -1):
+		var j: int = RNG.randi_range(0, i)
 		var tmp: Dictionary = arr[i]
 		arr[i] = arr[j]
 		arr[j] = tmp

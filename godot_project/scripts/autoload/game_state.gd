@@ -17,6 +17,7 @@ signal game_over(reason: String)
 signal game_win()
 signal exp_gained(amount: int, total_exp: int)
 signal level_up(new_level: int)
+signal tidecoins_changed(new_total: int)
 
 # 局内状态
 var current_night: int = 0
@@ -159,10 +160,6 @@ func add_passive(passive_id: String) -> bool:
 		return false
 	passive_slots.append(passive_id)
 	return true
-
-
-## 潮币变化信号（商店/掉落 UI 用）
-signal tidecoins_changed(new_total: int)
 
 
 ## 玩家受伤（敌人接触/弹幕/自爆调用）；归零触发游戏结束

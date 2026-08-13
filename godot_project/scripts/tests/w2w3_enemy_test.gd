@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _test_burrow_ambush()         # 2.2.2 潜地行为
 	await _test_self_destruct()         # 2.2.2 自爆行为
 	await _test_spawn_loop_and_cap()    # 2.2.3 潮汐刷怪 + 2.2.4 同屏上限
+	await _test_quota_preserved_when_full()  # 池满不烧配额
+	await _test_day_clears_enemy_projectiles()  # 进昼清弹道契约
 	await _test_elite_night5()          # 2.3.1 精英夜（巨钳王）
 	await _test_boss_night10()          # 2.3.2 天灾夜 Boss 占位
 	await _test_coin_loop()             # 3.2 潮币闭环（掉落→拾取）
@@ -121,7 +123,7 @@ func _test_burrow_ambush() -> void:
 	var burrowed: bool = false
 	for i in 240:
 		await get_tree().process_frame
-		if is_instance_valid(e) and e._burrowed:
+		if is_instance_valid(e) and e.is_burrowed():
 			burrowed = true
 			break
 	_assert(burrowed, "深潜者进入潜地状态")
@@ -139,8 +141,8 @@ func _test_self_destruct() -> void:
 	e.configure(def, 5)
 	e.spawn_at(player.global_position, player)
 	await _run_frames(10)
-	# 自爆 → _die → _dead=true（玩家受伤由 explosion 接触伤害体现）
-	var died: bool = is_instance_valid(e) and e._dead
+	# 自爆 → _die → is_dead（玩家受伤由 explosion 接触伤害体现）
+	var died: bool = is_instance_valid(e) and e.is_dead()
 	var hurt: bool = GameState.player_health < GameState.player_max_health
 	_assert(died and hurt, "爆炸贝自爆致死 + 玩家受伤 (hp=%d, dead=%s)" % [GameState.player_health, died])
 
@@ -156,6 +158,60 @@ func _test_spawn_loop_and_cap() -> void:
 	var within_cap: bool = active <= EnemySpawner.MAX_ENEMIES
 	_assert(active >= 1 and within_cap, "第1夜刷怪活跃数=%d（≤%d）" % [active, EnemySpawner.MAX_ENEMIES])
 	spawner.clear_all()
+
+
+# ---------------------------------------------------------------------------
+# 池满 / 达上限时不空耗刷怪配额；腾出名额后可继续刷
+# ---------------------------------------------------------------------------
+func _test_quota_preserved_when_full() -> void:
+	print("[配额] 池满不烧 remaining")
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+	var def: Dictionary = ConfigLoader.get_enemy("small_goblin")
+	# 用远距小水鬼填满对象池（避免残留行为在原点接触/自爆）
+	var fill_i: int = 0
+	while enemy_pool.available_count() > 0:
+		var filler: EnemyBase = enemy_pool.acquire() as EnemyBase
+		if filler == null:
+			break
+		filler.configure(def, 1)
+		filler.spawn_at(player.global_position + Vector2(2000.0 + float(fill_i) * 40.0, 0.0), player)
+		fill_i += 1
+	_assert(enemy_pool.available_count() == 0, "对象池已填满 available=0")
+	spawner.start_night(1)
+	var rem0: int = spawner.get_remaining()
+	await _run_frames(30)
+	var rem1: int = spawner.get_remaining()
+	_assert(rem0 > 0 and rem1 == rem0, "池满时配额不变 (%d→%d)" % [rem0, rem1])
+	# 腾出一个名额后应能刷出并扣配额
+	var actives: Array[Node] = enemy_pool.get_active()
+	if not actives.is_empty():
+		enemy_pool.release(actives[0])
+	await _run_frames(20)
+	var rem2: int = spawner.get_remaining()
+	_assert(rem2 < rem1, "腾出名额后配额下降 (%d→%d)" % [rem1, rem2])
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 进昼清场契约：与 World._clear_night_entities 同序（停刷→清敌→清弹道→清掉落）
+# ---------------------------------------------------------------------------
+func _test_day_clears_enemy_projectiles() -> void:
+	print("[进昼清场] 敌方弹道回收")
+	var def: Dictionary = ConfigLoader.get_enemy("jellyfish_drifter")
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	e.configure(def, 3)
+	e.spawn_at(player.global_position + Vector2(80.0, 0.0), player)
+	await _run_frames(5)
+	_assert(eproj_pool.active_count() > 0, "清场前有活跃弹道=%d" % eproj_pool.active_count())
+	# 镜像 World._clear_night_entities
+	spawner.stop()
+	spawner.clear_all()
+	eproj_pool.release_all()
+	pickup_system.clear_all()
+	_assert(eproj_pool.active_count() == 0, "清场后敌方弹道=0")
+	_assert(enemy_pool.active_count() == 0, "清场后敌人=0")
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@
       "15": 2,
       "20": 3
     },
-    "note": "运行时只读；阶段技另由 boss_*_controller.gd 编排"
+    "note": "运行时只读；阶段技另由 boss_*_controller.gd 编排；占位战斗参数（move_speed 等）写在各 Boss 条目"
   },
   "bosses": {
     "jellyfish_queen": {
@@ -19,7 +19,14 @@
       "name": "深渊水母后",
       "night": 10,
       "base_health": 2400,
-      "contact_damage": null,
+      "base_exp": 50,
+      "contact_damage": 20,
+      "move_speed": 40.0,
+      "contact_radius": 30.0,
+      "behavior_type": "charge_linear",
+      "danger": 5,
+      "update_group": 2,
+      "coin_drop_mult": 2.0,
       "exam_point": "弹幕环 + 分裂小水母，考验转火",
       "mechanics": [
         { "key": "barrage_ring", "desc": "环形弹幕" },
@@ -33,7 +40,14 @@
       "name": "潮汐执政官",
       "night": 15,
       "base_health": 4200,
-      "contact_damage": null,
+      "base_exp": 80,
+      "contact_damage": 24,
+      "move_speed": 40.0,
+      "contact_radius": 30.0,
+      "behavior_type": "charge_linear",
+      "danger": 5,
+      "update_group": 2,
+      "coin_drop_mult": 2.0,
       "exam_point": "传送 + 全屏潮汐波（躲进灯塔光晕）",
       "mechanics": [
         { "key": "teleport", "desc": "短距传送" },
@@ -48,7 +62,14 @@
       "name": "吞噬之星",
       "night": 20,
       "base_health": 7000,
-      "contact_damage": null,
+      "base_exp": 120,
+      "contact_damage": 28,
+      "move_speed": 40.0,
+      "contact_radius": 30.0,
+      "behavior_type": "charge_linear",
+      "danger": 5,
+      "update_group": 2,
+      "coin_drop_mult": 2.0,
       "exam_point": "多阶段（护盾 → 狂暴 → 分身）",
       "mechanics": [
         { "key": "shield_phase", "desc": "阶段一：护盾" },

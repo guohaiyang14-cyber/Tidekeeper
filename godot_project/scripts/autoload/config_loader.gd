@@ -140,6 +140,16 @@ func get_enemy_spawn() -> Dictionary:
 	return enemies.get("metadata", {}).get("spawn", {})
 
 
+## 敌人战斗通用参数（来自 enemies.json metadata.combat）
+func get_enemy_combat() -> Dictionary:
+	return enemies.get("metadata", {}).get("combat", {})
+
+
+## 敌人精英夜参数（来自 enemies.json metadata.elite）
+func get_enemy_elite() -> Dictionary:
+	return enemies.get("metadata", {}).get("elite", {})
+
+
 ## 武器商店参数（来自 weapons.json metadata.shop）
 func get_weapon_shop_meta() -> Dictionary:
 	return weapons.get("metadata", {}).get("shop", {})

@@ -31,6 +31,9 @@ var _ranged_damage: int = 0
 var _explode_radius: float = 40.0
 var _self_destruct_damage: int = 0
 var _burrow_duration: float = 3.0
+var _contact_interval: float = 0.5
+var _burrow_cooldown_cfg: float = 2.0
+var _burrow_initial_delay: float = 1.0
 
 # ---- Boss 标记（configure_boss 置 true，configure 复位 false） ----
 var is_boss: bool = false
@@ -59,7 +62,7 @@ func _on_acquire() -> void:
 	_fire_timer = 0.0
 	_burrowed = false
 	_burrow_timer = 0.0
-	_burrow_cooldown = 1.0
+	_burrow_cooldown = _burrow_initial_delay
 	_ensure_hash()
 	_ensure_enemy_projectile_pool()
 
@@ -132,31 +135,41 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	_explode_radius = float(data.get("explode_radius", 40.0))
 	_self_destruct_damage = int(roundi(float(data.get("self_destruct_damage", 0)) * dmg_scale))
 	_burrow_duration = float(data.get("burrow_duration", 3.0))
+	var combat: Dictionary = ConfigLoader.get_enemy_combat()
+	_contact_interval = float(data.get("contact_interval", combat.get("contact_interval", 0.5)))
+	_burrow_cooldown_cfg = float(data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
+	_burrow_initial_delay = float(data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
+	_burrow_cooldown = _burrow_initial_delay
 
 
-## Boss 占位配置（W3）：不走 §8.2 难度缩放，base_health 直接用 bosses.json 原值
-## 行为用 charge_linear 占位（完整 Boss 阶段技见 MVP W5）
+## Boss 占位配置（W3）：不走 §8.2 难度缩放，数值直接读 bosses.json
+## 行为默认 charge_linear 占位（完整 Boss 阶段技见 MVP W5）
 func configure_boss(boss_data: Dictionary) -> void:
 	enemy_id = boss_data.get("id", "")
-	behavior_type = "charge_linear"
-	danger = 5
-	update_group = 2
+	behavior_type = String(boss_data.get("behavior_type", "charge_linear"))
+	danger = int(boss_data.get("danger", 5))
+	update_group = int(boss_data.get("update_group", 2))
 	is_boss = true
 	night = GameState.current_night
 	var bexp: int = int(boss_data.get("base_exp", 50))
 	base_exp = bexp
 	max_health = int(boss_data.get("base_health", 1000))
-	var cd: Variant = boss_data.get("contact_damage", null)
-	contact_damage = int(cd) if cd != null else 20
-	coin_drop = maxi(1, roundi(float(bexp) * 2.0))
+	contact_damage = int(boss_data.get("contact_damage", 20))
+	var coin_mult: float = float(boss_data.get("coin_drop_mult", 2.0))
+	coin_drop = maxi(1, roundi(float(bexp) * coin_mult))
 	health = max_health
-	move_speed = 40.0
-	contact_radius = 30.0
-	_fire_interval = 2.0
-	_ranged_damage = 0
-	_explode_radius = 40.0
-	_self_destruct_damage = 0
-	_burrow_duration = 3.0
+	move_speed = float(boss_data.get("move_speed", 40.0))
+	contact_radius = float(boss_data.get("contact_radius", 30.0))
+	_fire_interval = float(boss_data.get("fire_interval", 2.0))
+	_ranged_damage = int(boss_data.get("ranged_projectile_damage", 0))
+	_explode_radius = float(boss_data.get("explode_radius", 40.0))
+	_self_destruct_damage = int(boss_data.get("self_destruct_damage", 0))
+	_burrow_duration = float(boss_data.get("burrow_duration", 3.0))
+	var combat: Dictionary = ConfigLoader.get_enemy_combat()
+	_contact_interval = float(boss_data.get("contact_interval", combat.get("contact_interval", 0.5)))
+	_burrow_cooldown_cfg = float(boss_data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
+	_burrow_initial_delay = float(boss_data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
+	_burrow_cooldown = _burrow_initial_delay
 
 
 # ============================================================================
@@ -214,7 +227,7 @@ func _try_contact_damage(player_pos: Vector2) -> void:
 		return
 	if global_position.distance_to(player_pos) <= contact_radius:
 		GameState.damage_player(contact_damage)
-		_contact_cd = 0.5
+		_contact_cd = _contact_interval
 
 
 func _tick_burrow(delta: float, player_pos: Vector2, do_move: bool) -> void:
@@ -224,7 +237,7 @@ func _tick_burrow(delta: float, player_pos: Vector2, do_move: bool) -> void:
 			_burrowed = false
 			visible = true
 			global_position = player_pos
-			_burrow_cooldown = 2.0
+			_burrow_cooldown = _burrow_cooldown_cfg
 		elif do_move:
 			_move_toward(player_pos, delta)
 	else:
@@ -275,3 +288,13 @@ func _die() -> void:
 	var pool: ObjectPool = get_parent() as ObjectPool
 	if pool != null:
 		pool.release(self)
+
+
+## 是否已死亡（测试 / 外部查询）
+func is_dead() -> bool:
+	return _dead
+
+
+## 是否处于潜地状态（测试 / 外部查询）
+func is_burrowed() -> bool:
+	return _burrowed
