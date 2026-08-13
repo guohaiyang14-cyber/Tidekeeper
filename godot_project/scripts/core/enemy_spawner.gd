@@ -134,11 +134,11 @@ func _spawn_one() -> void:
 	var dist: float = 180.0 + RNG.randf_range(0.0, 220.0)
 	var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
 	e.spawn_at(pos, target)
-	if not e.enemy_died.is_connected(_on_enemy_died):
-		e.enemy_died.connect(_on_enemy_died)
+	_connect_died(e)
 
 
-## 精英夜：巨钳王 = 强化铁壳蟹（3 倍血 / 3 倍经验 / 2 倍接触伤害）
+## 精英夜：巨钳王 = 强化铁壳蟹（base_health×3 / base_exp×3 / contact_damage×2）
+## 注：该 3× 在 configure() 后仍会叠加 §8.2 夜晚缩放，故实战为「正常缩放后约 3×」
 func _spawn_elite(night: int) -> void:
 	var base: Dictionary = ConfigLoader.get_enemy("iron_crab")
 	if base.is_empty():
@@ -155,8 +155,7 @@ func _spawn_elite(night: int) -> void:
 	e.configure(edata, night)
 	var pos: Vector2 = target.global_position + Vector2(0.0, -200.0)
 	e.spawn_at(pos, target)
-	if not e.enemy_died.is_connected(_on_enemy_died):
-		e.enemy_died.connect(_on_enemy_died)
+	_connect_died(e)
 	print("[EnemySpawner] 精英登场：巨钳王")
 
 
@@ -171,9 +170,14 @@ func _spawn_boss(night: int) -> void:
 	e.configure_boss(b)
 	var pos: Vector2 = target.global_position + Vector2(0.0, -220.0)
 	e.spawn_at(pos, target)
+	_connect_died(e)
+	print("[EnemySpawner] 天灾夜 Boss 登场：%s" % b.get("name", "未知"))
+
+
+## 连接敌人死亡信号（幂等：同一实例仅连一次，避免 release 复用后重复连接）
+func _connect_died(e: EnemyBase) -> void:
 	if not e.enemy_died.is_connected(_on_enemy_died):
 		e.enemy_died.connect(_on_enemy_died)
-	print("[EnemySpawner] 天灾夜 Boss 登场：%s" % b.get("name", "未知"))
 
 
 ## 敌人死亡：掉经验珠 + 潮币

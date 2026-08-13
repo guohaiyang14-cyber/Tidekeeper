@@ -16,11 +16,8 @@ var _shop_manager: ShopManager
 
 func _ready() -> void:
 	visible = false
-	if _shop_manager == null:
-		var sm: Node = get_parent().get_parent().get_node_or_null("ShopManager") if get_parent() else null
-		if sm == null and get_parent() != null:
-			sm = get_parent().get_node_or_null("ShopManager")
-		_shop_manager = sm as ShopManager
+	# ShopManager 由 World 在 _ready 中通过 setup() 注入（正式路径）。
+	# 不在此做脆弱的双跳节点回溯（get_parent().get_parent()），避免场景树结构调整即断裂。
 	_connect_manager()
 
 

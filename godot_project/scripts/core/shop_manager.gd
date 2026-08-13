@@ -131,13 +131,13 @@ func _shuffle(arr: Array[Dictionary]) -> void:
 
 ## 武器单价（config 折扣后）
 func _weapon_cost() -> int:
-	var meta: Dictionary = ConfigLoader.weapons.get("metadata", {}).get("shop", {})
+	var meta: Dictionary = ConfigLoader.get_weapon_shop_meta()
 	return _discounted(int(meta.get("cost", 30)), float(meta.get("discount", 0.2)))
 
 
 ## 被动单价（config 折扣后）
 func _passive_cost() -> int:
-	var meta: Dictionary = ConfigLoader.passives.get("metadata", {}).get("shop", {})
+	var meta: Dictionary = ConfigLoader.get_passive_shop_meta()
 	return _discounted(int(meta.get("cost", 20)), float(meta.get("discount", 0.2)))
 
 

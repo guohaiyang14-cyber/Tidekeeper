@@ -139,6 +139,16 @@ func get_enemy_difficulty() -> Dictionary:
 func get_enemy_spawn() -> Dictionary:
 	return enemies.get("metadata", {}).get("spawn", {})
 
+
+## 武器商店参数（来自 weapons.json metadata.shop）
+func get_weapon_shop_meta() -> Dictionary:
+	return weapons.get("metadata", {}).get("shop", {})
+
+
+## 被动商店参数（来自 passives.json metadata.shop）
+func get_passive_shop_meta() -> Dictionary:
+	return passives.get("metadata", {}).get("shop", {})
+
 ## 获取全部敌人 id 列表
 func get_all_enemy_ids() -> Array:
 	return enemies.get("enemies", {}).keys()
