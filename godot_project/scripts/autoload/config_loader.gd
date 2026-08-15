@@ -160,6 +160,11 @@ func get_starting_weapon() -> String:
 	return weapons.get("metadata", {}).get("starting_weapon", "")
 
 
+## 武器每级伤害加成系数（来自 weapons.json metadata.damage_per_level，§6.3）
+func get_damage_per_level() -> float:
+	return float(weapons.get("metadata", {}).get("damage_per_level", 0.15))
+
+
 ## 被动商店参数（来自 passives.json metadata.shop）
 func get_passive_shop_meta() -> Dictionary:
 	return passives.get("metadata", {}).get("shop", {})

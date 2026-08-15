@@ -5,9 +5,10 @@
     "max_weapon_level": 7,
     "slot_limit": 4,
     "starting_weapon": "harpoon",
+    "damage_per_level": 0.15,
     "shop": { "cost": 30, "discount": 0.2 },
     "mvp_scope": "8 种武器 / 8 条进化路径（路径 #9、#10 为内容扩充阶段，不在本表）",
-    "note": "运行时只读；调参改表不改公式。武器等级上限见 §6.3，槽位上限见 §6.1"
+    "note": "运行时只读；调参改表不改公式。武器等级上限见 §6.3，槽位上限见 §6.1；damage_per_level 见 §6.3"
   },
   "weapons": {
     "harpoon": {
@@ -20,6 +21,13 @@
       "max_level": 7,
       "level_1_trait": "5 弹道、穿透 2",
       "notes": "定向；MVP 起步值",
+      "behavior": {
+        "base_count": 5,
+        "count_per_level": 1,
+        "base_pierce": 2,
+        "pierce_per_level": 1,
+        "spread_deg": 6.0
+      },
       "evolution": {
         "name": "深渊鱼叉",
         "required_passive": "潮汐罗盘",
@@ -39,6 +47,10 @@
       "max_level": 7,
       "level_1_trait": "范围 +80%",
       "notes": "范围灼烧",
+      "behavior": {
+        "base_radius": 80.0,
+        "radius_per_level": 0.15
+      },
       "evolution": {
         "name": "永昼圣火",
         "required_passive": "燃灯油",
@@ -59,6 +71,11 @@
       "max_level": 7,
       "level_1_trait": "命中范围 +60%",
       "notes": "近战爆发",
+      "behavior": {
+        "base_radius": 70.0,
+        "l1_radius_mult": 1.6,
+        "radius_per_level": 0.15
+      },
       "evolution": {
         "name": "风暴之锚",
         "required_passive": "铁链",
@@ -75,9 +92,16 @@
       "behavior_type": "summon_jellyfish",
       "base_damage": 6,
       "attack_rate": null,
+      "pulse_rate": 1.0,
       "max_level": 7,
       "level_1_trait": "3 个召唤物",
       "notes": "召唤物 DPS 口径；同时 1 只",
+      "behavior": {
+        "base_radius": 120.0,
+        "radius_per_level": 10.0,
+        "base_targets": 3,
+        "targets_per_level": 1
+      },
       "evolution": {
         "name": "水母巢",
         "required_passive": "腐殖质",
@@ -97,6 +121,10 @@
       "max_level": 7,
       "level_1_trait": "3 秒一道落雷",
       "notes": "约 3 秒一击，满级改落雷节奏",
+      "behavior": {
+        "base_radius": 90.0,
+        "radius_per_level": 0.12
+      },
       "evolution": {
         "name": "湮灭雷暴",
         "required_passive": "风暴瓶",
@@ -116,6 +144,12 @@
       "max_level": 7,
       "level_1_trait": "4 道环形弹幕、命中减速 20%",
       "notes": "环形弹幕",
+      "behavior": {
+        "base_count": 4,
+        "count_per_level": 1,
+        "hit_slow_factor": 0.8,
+        "hit_slow_duration": 1.0
+      },
       "evolution": {
         "name": "深渊水母王",
         "required_passive": "深海之眼",
@@ -136,6 +170,10 @@
       "max_level": 7,
       "level_1_trait": "3 圈环绕锚链、中等伤害",
       "notes": "环绕 tick",
+      "behavior": {
+        "base_radius": 60.0,
+        "radius_per_level": 15.0
+      },
       "evolution": {
         "name": "永恒锚轮",
         "required_passive": "珊瑚屏障",
@@ -152,9 +190,16 @@
       "behavior_type": "summon_dive",
       "base_damage": 10,
       "attack_rate": null,
+      "pulse_rate": 1.0,
       "max_level": 7,
       "level_1_trait": "2 只信天翁跟随、俯冲",
       "notes": "召唤俯冲；同时 1 只",
+      "behavior": {
+        "base_radius": 280.0,
+        "radius_per_level": 20.0,
+        "base_targets": 2,
+        "targets_per_level": 1
+      },
       "evolution": {
         "name": "永恒鸥群",
         "required_passive": "经验囊",

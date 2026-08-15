@@ -49,6 +49,10 @@ var _burrow_timer: float = 0.0
 var _burrow_cooldown: float = 1.0
 var _enemy_proj_pool: ObjectPool
 
+# ---- 减速（水母炮等弹道命中） ----
+var _move_speed_mult: float = 1.0
+var _slow_timer: float = 0.0
+
 
 # ============================================================================
 # 池生命周期（ObjectPool 约定）
@@ -63,6 +67,8 @@ func _on_acquire() -> void:
 	_burrowed = false
 	_burrow_timer = 0.0
 	_burrow_cooldown = _burrow_initial_delay
+	_move_speed_mult = 1.0
+	_slow_timer = 0.0
 	_ensure_hash()
 	_ensure_enemy_projectile_pool()
 
@@ -186,6 +192,10 @@ func _process(delta: float) -> void:
 	_fire_timer -= delta
 	if _burrowed:
 		_burrow_timer -= delta
+	if _slow_timer > 0.0:
+		_slow_timer -= delta
+		if _slow_timer <= 0.0:
+			_move_speed_mult = 1.0
 
 	# 分帧：仅移动逻辑走 update_group（SKILL.md §5.3）
 	var do_move: bool = (Engine.get_process_frames() % update_group == 0)
@@ -217,9 +227,21 @@ func _process(delta: float) -> void:
 func _move_toward(player_pos: Vector2, delta: float) -> void:
 	var old_pos: Vector2 = global_position
 	var dir: Vector2 = (player_pos - global_position).normalized()
-	global_position += dir * move_speed * delta
+	global_position += dir * move_speed * _move_speed_mult * delta
 	if _hash != null:
 		_hash.update(self, old_pos)
+
+
+## 施加移速减速（factor=0.8 → 移速×0.8；取更强减速并刷新持续时间）
+func apply_slow(factor: float, duration: float) -> void:
+	if duration <= 0.0 or factor >= 1.0:
+		return
+	_move_speed_mult = minf(_move_speed_mult, factor)
+	_slow_timer = maxf(_slow_timer, duration)
+
+
+func get_move_speed_mult() -> float:
+	return _move_speed_mult
 
 
 func _try_contact_damage(player_pos: Vector2) -> void:

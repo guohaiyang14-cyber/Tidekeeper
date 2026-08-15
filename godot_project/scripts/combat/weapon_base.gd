@@ -20,9 +20,6 @@ var attack_timer: float = 0.0
 var get_target: Callable = Callable()
 var get_owner_pos: Callable = Callable()
 
-## 伤害/级系数（原型占位，W12 随被动系统统一校准，§6.3）
-const DAMAGE_PER_LEVEL: float = 0.15
-
 
 func configure(data: Dictionary, lv: int) -> void:
 	weapon_data = data
@@ -32,16 +29,81 @@ func configure(data: Dictionary, lv: int) -> void:
 
 
 func get_attack_rate() -> float:
-	return float(weapon_data.get("attack_rate", 1.0))
+	# 召唤型表载 attack_rate 可为 null；改读 pulse_rate（默认 1.0，§4.2）
+	var raw: Variant = weapon_data.get("attack_rate", 1.0)
+	if raw == null:
+		return float(weapon_data.get("pulse_rate", 1.0))
+	return float(raw)
 
 
 func get_base_damage() -> int:
 	return int(weapon_data.get("base_damage", 0))
 
 
-## 等级缩放伤害（§6.3：每级 +15%）
+## 等级缩放伤害（§6.3：每级系数来自 weapons.json metadata.damage_per_level）
 func get_leveled_damage() -> int:
-	return int(round(float(get_base_damage()) * (1.0 + DAMAGE_PER_LEVEL * float(level - 1))))
+	var per_lv: float = ConfigLoader.get_damage_per_level()
+	return int(round(float(get_base_damage()) * (1.0 + per_lv * float(level - 1))))
+
+
+## 读取 behavior 子表数值（缺省回退 default）
+func get_behavior_float(key: String, default_value: float) -> float:
+	var beh: Variant = weapon_data.get("behavior", {})
+	if beh is Dictionary:
+		return float((beh as Dictionary).get(key, default_value))
+	return default_value
+
+
+func get_behavior_int(key: String, default_value: int) -> int:
+	var beh: Variant = weapon_data.get("behavior", {})
+	if beh is Dictionary:
+		return int((beh as Dictionary).get(key, default_value))
+	return default_value
+
+
+## 从 SpatialHash 取距 origin 最近的至多 count 个敌人（O(n·k)，k=count，避免全量 sort）
+func query_nearest_enemies(hash: SpatialHash, origin: Vector2, radius: float, count: int) -> Array[EnemyBase]:
+	var result: Array[EnemyBase] = []
+	if hash == null or count <= 0:
+		return result
+	var best_d2: Array[float] = []
+	var candidates: Array = hash.query_radius(origin, radius)
+	for node in candidates:
+		if not (node is EnemyBase):
+			continue
+		var enemy: EnemyBase = node as EnemyBase
+		var d2: float = origin.distance_squared_to(enemy.global_position)
+		_insert_nearest(result, best_d2, enemy, d2, count)
+	return result
+
+
+func _insert_nearest(out_enemies: Array[EnemyBase], out_d2: Array[float], enemy: EnemyBase, d2: float, limit: int) -> void:
+	if out_enemies.size() < limit:
+		var i: int = out_enemies.size()
+		out_enemies.append(enemy)
+		out_d2.append(d2)
+		while i > 0 and out_d2[i] < out_d2[i - 1]:
+			var td: float = out_d2[i - 1]
+			out_d2[i - 1] = out_d2[i]
+			out_d2[i] = td
+			var te: EnemyBase = out_enemies[i - 1]
+			out_enemies[i - 1] = out_enemies[i]
+			out_enemies[i] = te
+			i -= 1
+		return
+	if d2 >= out_d2[limit - 1]:
+		return
+	out_enemies[limit - 1] = enemy
+	out_d2[limit - 1] = d2
+	var j: int = limit - 1
+	while j > 0 and out_d2[j] < out_d2[j - 1]:
+		var td2: float = out_d2[j - 1]
+		out_d2[j - 1] = out_d2[j]
+		out_d2[j] = td2
+		var te2: EnemyBase = out_enemies[j - 1]
+		out_enemies[j - 1] = out_enemies[j]
+		out_enemies[j] = te2
+		j -= 1
 
 
 ## 每帧推进计时；到点自动开火（无目标不发射、不累积）

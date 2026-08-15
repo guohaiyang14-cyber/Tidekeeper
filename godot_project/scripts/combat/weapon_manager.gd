@@ -12,6 +12,11 @@ const _WEAPON_BASE = preload("res://scripts/combat/weapon_base.gd")
 const _WEAPON_HARPOON = preload("res://scripts/combat/weapon_harpoon.gd")
 const _WEAPON_HOLY_FIRE = preload("res://scripts/combat/weapon_holy_fire.gd")
 const _WEAPON_ANCHOR = preload("res://scripts/combat/weapon_anchor_chain.gd")
+const _WEAPON_ANCHOR_HAMMER = preload("res://scripts/combat/weapon_anchor_hammer.gd")
+const _WEAPON_SPORE = preload("res://scripts/combat/weapon_spore.gd")
+const _WEAPON_STORM = preload("res://scripts/combat/weapon_storm_cloud.gd")
+const _WEAPON_JELLY = preload("res://scripts/combat/weapon_jellyfish_cannon.gd")
+const _WEAPON_ALBATROSS = preload("res://scripts/combat/weapon_albatross.gd")
 
 var _weapons: Array[WeaponBase] = []
 var _player: Node2D
@@ -53,6 +58,9 @@ func sync_from_game_state() -> void:
 		var w: WeaponBase = _weapons[i]
 		if w.weapon_id not in owned:
 			_remove_weapon_instance(w)
+		else:
+			# 已持有：同步等级（三选一/商店升级后实例需跟上 GameState）
+			w.level = GameState.get_weapon_level(w.weapon_id)
 
 
 func _has_weapon(id: String) -> bool:
@@ -85,6 +93,16 @@ func _create_weapon(behavior_type: String) -> WeaponBase:
 			return WeaponHolyFire.new()
 		"orbit_tick":
 			return WeaponAnchorChain.new()
+		"melee_burst":
+			return WeaponAnchorHammer.new()
+		"summon_jellyfish":
+			return WeaponSpore.new()
+		"area_lightning":
+			return WeaponStormCloud.new()
+		"ring_barrage":
+			return WeaponJellyfishCannon.new()
+		"summon_dive":
+			return WeaponAlbatross.new()
 		_:
 			push_warning("[WeaponManager] 未知 behavior_type: %s，跳过" % behavior_type)
 			return null

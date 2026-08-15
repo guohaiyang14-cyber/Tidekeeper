@@ -1,5 +1,5 @@
 # ============================================================================
-# W5WeaponTest — W5 武器系统单测（headless 验收）
+# W5WeaponTest — W5/W6 武器系统单测（headless 验收）
 # 验收项：
 #   T15-a 武器可升至 7 级（max_weapon_level），满级后再获得返回 false
 #   T15-b 武器槽上限 4（MAX_WEAPON_SLOTS），第 5 个被拒
@@ -7,8 +7,10 @@
 #   T15-d 灯塔圣火（area_burn）范围伤害命中敌人
 #   T15-e 锚链（orbit_tick）环绕伤害命中玩家周围敌人
 #   T15-f 索敌返回最近敌人
+#   T15-g 弹道 MAX_LIFE 回收
+#   T16-a~e W6 五武器：锚锤/孢子/雷暴云/水母炮/信天翁均可造成伤害
 # 红线：仅走对象池 / SpatialHash；不 instantiate；断言不依赖渲染
-# 运行：godot --headless --path godot_project res://scenes/tests/w5_weapon_test.tscn
+# 运行：godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/w5_weapon_test.tscn
 #       退出码 0=全过 / 1=有失败
 # ============================================================================
 extends Node2D
@@ -58,12 +60,14 @@ func _reset_arena() -> void:
 	weapon_manager.sync_from_game_state()
 
 
-## 设置单个被测武器：新局清槽 → 清场 → 仅装备 id（避免对上一测试的武器误建实例）
+## 设置单个被测武器：新局清槽 → 去掉开局默认武器 → 仅装备 id
 func _setup_weapon(id: String) -> void:
-	GameState.start_new_run("watcher")  # 先清槽（weapon_slots/weapon_levels）
-	_reset_arena()                      # 回收敌人/投射物 + 按空槽同步（移除所有武器实例）
+	GameState.start_new_run("watcher")
+	GameState.weapon_slots.clear()
+	GameState.weapon_levels.clear()
+	_reset_arena()
 	GameState.add_weapon(id)
-	weapon_manager.sync_from_game_state()  # 新增 id 武器实例
+	weapon_manager.sync_from_game_state()
 
 
 ## 推进 n 帧（headless 下引擎尽快跑完）
@@ -80,6 +84,27 @@ func _run_all() -> void:
 	await _test_anchor_chain()
 	await _test_targeting()
 	await _test_projectile_recycle()
+	await _test_w6_anchor_hammer()
+	await _test_w6_spore()
+	await _test_w6_storm_cloud()
+	await _test_w6_jellyfish_cannon()
+	await _test_w6_albatross()
+	await _test_all_behavior_types_creatable()
+
+
+## 在玩家附近刷一只敌人，等待武器造成掉血
+func _assert_weapon_damages(weapon_id: String, offset: Vector2, frames: int, label: String) -> void:
+	_setup_weapon(weapon_id)
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	e.spawn_at(player.global_position + offset, player)
+	var start_health: int = e.health
+	for _i in frames:
+		await get_tree().process_frame
+		if e.health < start_health:
+			break
+	_assert(e.health < start_health, label)
+	if e != null and enemy_pool.get_active().find(e) != -1:
+		enemy_pool.release(e)
 
 
 # ---- T15-a 武器升级至 7 级 --------------------------------------------------
@@ -189,6 +214,75 @@ func _test_projectile_recycle() -> void:
 			recycled = true
 			break
 	_assert(recycled, "未命中弹道在 MAX_LIFE(2s) 内被回收（修复对象池耗尽）")
+
+
+# ---- T16-a 锚锤近战爆发 -----------------------------------------------------
+func _test_w6_anchor_hammer() -> void:
+	# 前方半球内 50u，应被 melee_burst 打到
+	await _assert_weapon_damages("anchor_hammer", Vector2(50.0, 0.0), 180, "锚锤近战爆发命中前方敌人 (melee_burst)")
+
+
+# ---- T16-b 水母孢子召唤叮咬 -------------------------------------------------
+func _test_w6_spore() -> void:
+	await _assert_weapon_damages("spore", Vector2(80.0, 0.0), 120, "水母孢子召唤叮咬命中敌人 (summon_jellyfish)")
+
+
+# ---- T16-c 雷暴云落雷（约 3s 一击） ------------------------------------------
+func _test_w6_storm_cloud() -> void:
+	# attack_rate=0.33 → 约 3s；固定 60fps 下留足余量
+	await _assert_weapon_damages("storm_cloud", Vector2(100.0, 0.0), 240, "雷暴云落雷命中敌人 (area_lightning)")
+
+
+# ---- T16-d 水母炮环形弹幕 ---------------------------------------------------
+func _test_w6_jellyfish_cannon() -> void:
+	_setup_weapon("jellyfish_cannon")
+	# 敌人放在右侧弹道路径上（环形有向右的一道）；锁死移速避免走开被接触伤害误伤
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	e.spawn_at(player.global_position + Vector2(120.0, 0.0), player)
+	e.move_speed = 0.0
+	var start_health: int = e.health
+	var saw_proj: bool = false
+	for _i in 150:
+		await get_tree().process_frame
+		if projectile_pool.active_count() > 0:
+			saw_proj = true
+		if e.health < start_health:
+			break
+	_assert(saw_proj, "水母炮发射了环形弹道 (ring_barrage)")
+	_assert(e.health < start_health, "水母炮环形弹幕命中敌人")
+	_assert(e.get_move_speed_mult() < 1.0, "水母炮命中施加减速 (hit_slow 20%)")
+	if enemy_pool.get_active().find(e) != -1:
+		enemy_pool.release(e)
+
+
+# ---- T16-e 信天翁俯冲 -------------------------------------------------------
+func _test_w6_albatross() -> void:
+	await _assert_weapon_damages("albatross", Vector2(150.0, 0.0), 120, "信天翁俯冲命中敌人 (summon_dive)")
+
+
+# ---- T16-f 八种 behavior_type 均可实例化 ------------------------------------
+func _test_all_behavior_types_creatable() -> void:
+	var ids: Array[String] = [
+		"harpoon", "holy_fire", "anchor_hammer", "spore",
+		"storm_cloud", "jellyfish_cannon", "anchor_chain", "albatross",
+	]
+	var created: int = 0
+	for id in ids:
+		GameState.start_new_run("watcher")
+		_reset_arena()
+		if id != "harpoon":
+			GameState.add_weapon(id)
+		weapon_manager.sync_from_game_state()
+		var found: bool = false
+		for w in weapon_manager.get_weapons():
+			if w.weapon_id == id:
+				found = true
+				break
+		if found:
+			created += 1
+		else:
+			_assert(false, "可创建武器实例: %s" % id)
+	_assert(created == 8, "8 种武器 behavior_type 均可创建实例 (%d/8)" % created)
 
 
 func _finish() -> void:

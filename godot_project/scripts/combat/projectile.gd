@@ -21,6 +21,8 @@ const MAX_LIFE: float = 2.0
 var _direction: Vector2 = Vector2.RIGHT
 var _damage: int = 0
 var _pierce: int = 0
+var _slow_factor: float = 1.0
+var _slow_duration: float = 0.0
 var _hash: SpatialHash
 var _hit_set: Dictionary = {}  # 已命中敌人，去重
 var _active: bool = false
@@ -30,6 +32,8 @@ var _life: float = 0.0
 func _on_acquire() -> void:
 	_active = true
 	_life = 0.0
+	_slow_factor = 1.0
+	_slow_duration = 0.0
 	_hit_set.clear()
 	_ensure_hash()
 
@@ -48,12 +52,14 @@ func _ensure_hash() -> void:
 			_hash = holder.get_hash()
 
 
-## 发射配置（由武器调用）
-func launch(pos: Vector2, dir: Vector2, damage: int, pierce: int) -> void:
+## 发射配置（由武器调用）；slow_factor<1 且 duration>0 时命中施加减速
+func launch(pos: Vector2, dir: Vector2, damage: int, pierce: int, slow_factor: float = 1.0, slow_duration: float = 0.0) -> void:
 	global_position = pos
 	_direction = dir.normalized()
 	_damage = damage
 	_pierce = pierce
+	_slow_factor = slow_factor
+	_slow_duration = slow_duration
 	_life = MAX_LIFE
 	if is_inside_tree():
 		visible = true
@@ -73,7 +79,10 @@ func _process(delta: float) -> void:
 		for node in candidates:
 			if node is EnemyBase and not _hit_set.has(node):
 				_hit_set[node] = true
-				(node as EnemyBase).take_damage(_damage)
+				var enemy: EnemyBase = node as EnemyBase
+				enemy.take_damage(_damage)
+				if _slow_duration > 0.0 and _slow_factor < 1.0:
+					enemy.apply_slow(_slow_factor, _slow_duration)
 				_pierce -= 1
 				if _pierce < 0:
 					_recycle()
