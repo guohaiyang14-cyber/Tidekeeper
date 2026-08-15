@@ -20,6 +20,7 @@ func _ready() -> void:
 	_test_rng_deterministic()
 	_test_exp_table()
 	_test_game_state_leveling()
+	await _test_starting_weapon_and_game_over()
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	print("============================================================")
@@ -141,3 +142,34 @@ func _test_game_state_leveling() -> void:
 	_assert(GameState.player_level == 2 and GameState.player_exp == 0, "22 -> Lv2")
 	GameState.add_exp(27)
 	_assert(GameState.player_level == 3 and GameState.player_exp == 0, "E(2)=27 -> Lv3")
+
+
+## 开局默认武器授予 + 游戏结束只触发一次 + 昼夜循环冻结（修复 §4.2 / 用户反馈）
+func _test_starting_weapon_and_game_over() -> void:
+	print("[StartWeapon + GameOver]")
+	# 1) 开局应授予数据驱动默认武器，避免 0 武器无法攻击的死亡螺旋
+	GameState.start_new_run("watcher", 777)
+	_assert(ConfigLoader.get_starting_weapon() == "harpoon", "config starting_weapon = harpoon")
+	_assert(GameState.weapon_slots.has("harpoon"), "start_new_run grants starting weapon")
+	_assert(GameState.get_weapon_level("harpoon") == 1, "starting weapon level = 1")
+	# 2) 游戏结束只触发一次（is_over 守卫，防止敌人逐帧重复触发）
+	# 计数用引用类型（Array），避免 GDScript lambda 对 int 的按值捕获
+	var tally: Array[int] = [0]
+	var cb := func(_r: String): tally[0] += 1
+	GameState.game_over.connect(cb)
+	GameState.trigger_game_over("hp_zero")
+	GameState.trigger_game_over("hp_zero")  # 重复触发
+	GameState.damage_player(999)            # 再次撞击归零
+	await get_tree().process_frame
+	GameState.game_over.disconnect(cb)
+	_assert(tally[0] == 1, "game_over emitted exactly once")
+	# 3) 昼夜循环停止后冻结（phase=INIT，_process 不再推进夜晚计时器 / 不会滚入 DAY）
+	var dn := DayNightStateMachine.new()
+	add_child(dn)
+	dn.start_run()
+	await get_tree().process_frame
+	_assert(dn.get_phase() == DayNightStateMachine.Phase.NIGHT, "start_run -> NIGHT")
+	dn.stop()
+	await get_tree().process_frame
+	_assert(dn.get_phase() == DayNightStateMachine.Phase.INIT, "stop freezes to INIT")
+	dn.queue_free()

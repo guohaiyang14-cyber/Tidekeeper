@@ -25,12 +25,15 @@ const UNIT_TO_PIXEL: float = 60.0
 # 运行时
 var _move_speed_mult: float = 1.0
 var _pickup_radius_mult: float = 1.0
+var _hurt_flash: float = 0.0
 
 
 func _ready() -> void:
 	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
 	_apply_pickup_config()
+	if not GameState.player_damaged.is_connected(_on_player_damaged):
+		GameState.player_damaged.connect(_on_player_damaged)
 	print("[Player] 就绪: character=%s move_speed=%.1f pickup_radius=%.0f" % [
 		character_id, base_move_speed, base_pickup_radius,
 	])
@@ -38,6 +41,9 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_handle_movement()
+	if _hurt_flash > 0.0:
+		_hurt_flash = maxf(0.0, _hurt_flash - _delta)
+		queue_redraw()
 
 
 ## 从配置应用角色属性（§9.4）
@@ -59,6 +65,12 @@ func _apply_pickup_config() -> void:
 	var cfg: Dictionary = ConfigLoader.get_exp_gem_config()
 	if cfg.has("default_pickup_radius"):
 		base_pickup_radius = float(cfg["default_pickup_radius"])
+
+
+## 受击闪红反馈（GameState.player_damaged 触发，短时提示）
+func _on_player_damaged(_amount: int) -> void:
+	_hurt_flash = 0.18
+	queue_redraw()
 
 
 ## 处理移动输入（WASD，§5.2）
@@ -106,6 +118,7 @@ func _draw() -> void:
 	# 拾取半径范围（半透明圈，方便调试观察）
 	var radius: float = get_pickup_radius()
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(0.3, 0.85, 1.0, 0.15), 2.0)
-	# 玩家本体
-	draw_circle(Vector2.ZERO, 14.0, Color(0.9, 0.95, 1.0, 0.9))
+	# 玩家本体（受击闪红）
+	var body_color: Color = Color(0.9, 0.95, 1.0, 0.9) if _hurt_flash <= 0.0 else Color(1.0, 0.25, 0.25, 0.95)
+	draw_circle(Vector2.ZERO, 14.0, body_color)
 	draw_arc(Vector2.ZERO, 14.0, 0.0, TAU, 24, Color(0.3, 0.6, 1.0, 1.0), 2.0)

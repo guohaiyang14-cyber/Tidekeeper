@@ -194,7 +194,10 @@ func _test_force_resume_closes_ui_signal() -> void:
 	GameState.trigger_game_over("test")
 	_assert(closed[0], "game_over 时发出 upgrade_resolved")
 	_assert(not UpgradeManager.is_presenting(), "game_over 后结束三选一")
-	_assert(not get_tree().paused, "game_over 后恢复树")
+	# is_over 时 UpgradeManager 不解暂停（结束态暂停权归 World/ResultUI）
+	_assert(get_tree().paused, "is_over 时 UpgradeManager 保持暂停（不解暂停）")
+	_assert(GameState.is_over, "trigger_game_over 置 is_over")
+	get_tree().paused = false  # 单测无 World，自行清暂停以免污染后续用例
 	if UpgradeManager.upgrade_resolved.is_connected(cb):
 		UpgradeManager.upgrade_resolved.disconnect(cb)
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -22,6 +22,8 @@
 [ext_resource type="PackedScene" path="res://scripts/combat/enemy_projectile.tscn" id="20_eproj"]
 [ext_resource type="Script" path="res://scripts/core/shop_manager.gd" id="21_shop"]
 [ext_resource type="Script" path="res://scripts/core/shop_ui.gd" id="22_shopui"]
+[ext_resource type="Script" path="res://scripts/core/day_phase_ui.gd" id="23_dayphase"]
+[ext_resource type="Script" path="res://scripts/core/result_ui.gd" id="24_resultui"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -43,7 +45,7 @@ pool_size = 120
 [node name="ProjectilePool" type="Node" parent="."]
 script = ExtResource("5_proj_pool")
 scene = ExtResource("14_proj")
-pool_size = 32
+pool_size = 48
 
 [node name="EnemyProjectilePool" type="Node" parent="."]
 script = ExtResource("19_eproj_pool")
@@ -101,6 +103,7 @@ horizontal_alignment = 0
 vertical_alignment = 0
 
 [node name="DayPhaseUI" type="Control" parent="UI"]
+script = ExtResource("23_dayphase")
 visible = false
 layout_mode = 3
 anchors_preset = 15
@@ -111,6 +114,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="ResultUI" type="Control" parent="UI"]
+script = ExtResource("24_resultui")
 visible = false
 layout_mode = 3
 anchors_preset = 15
@@ -145,5 +149,4 @@ offset_bottom = 620.0
 layout_mode = 2
 text = "潮币：0"
 
-[node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(640, 360)
+[node name="Camera2D" type="Camera2D" parent="Player"]

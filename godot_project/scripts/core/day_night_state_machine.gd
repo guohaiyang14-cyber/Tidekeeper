@@ -83,6 +83,13 @@ func skip_day_phase() -> void:
 	enter_next_night()
 
 
+## 强制停止昼夜循环（游戏结束/通关时调用，冻结夜晚计时器并阻止后续阶段切换）
+func stop() -> void:
+	_night_timer = 0.0
+	_phase = Phase.INIT
+	print("[DayNight] 循环已停止（冻结）")
+
+
 ## 获取当前阶段
 func get_phase() -> Phase:
 	return _phase

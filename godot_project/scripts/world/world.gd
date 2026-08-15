@@ -9,6 +9,9 @@ class_name World
 
 # 显式预加载 EnemyBase，确保 headless 下 class_name 注册（刷怪类型依赖）
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
+# 显式预加载 UI 脚本，确保 headless 下 class_name 可用（新脚本可能尚未写入 global_script_class_cache）
+const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
+const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -25,6 +28,8 @@ const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 @onready var coin_pool: ObjectPool = $CoinPool
 @onready var shop_manager: ShopManager = $ShopManager
 @onready var shop_ui: ShopUI = $UI/ShopUI
+@onready var day_phase_ui: DayPhaseUI = $UI/DayPhaseUI
+@onready var result_ui: ResultUI = $UI/ResultUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 
@@ -38,6 +43,8 @@ func _ready() -> void:
 	if player is Player:
 		character_id = (player as Player).character_id
 	GameState.start_new_run(character_id)
+	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
+	weapon_manager.sync_from_game_state()
 	UpgradeManager.reset()
 	# 空间哈希加入 group，供敌人/武器/弹道通过 group 查找（避免硬编码路径）
 	spatial_hash_holder.add_to_group("spatial_hash")
@@ -48,6 +55,7 @@ func _ready() -> void:
 	# 商店接线（ShopManager ↔ ShopUI 双向）
 	shop_manager.setup(shop_ui)
 	shop_ui.setup(shop_manager)
+	shop_ui.skip_requested.connect(_on_shop_skip)
 	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
 	player.add_to_group("player")
 	enemy_projectile_pool.add_to_group("enemy_projectile_pool")
@@ -72,18 +80,24 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	# 调试信息（W2 临时，W11 移到正式 HUD）
-	if debug_label:
-		debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %d/%d  |  经验: %d  |  珠: %d" % [
-			day_night.get_current_night(),
-			_phase_label(day_night.get_phase()),
-			day_night.get_night_remaining(),
-			GameState.player_level,
-			GameState.player_health,
-			GameState.player_max_health,
-			GameState.player_exp,
-			pickup_system.active_gem_count() if pickup_system else 0,
-		]
+	_update_debug_label()
+
+
+## 刷新调试 HUD（玩家血量/等级/经验等）。游戏结束/通关时树被暂停、_process 停跑，
+## 故在 _on_game_over/_on_game_win 中显式再调一次，避免 HUD 冻结在致死前最后一帧。
+func _update_debug_label() -> void:
+	if debug_label == null:
+		return
+	debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %d/%d  |  经验: %d  |  珠: %d" % [
+		day_night.get_current_night(),
+		_phase_label(day_night.get_phase()),
+		day_night.get_night_remaining(),
+		GameState.player_level,
+		GameState.player_health,
+		GameState.player_max_health,
+		GameState.player_exp,
+		pickup_system.active_gem_count() if pickup_system else 0,
+	]
 
 
 ## 验证配置加载（启动自检）
@@ -113,6 +127,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全
 			_clear_night_entities()
+			# 显示白昼选择页面框架（技术选型.md：DayPhaseUI = 抉择之昼）
+			day_phase_ui.enter_day(day_night.get_current_night())
 			shop_manager.open_shop()
 		DayNightStateMachine.Phase.TRANSITION:
 			pass  # 过渡帧，无需处理
@@ -125,11 +141,31 @@ func _on_night_tick(remaining: float) -> void:
 func _on_game_over(reason: String) -> void:
 	print("[World] 游戏结束: %s" % reason)
 	_clear_night_entities()
+	day_phase_ui.exit_day()
+	# 冻结昼夜循环，阻止夜晚计时器继续滚动进入抉择之昼（§5.1）
+	day_night.stop()
+	# 显示结算/死因界面（§挫败感控制：死亡原因可视化）并暂停整棵树（防止玩家在结算页继续移动/交互）
+	result_ui.show_game_over(reason, day_night.get_current_night(), GameState.player_level, GameState.tidecoins)
+	get_tree().paused = true
+	_update_debug_label()  # 树已暂停、_process 停跑，强制刷新 HUD 以显示真实 HP（致死时 player_health 已置 0）
 
 
 func _on_game_win() -> void:
 	print("[World] 通关！")
 	_clear_night_entities()
+	day_phase_ui.exit_day()
+	day_night.stop()
+	# 显示通关结算界面并暂停整棵树
+	result_ui.show_victory(day_night.get_current_night(), GameState.player_level, GameState.tidecoins)
+	get_tree().paused = true
+	_update_debug_label()
+
+
+## 玩家在商店点「继续下一夜」→ 关店并进下一夜（与 Q 键等效）
+func _on_shop_skip() -> void:
+	day_phase_ui.exit_day()
+	shop_ui.close()
+	day_night.skip_day_phase()
 
 
 ## 停止刷怪并回收敌人 / 敌方弹道 / 拾取物
@@ -149,6 +185,7 @@ func _on_upgrade_resolved(_offer: Dictionary, _is_skip: bool) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# 抉择之昼按 skip 键进入下一夜
 	if event.is_action_pressed("skip") and day_night.get_phase() == DayNightStateMachine.Phase.DAY:
+		day_phase_ui.exit_day()
 		shop_ui.close()
 		day_night.skip_day_phase()
 	# W2 调试：按 interact(E) 在玩家周围生成经验珠（随机品质）

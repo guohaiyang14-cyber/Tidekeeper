@@ -155,6 +155,11 @@ func get_weapon_shop_meta() -> Dictionary:
 	return weapons.get("metadata", {}).get("shop", {})
 
 
+## 开局默认武器（来自 weapons.json metadata.starting_weapon，数据驱动避免硬编码 §4.2）
+func get_starting_weapon() -> String:
+	return weapons.get("metadata", {}).get("starting_weapon", "")
+
+
 ## 被动商店参数（来自 passives.json metadata.shop）
 func get_passive_shop_meta() -> Dictionary:
 	return passives.get("metadata", {}).get("shop", {})

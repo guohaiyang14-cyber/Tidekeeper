@@ -18,6 +18,7 @@ signal game_win()
 signal exp_gained(amount: int, total_exp: int)
 signal level_up(new_level: int)
 signal tidecoins_changed(new_total: int)
+signal player_damaged(amount: int)
 
 # 局内状态
 var current_night: int = 0
@@ -49,6 +50,9 @@ const MAX_REFINE_III: int = 0  # MVP 不做 III
 
 # 局内种子（确定性回放）
 var run_seed: int = 0
+
+# 局是否已结束（游戏结束/通关后防止重复触发）
+var is_over: bool = false
 
 
 func _ready() -> void:
@@ -82,11 +86,18 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	weapon_slots.clear()
 	passive_slots.clear()
 	weapon_levels.clear()
+	# 开局授予数据驱动的默认武器（避免 0 武器无法攻击的死亡螺旋，§4.2）
+	var sw: String = ConfigLoader.get_starting_weapon()
+	if sw != "":
+		add_weapon(sw)
 	# 武器等级上限来自 config（避免硬编码，§6.3）
 	var cfg_max_lv: int = ConfigLoader.get_max_weapon_level()
 	if cfg_max_lv > 0:
 		max_weapon_level = cfg_max_lv
 	refine_ii_count = 0
+
+	# 重置结束标记（新局可再次触发结束）
+	is_over = false
 
 	# 种子
 	if seed_value < 0:
@@ -167,6 +178,7 @@ func damage_player(amount: int) -> void:
 	if amount <= 0:
 		return
 	player_health -= amount
+	player_damaged.emit(amount)
 	if player_health <= 0:
 		player_health = 0
 		trigger_game_over("hp_zero")
@@ -192,12 +204,18 @@ func spend_tidecoins(amount: int) -> bool:
 
 ## 判定游戏结束
 func trigger_game_over(reason: String = "death") -> void:
+	if is_over:
+		return  # 已结束，防止敌人接触逐帧重复触发
+	is_over = true
 	game_over.emit(reason)
 	print("[GameState] 游戏结束: %s (已存活 %d 夜)" % [reason, current_night])
 
 
 ## 判定通关（第 20 夜 Boss 击败）
 func trigger_game_win() -> void:
+	if is_over:
+		return
+	is_over = true
 	game_win.emit()
 	print("[GameState] 通关！20 夜全部完成")
 

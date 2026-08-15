@@ -179,7 +179,9 @@ func _force_resume(_payload: Variant = null) -> void:
 	_current_offers = []
 	_weapon_seen_this_choice = false
 	_series_seen_this_choice.clear()
-	if get_tree() != null:
+	# 局已结束时不解暂停：结束态暂停权归 World/ResultUI，避免与连接顺序竞态
+	# （本 autoload 先于 World 订阅 game_over，若此处 unpause 再被 World pause 依赖顺序脆弱）
+	if get_tree() != null and not GameState.is_over:
 		get_tree().paused = false
 	if was_choosing:
 		upgrade_resolved.emit({}, true)

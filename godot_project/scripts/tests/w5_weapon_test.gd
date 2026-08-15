@@ -79,22 +79,24 @@ func _run_all() -> void:
 	await _test_holy_fire()
 	await _test_anchor_chain()
 	await _test_targeting()
+	await _test_projectile_recycle()
 
 
 # ---- T15-a 武器升级至 7 级 --------------------------------------------------
 func _test_leveling() -> void:
 	GameState.start_new_run("watcher")
-	var added: int = 0
-	if GameState.add_weapon("harpoon"):
-		added += 1
-	for _i in 6:  # 再获得 6 次 → 累计 7 次入槽/升级
-		if GameState.add_weapon("harpoon"):
+	# 开局已按配置授予默认武器（§4.2）→ 用 holy_fire 验证纯升级链路，避免与默认武器冲突
+	var wid: String = "holy_fire"
+	GameState.add_weapon(wid)  # 入槽并置 1 级
+	var added: int = 1
+	for _i in 6:  # 再获得 6 次 → 1+6 = 7 级
+		if GameState.add_weapon(wid):
 			added += 1
-	_assert(GameState.get_weapon_level("harpoon") == 7, "武器可升至 7 级 (max_weapon_level)")
-	_assert(added == 7, "harpoon 累计获得 7 次均成功")
-	var eighth: bool = GameState.add_weapon("harpoon")
+	_assert(GameState.get_weapon_level(wid) == 7, "武器可升至 7 级 (max_weapon_level)")
+	_assert(added == 7, "holy_fire 累计获得 7 次均成功")
+	var eighth: bool = GameState.add_weapon(wid)
 	_assert(eighth == false, "满级(7)后再获得同一武器返回 false")
-	_assert(GameState.get_weapon_level("harpoon") == 7, "满级后等级维持 7 不变")
+	_assert(GameState.get_weapon_level(wid) == 7, "满级后等级维持 7 不变")
 
 
 # ---- T15-b 武器槽上限 4 -----------------------------------------------------
@@ -167,6 +169,26 @@ func _test_targeting() -> void:
 	_assert(tgt == near, "索敌返回最近敌人 (100u) 而非 (500u)")
 	enemy_pool.release(near)
 	enemy_pool.release(far)
+
+
+# ---- T15-g 弹道生命周期回收（防止对象池耗尽导致武器停火） -----------------
+func _test_projectile_recycle() -> void:
+	_setup_weapon("harpoon")
+	# 直接发射一枚不命中任何敌人的弹道（朝右飞，2s 仅 ~840 单位，未达 5000 出界阈值）
+	# 旧实现：仅靠命中/出界回收 → _active 恒 true → 池被持续发射占满 → 武器停火
+	# 新实现：Projectile.MAX_LIFE(2s) 强制回收 → 有界
+	var p: Projectile = projectile_pool.acquire() as Projectile
+	_assert(p != null, "可获取弹道实例")
+	p.launch(player.global_position, Vector2.RIGHT, 10, 0)
+	await _simulate(2)
+	_assert(projectile_pool.active_count() >= 1, "弹道发射后处于活跃态")
+	var recycled: bool = false
+	for _i in 200:  # ≈3.3s @60fps > MAX_LIFE(2s)
+		await get_tree().process_frame
+		if projectile_pool.get_active().find(p) == -1:
+			recycled = true
+			break
+	_assert(recycled, "未命中弹道在 MAX_LIFE(2s) 内被回收（修复对象池耗尽）")
 
 
 func _finish() -> void:

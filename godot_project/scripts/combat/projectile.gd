@@ -13,16 +13,23 @@ const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 @export var speed: float = 420.0
 @export var hit_radius: float = 14.0
 
+## 弹道最大存活时间（秒）：即使未命中/未出界也强制回收，防止对象池被持续发射的弹道占满
+## （鱼叉枪每发 5+ 弹道，稀疏/速杀场景下未命中弹道会飞到 5000 单位边界才回收，
+##   约 12s 寿命 → 32 容量池几秒内耗尽 → 武器停火 → 玩家无敌防御被秒杀）
+const MAX_LIFE: float = 2.0
+
 var _direction: Vector2 = Vector2.RIGHT
 var _damage: int = 0
 var _pierce: int = 0
 var _hash: SpatialHash
 var _hit_set: Dictionary = {}  # 已命中敌人，去重
 var _active: bool = false
+var _life: float = 0.0
 
 
 func _on_acquire() -> void:
 	_active = true
+	_life = 0.0
 	_hit_set.clear()
 	_ensure_hash()
 
@@ -47,12 +54,17 @@ func launch(pos: Vector2, dir: Vector2, damage: int, pierce: int) -> void:
 	_direction = dir.normalized()
 	_damage = damage
 	_pierce = pierce
+	_life = MAX_LIFE
 	if is_inside_tree():
 		visible = true
 
 
 func _process(delta: float) -> void:
 	if not _active:
+		return
+	_life -= delta
+	if _life <= 0.0:
+		_recycle()
 		return
 	global_position += _direction * speed * delta
 	# 命中检测（所在格 + 邻格，SKILL §2.4）

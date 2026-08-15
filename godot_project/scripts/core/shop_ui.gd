@@ -10,8 +10,12 @@ extends Control
 
 var _shop_manager: ShopManager
 
+## 玩家请求跳过昼（继续下一夜）；World 监听后关店并进夜
+signal skip_requested()
+
 @onready var _vbox: VBoxContainer = $VBox
 @onready var _coin_label: Label = $VBox/CoinLabel
+var _skip_btn: Button
 
 
 func _ready() -> void:
@@ -19,6 +23,11 @@ func _ready() -> void:
 	# ShopManager 由 World 在 _ready 中通过 setup() 注入（正式路径）。
 	# 不在此做脆弱的双跳节点回溯（get_parent().get_parent()），避免场景树结构调整即断裂。
 	_connect_manager()
+	# 继续下一夜按钮（避免商店成为死路；与 Q 键等效；验收 1.1.5 要求可见跳过入口）
+	_skip_btn = Button.new()
+	_skip_btn.text = "继续下一夜 (Q)"
+	_skip_btn.pressed.connect(func(): skip_requested.emit())
+	_vbox.add_child(_skip_btn)
 
 
 ## 注入 ShopManager（由 World 调用）
@@ -54,7 +63,9 @@ func _on_purchase_failed(_reason: String) -> void:
 # ---- 渲染 ----
 
 func _render(items: Array) -> void:
-	# 清空旧按钮（保留 CoinLabel）
+	# 清空旧商品按钮（保留 CoinLabel）；跳过钮先摘下，渲染完再置底
+	if _skip_btn != null and _skip_btn.get_parent() == _vbox:
+		_vbox.remove_child(_skip_btn)
 	for child in _vbox.get_children():
 		if child != _coin_label:
 			child.queue_free()
@@ -64,6 +75,8 @@ func _render(items: Array) -> void:
 		btn.text = "%s · %s  (潮币 %d)" % [item.get("name", "?"), kind_label, int(item.get("cost", 0))]
 		btn.pressed.connect(_on_item_pressed.bind(item))
 		_vbox.add_child(btn)
+	if _skip_btn != null:
+		_vbox.add_child(_skip_btn)
 
 
 func _on_item_pressed(item: Dictionary) -> void:
