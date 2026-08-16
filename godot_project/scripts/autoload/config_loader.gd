@@ -177,6 +177,17 @@ func get_all_enemy_ids() -> Array:
 func get_boss(boss_id: String) -> Dictionary:
 	return bosses.get("bosses", {}).get(boss_id, {})
 
+
+## 天灾夹击规则（bosses.json metadata.calamity）
+func get_boss_calamity() -> Dictionary:
+	return bosses.get("metadata", {}).get("calamity", {})
+
+
+## 灯塔光晕参数（bosses.json metadata.lighthouse）
+func get_lighthouse_meta() -> Dictionary:
+	return bosses.get("metadata", {}).get("lighthouse", {})
+
+
 ## 按夜次获取 Boss（第 10/15/20 夜）
 func get_boss_by_night(night: int) -> Dictionary:
 	for boss in bosses.get("bosses", {}).values():

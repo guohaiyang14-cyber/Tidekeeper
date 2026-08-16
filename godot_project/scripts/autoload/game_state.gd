@@ -53,6 +53,8 @@ var run_seed: int = 0
 
 # 局是否已结束（游戏结束/通关后防止重复触发）
 var is_over: bool = false
+## arm_game_win() 已置 is_over，但 game_win 信号尚未发出（防死亡栈内清场）
+var _game_win_armed: bool = false
 
 
 func _ready() -> void:
@@ -97,7 +99,7 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	refine_ii_count = 0
 
 	# 重置结束标记（新局可再次触发结束）
-	is_over = false
+	clear_over_state()
 
 	# 种子
 	if seed_value < 0:
@@ -175,7 +177,7 @@ func add_passive(passive_id: String) -> bool:
 
 ## 玩家受伤（敌人接触/弹幕/自爆调用）；归零触发游戏结束
 func damage_player(amount: int) -> void:
-	if amount <= 0:
+	if is_over or amount <= 0:
 		return
 	player_health -= amount
 	player_damaged.emit(amount)
@@ -207,15 +209,25 @@ func trigger_game_over(reason: String = "death") -> void:
 	if is_over:
 		return  # 已结束，防止敌人接触逐帧重复触发
 	is_over = true
+	_game_win_armed = false
 	game_over.emit(reason)
 	print("[GameState] 游戏结束: %s (已存活 %d 夜)" % [reason, current_night])
 
 
-## 判定通关（第 20 夜 Boss 击败）
-func trigger_game_win() -> void:
+## 立刻锁通关（不发信号）：终局 Boss 死亡回调里调用，防止同帧接触抢先判负
+func arm_game_win() -> void:
 	if is_over:
 		return
 	is_over = true
+	_game_win_armed = true
+
+
+## 判定通关（第 20 夜 Boss 击败 / 夜尽）；若已 arm 则只补发信号
+func trigger_game_win() -> void:
+	if is_over and not _game_win_armed:
+		return
+	is_over = true
+	_game_win_armed = false
 	game_win.emit()
 	print("[GameState] 通关！20 夜全部完成")
 
@@ -223,3 +235,9 @@ func trigger_game_win() -> void:
 ## 是否最后一夜
 func is_final_night() -> bool:
 	return current_night >= 20
+
+
+## 清除结束态（新局 / 机检复位）
+func clear_over_state() -> void:
+	is_over = false
+	_game_win_armed = false

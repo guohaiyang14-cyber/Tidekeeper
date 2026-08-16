@@ -10,6 +10,7 @@ class_name EnemyBase
 extends Node2D
 
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 
 signal enemy_died(enemy: EnemyBase)
 
@@ -56,6 +57,10 @@ var _tint: Color = Color(0.85, 0.25, 0.25)
 
 # ---- Boss 标记（configure_boss 置 true，configure 复位 false） ----
 var is_boss: bool = false
+var _boss_brain: BossBrain
+var _boss_data: Dictionary = {}
+## 灯塔位置（潮汐波安全区圆心；由 Spawner 注入）
+var lighthouse_position: Vector2 = Vector2.ZERO
 
 # ---- 词缀（W8） ----
 var affix_ids: Array[String] = []
@@ -106,6 +111,9 @@ func _on_acquire() -> void:
 	_charge_cd = 0.0
 	_summon_timer = 0.0
 	prototype_id = ""
+	is_boss = false
+	_boss_brain = null
+	_boss_data = {}
 	affix_ids.clear()
 	affix_state.clear()
 	aura_speed_bonus = 0.0
@@ -161,6 +169,8 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	base_exp = int(data.get("base_exp", 1))
 	night = night_value
 	is_boss = false
+	_boss_brain = null
+	_boss_data = {}
 	affix_ids.clear()
 	affix_state.clear()
 	aura_speed_bonus = 0.0
@@ -218,15 +228,15 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	_apply_visual(1.0)
 
 
-## Boss 占位配置（W3）：不走 §8.2 难度缩放，数值直接读 bosses.json
-## 行为默认 charge_linear 占位（完整 Boss 阶段技见 MVP W9）
+## Boss 配置（W9）：不走 §8.2 难度缩放；挂载 BossBrain
 func configure_boss(boss_data: Dictionary) -> void:
 	enemy_id = boss_data.get("id", "")
 	prototype_id = enemy_id
 	behavior_type = String(boss_data.get("behavior_type", "charge_linear"))
 	danger = int(boss_data.get("danger", 5))
-	update_group = int(boss_data.get("update_group", 2))
+	update_group = int(boss_data.get("update_group", 1))
 	is_boss = true
+	_boss_data = boss_data
 	night = GameState.current_night
 	var bexp: int = int(boss_data.get("base_exp", 50))
 	base_exp = bexp
@@ -249,7 +259,12 @@ func configure_boss(boss_data: Dictionary) -> void:
 	_burrow_cooldown = _burrow_initial_delay
 	affix_ids.clear()
 	affix_state.clear()
-	_apply_visual(1.4)
+	_visual_size = float(boss_data.get("visual_size", 48.0))
+	_tint = _parse_tint(boss_data.get("tint", [0.7, 0.2, 0.8]))
+	_apply_visual(1.0)
+	_boss_brain = BossBrain.create(behavior_type)
+	if _boss_brain != null:
+		_boss_brain.setup(self, boss_data)
 
 
 func apply_affixes(ids: Array[String]) -> void:
@@ -315,28 +330,31 @@ func _process(delta: float) -> void:
 	# 分帧：仅移动逻辑走 update_group（SKILL.md §5.3）
 	var do_move: bool = (Engine.get_process_frames() % update_group == 0)
 
-	match behavior_type:
-		"burrow_ambush":
-			_tick_burrow(delta, player_pos, do_move)
-		"ranged_barrage":
-			if do_move:
-				_move_toward(player_pos, delta)
-			if _fire_timer <= 0.0:
-				_fire_timer = _fire_interval
-				_fire_enemy_projectile(player_pos)
-		"self_destruct":
-			if do_move:
-				_move_toward(player_pos, delta)
-			if global_position.distance_to(player_pos) <= _explode_radius:
-				_explode()
-		"summoner":
-			_tick_summoner(delta, player_pos, do_move)
-		"charge_damage_reduction":
-			_tick_charge(delta, player_pos, do_move)
-		_:
-			# charge_linear / slow_melee_armor_break / flying_swarm / damage_share / 默认
-			if do_move:
-				_move_toward(player_pos, delta)
+	if is_boss and _boss_brain != null:
+		_boss_brain.tick(delta, player_pos, do_move)
+	else:
+		match behavior_type:
+			"burrow_ambush":
+				_tick_burrow(delta, player_pos, do_move)
+			"ranged_barrage":
+				if do_move:
+					_move_toward(player_pos, delta)
+				if _fire_timer <= 0.0:
+					_fire_timer = _fire_interval
+					_fire_enemy_projectile(player_pos)
+			"self_destruct":
+				if do_move:
+					_move_toward(player_pos, delta)
+				if global_position.distance_to(player_pos) <= _explode_radius:
+					_explode()
+			"summoner":
+				_tick_summoner(delta, player_pos, do_move)
+			"charge_damage_reduction":
+				_tick_charge(delta, player_pos, do_move)
+			_:
+				# charge_linear / slow_melee_armor_break / flying_swarm / damage_share / 默认
+				if do_move:
+					_move_toward(player_pos, delta)
 
 	# 接触伤害（潜地中无敌且不可接触）
 	if not _burrowed:
@@ -469,6 +487,55 @@ func _fire_enemy_projectile(player_pos: Vector2) -> void:
 	p.launch(global_position, dir, _ranged_damage)
 
 
+# ============================================================================
+# BossBrain 接口（公开给战斗脚本）
+# ============================================================================
+
+func boss_move_toward(pos: Vector2, delta: float) -> void:
+	_move_toward(pos, delta)
+
+
+func boss_move_away(pos: Vector2, delta: float) -> void:
+	_move_in_dir(global_position - pos, delta)
+
+
+func boss_teleport(pos: Vector2) -> void:
+	var old_pos: Vector2 = global_position
+	global_position = pos
+	if _hash != null:
+		_hash.update(self, old_pos)
+
+
+func boss_fire_projectile(dir: Vector2, damage: int) -> void:
+	if _enemy_proj_pool == null:
+		_ensure_enemy_projectile_pool()
+	if _enemy_proj_pool == null:
+		return
+	var p: Node = _enemy_proj_pool.acquire()
+	if p == null or not p.has_method("launch"):
+		return
+	p.launch(global_position, dir, damage)
+
+
+func find_spawner() -> Node:
+	if get_tree() == null:
+		return null
+	var nodes: Array = get_tree().get_nodes_in_group("enemy_spawner")
+	if nodes.is_empty():
+		return null
+	return nodes[0] as Node
+
+
+func get_lighthouse_position() -> Vector2:
+	return lighthouse_position
+
+
+func get_boss_phase() -> int:
+	if _boss_brain == null:
+		return 0
+	return _boss_brain.phase
+
+
 func _explode() -> void:
 	GameState.damage_player(_self_destruct_damage)
 	_die()
@@ -484,11 +551,17 @@ func take_damage(amount: int, is_melee: bool = false, from_share: bool = false) 
 		return false
 	if amount <= 0:
 		return false
+	if is_boss and _boss_brain != null:
+		amount = _boss_brain.modify_incoming_damage(amount)
+	if amount <= 0:
+		return false
 	if _charging:
 		amount = maxi(1, int(round(float(amount) * (1.0 - _charge_dr))))
 	if not from_share and behavior_type == "damage_share":
 		amount = _share_damage(amount)
 	health -= amount
+	if is_boss and _boss_brain != null:
+		_boss_brain.on_health_changed()
 	if not from_share:
 		AffixSystem.on_damaged(self, amount, is_melee)
 	else:

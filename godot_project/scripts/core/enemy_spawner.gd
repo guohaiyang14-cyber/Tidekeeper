@@ -14,6 +14,7 @@ extends Node2D
 const MAX_ENEMIES: int = 100
 
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 
 ## 已实现的 9 种行为（W7 基础 5 + W8 进阶 4）
 const IMPLEMENTED_BEHAVIORS: Array[String] = [
@@ -53,6 +54,11 @@ var _spawn_meta: Dictionary = {}
 var _eligible: Array[Dictionary] = []
 ## 天灾夜全场统一词缀（§5.5 第 10 夜 +1；当夜抽取一次后复用）
 var _night_bonus_affixes: Array[String] = []
+## 第 15 夜潮汐夹击：两侧刷怪
+var _pincer_mode: bool = false
+var _pincer_side: int = 1
+## 灯塔位置（执政官潮汐波安全区）
+var lighthouse_position: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -76,6 +82,8 @@ func setup(pool: ObjectPool, player: Node2D, pickups: PickupSystem) -> void:
 	enemy_pool = pool
 	target = player
 	pickup_system = pickups
+	if player != null:
+		lighthouse_position = player.global_position
 
 
 ## 开始第 night 夜刷怪（由 World 在 NIGHT 阶段调用）
@@ -91,11 +99,13 @@ func start_night(night: int) -> void:
 	_remaining = _compute_count(night)
 	_eligible = _build_eligible(night)
 	_night_bonus_affixes = _pick_night_bonus_affixes(night)
+	_pincer_mode = _is_pincer_night(night)
+	_pincer_side = 1
 	_spawning = true
-	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s)" % [
-		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes),
+	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s)" % [
+		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
 	])
-	# 精英 / Boss 占位（开局立即登场；同样受 MAX_ENEMIES 约束）
+	# 精英 / Boss（开局立即登场；同样受 MAX_ENEMIES 约束）
 	if night == 5:
 		_spawn_elite(night)
 	elif night in [10, 15, 20]:
@@ -157,6 +167,7 @@ func spawn_enemy(def: Dictionary, pos: Vector2, extra_affixes: Array[String] = [
 	if e == null:
 		return null
 	e.configure(def, _night)
+	e.lighthouse_position = lighthouse_position
 	e.spawn_at(pos, target)
 	_connect_died(e)
 	var ids: Array[String] = []
@@ -175,12 +186,35 @@ func _spawn_one() -> bool:
 	var def: Dictionary = _pick_enemy_def()
 	if def.is_empty():
 		return false
-	var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
-	var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
-	var angle: float = RNG.randf_range(0.0, TAU)
-	var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
-	var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
+	var pos: Vector2
+	if _pincer_mode:
+		pos = _pincer_spawn_pos()
+	else:
+		var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
+		var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
+		pos = target.global_position + Vector2(cos(angle), sin(angle)) * dist
 	return spawn_enemy(def, pos) != null
+
+
+func _pincer_spawn_pos() -> Vector2:
+	var calamity: Dictionary = ConfigLoader.get_boss_calamity()
+	var ox: float = float(calamity.get("pincer_offset_x", 220.0))
+	var jy: float = float(calamity.get("pincer_offset_y_jitter", 80.0))
+	var side: int = _pincer_side
+	_pincer_side = -_pincer_side
+	return target.global_position + Vector2(float(side) * ox, RNG.randf_range(-jy, jy))
+
+
+func _is_pincer_night(night: int) -> bool:
+	var calamity: Dictionary = ConfigLoader.get_boss_calamity()
+	var nights: Variant = calamity.get("pincer_nights", [15])
+	if nights is Array:
+		for v in nights:
+			if int(v) == night:
+				return true
+	return false
 
 
 ## 同屏未达上限且池仍有可用实例
@@ -226,7 +260,7 @@ func _spawn_elite(night: int) -> void:
 	print("[EnemySpawner] 精英登场：%s 词缀=%s" % [edata.get("name", "精英"), ",".join(e.affix_ids)])
 
 
-## 天灾夜：Boss 占位（configure_boss，不走 §8.2 缩放）
+## 天灾夜：Boss（configure_boss + BossBrain）
 func _spawn_boss(night: int) -> void:
 	if not _can_spawn_more():
 		push_warning("[EnemySpawner] 同屏已满，跳过 Boss 登场")
@@ -238,11 +272,12 @@ func _spawn_boss(night: int) -> void:
 	if e == null:
 		return
 	e.configure_boss(b)
+	e.lighthouse_position = lighthouse_position
 	var offset_y: float = float(_spawn_meta.get("boss_offset_y", -220.0))
 	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
 	e.spawn_at(pos, target)
 	_connect_died(e)
-	print("[EnemySpawner] 天灾夜 Boss 登场：%s" % b.get("name", "未知"))
+	print("[EnemySpawner] 天灾夜 Boss 登场：%s (%s)" % [b.get("name", "未知"), b.get("behavior_type", "")])
 
 
 ## 连接敌人死亡信号（幂等：同一实例仅连一次，避免 release 复用后重复连接）
@@ -251,13 +286,28 @@ func _connect_died(e: EnemyBase) -> void:
 		e.enemy_died.connect(_on_enemy_died)
 
 
-## 敌人死亡：掉经验珠 + 潮币
+## 敌人死亡：掉经验珠 + 潮币；第 20 夜 Boss 击杀通关
 func _on_enemy_died(enemy: EnemyBase) -> void:
-	if pickup_system == null or not is_instance_valid(enemy):
+	if not is_instance_valid(enemy):
 		return
 	var pos: Vector2 = enemy.global_position
-	pickup_system.spawn_exp_gem(pos, enemy.base_exp)
-	pickup_system.spawn_coin(pos, enemy.coin_drop)
+	var was_final_boss: bool = enemy.is_boss and GameState.current_night >= 20
+	if pickup_system != null:
+		pickup_system.spawn_exp_gem(pos, enemy.base_exp)
+		pickup_system.spawn_coin(pos, enemy.coin_drop)
+	if was_final_boss:
+		# 立刻锁通关（挡同帧接触判负）；信号/清场延后，避免死亡栈内嵌套切阶段
+		stop()
+		GameState.arm_game_win()
+		call_deferred("_deferred_final_win")
+
+
+func _deferred_final_win() -> void:
+	GameState.trigger_game_win()
+
+
+func is_pincer_mode() -> bool:
+	return _pincer_mode
 
 
 # ============================================================================

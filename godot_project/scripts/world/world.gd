@@ -10,6 +10,7 @@ class_name World
 # 显式预加载 EnemyBase，确保 headless 下 class_name 注册（刷怪类型依赖）
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 # 显式预加载 UI 脚本，确保 headless 下 class_name 可用（新脚本可能尚未写入 global_script_class_cache）
 const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
 const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
@@ -51,8 +52,9 @@ func _ready() -> void:
 	spatial_hash_holder.add_to_group("spatial_hash")
 	# 武器管理器接线（玩家位置 / 哈希 / 弹道池）
 	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
-	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）
+	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）；灯塔光晕圆心显式注入（执政官潮汐波）
 	enemy_spawner.setup(enemy_pool, player, pickup_system)
+	enemy_spawner.lighthouse_position = player.global_position
 	# 商店接线（ShopManager ↔ ShopUI 双向）
 	shop_manager.setup(shop_ui)
 	shop_ui.setup(shop_manager)

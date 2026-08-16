@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": 1,
-    "doc_source": "主设计文档 v0.3.4 §5.5 Boss + §9.4 MVP 底数表 + §8.3 天灾夜规则",
+    "doc_source": "主设计文档 v0.3.4 §5.5 Boss + §8.3 天灾夜规则 + §9.4 MVP 底数表",
     "mvp_scope": "3 个 Boss，仅出现在天灾夜（第 10/15/20 夜）",
     "rule": "第 5 夜不是 Boss 夜（巨钳王仅为精英夜命名精英）",
     "difficulty_formula": "Boss 不走 §8.2 公式，base_health 直接为表中数值",
@@ -11,7 +11,17 @@
       "15": 2,
       "20": 3
     },
-    "note": "运行时只读；阶段技另由 boss_*_controller.gd 编排；占位战斗参数（move_speed 等）写在各 Boss 条目"
+    "lighthouse": {
+      "aura_radius": 140.0,
+      "note": "潮汐波安全区：距灯塔位置 ≤ aura_radius 免伤（W9 占位，圆心由 World/Spawner 注入）"
+    },
+    "calamity": {
+      "pincer_nights": [15],
+      "pincer_offset_x": 220.0,
+      "pincer_offset_y_jitter": 80.0,
+      "note": "§8.3 第 15 夜强制潮汐夹击（两侧刷怪）"
+    },
+    "note": "运行时只读；阶段技由 BossBrain 子类编排"
   },
   "bosses": {
     "jellyfish_queen": {
@@ -23,17 +33,25 @@
       "contact_damage": 20,
       "move_speed": 40.0,
       "contact_radius": 30.0,
-      "behavior_type": "charge_linear",
+      "behavior_type": "boss_jelly_queen",
       "danger": 5,
-      "update_group": 2,
+      "update_group": 1,
       "coin_drop_mult": 2.0,
+      "visual_size": 48.0,
+      "tint": [0.45, 0.85, 0.95],
       "exam_point": "弹幕环 + 分裂小水母，考验转火",
       "mechanics": [
         { "key": "barrage_ring", "desc": "环形弹幕" },
         { "key": "split_jellyfish", "desc": "分裂小水母" }
       ],
       "additional_rule": "全场敌人 +1 词缀",
-      "phase_design_hint": "单阶段（MVP）；阶段技按周期触发"
+      "barrage_count": 8,
+      "barrage_interval": 3.0,
+      "barrage_damage": 12,
+      "split_interval": 8.0,
+      "split_count": 3,
+      "split_enemy_id": "jellyfish_drifter",
+      "keep_distance": 160.0
     },
     "tide_archon": {
       "id": "tide_archon",
@@ -44,18 +62,23 @@
       "contact_damage": 24,
       "move_speed": 40.0,
       "contact_radius": 30.0,
-      "behavior_type": "charge_linear",
+      "behavior_type": "boss_tide_archon",
       "danger": 5,
-      "update_group": 2,
+      "update_group": 1,
       "coin_drop_mult": 2.0,
+      "visual_size": 52.0,
+      "tint": [0.25, 0.55, 0.85],
       "exam_point": "传送 + 全屏潮汐波（躲进灯塔光晕）",
       "mechanics": [
         { "key": "teleport", "desc": "短距传送" },
         { "key": "tidal_wave", "desc": "全屏潮汐波；玩家需躲入灯塔光晕减伤" }
       ],
       "additional_rule": "强制「潮汐夹击」（两侧夹击；不含宝箱翻倍）；封测可叠侵蚀",
-      "naming_note": "第 15 夜天灾规则称「潮汐夹击」，效果仅两侧夹击；该夜事件池排除「潮汐反转」事件卡，避免叠乘",
-      "phase_design_hint": "单阶段（MVP）；阶段技按周期触发"
+      "teleport_interval": 5.0,
+      "teleport_range": 160.0,
+      "wave_interval": 7.0,
+      "wave_damage": 28,
+      "wave_initial_delay": 2.0
     },
     "devouring_star": {
       "id": "devouring_star",
@@ -65,11 +88,13 @@
       "base_exp": 120,
       "contact_damage": 28,
       "move_speed": 40.0,
-      "contact_radius": 30.0,
-      "behavior_type": "charge_linear",
+      "contact_radius": 34.0,
+      "behavior_type": "boss_devouring_star",
       "danger": 5,
-      "update_group": 2,
+      "update_group": 1,
       "coin_drop_mult": 2.0,
+      "visual_size": 56.0,
+      "tint": [0.55, 0.15, 0.65],
       "exam_point": "多阶段（护盾 → 狂暴 → 分身）",
       "mechanics": [
         { "key": "shield_phase", "desc": "阶段一：护盾" },
@@ -77,7 +102,13 @@
         { "key": "clone_phase", "desc": "阶段三：分身" }
       ],
       "additional_rule": "终局高压",
-      "phase_design_hint": "三阶段分池；阶段切换由血量阈值触发（建议 70%/35%）"
+      "phase_hp_thresholds": [0.7, 0.35],
+      "shield_damage_taken": 0.5,
+      "enrage_speed_mult": 1.8,
+      "enrage_contact_mult": 1.4,
+      "clone_count": 2,
+      "clone_enemy_id": "small_goblin",
+      "clone_hp_ratio": 0.2
     }
   }
 }
