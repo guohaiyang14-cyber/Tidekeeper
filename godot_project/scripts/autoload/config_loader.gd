@@ -65,7 +65,7 @@ func _load_all() -> void:
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
 		events.get("events", {}).size(),
-		affixes.size() - 1 if affixes.has("_meta") else affixes.size(),
+		get_all_affix_ids().size(),
 		passives.get("passives", {}).size(),
 		"ok" if pickups.has("exp_gem") else "missing",
 		"ok" if upgrade.has("reroll_cost") else "missing",
@@ -201,6 +201,22 @@ func get_events_for_night(night: int) -> Array:
 ## 获取词缀数据（按 id）
 func get_affix(affix_id: String) -> Dictionary:
 	return affixes.get(affix_id, {})
+
+
+## 全部词缀 id（排除 _meta）
+func get_all_affix_ids() -> Array[String]:
+	var out: Array[String] = []
+	for k in affixes.keys():
+		var id: String = String(k)
+		if id == "_meta":
+			continue
+		out.append(id)
+	return out
+
+
+## 词缀施加规则（精英 2~3 / 天灾全场 +1 / 教学夜无词缀）
+func get_affix_rules() -> Dictionary:
+	return enemies.get("metadata", {}).get("affix_rules", {})
 
 ## 获取难度公式元数据（§8.2）
 func get_difficulty_formula() -> Dictionary:

@@ -26,6 +26,7 @@ const UNIT_TO_PIXEL: float = 60.0
 var _move_speed_mult: float = 1.0
 var _pickup_radius_mult: float = 1.0
 var _hurt_flash: float = 0.0
+var _bind_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -40,6 +41,8 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	if _bind_timer > 0.0:
+		_bind_timer = maxf(0.0, _bind_timer - _delta)
 	_handle_movement()
 	if _hurt_flash > 0.0:
 		_hurt_flash = maxf(0.0, _hurt_flash - _delta)
@@ -73,8 +76,12 @@ func _on_player_damaged(_amount: int) -> void:
 	queue_redraw()
 
 
-## 处理移动输入（WASD，§5.2）
+## 处理移动输入（WASD，§5.2）；锁链词缀绑定时无法移动
 func _handle_movement() -> void:
+	if _bind_timer > 0.0:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
 	var input_vector: Vector2 = Vector2.ZERO
 	if Input.is_action_pressed("move_up"):
 		input_vector.y -= 1.0
@@ -111,6 +118,17 @@ func get_pickup_radius() -> float:
 func set_pickup_radius_mult(mult: float) -> void:
 	_pickup_radius_mult = mult
 	queue_redraw()
+
+
+## 锁链词缀：短时禁止移动（取较长剩余）
+func apply_bind(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	_bind_timer = maxf(_bind_timer, duration)
+
+
+func is_bound() -> bool:
+	return _bind_timer > 0.0
 
 
 func _draw() -> void:

@@ -40,7 +40,7 @@ script = ExtResource("16_spawner")
 [node name="EnemyPool" type="Node" parent="."]
 script = ExtResource("4_enemy_pool")
 scene = ExtResource("13_enemy")
-pool_size = 120
+pool_size = 250
 
 [node name="ProjectilePool" type="Node" parent="."]
 script = ExtResource("5_proj_pool")

@@ -9,6 +9,7 @@ class_name World
 
 # 显式预加载 EnemyBase，确保 headless 下 class_name 注册（刷怪类型依赖）
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
+const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
 # 显式预加载 UI 脚本，确保 headless 下 class_name 可用（新脚本可能尚未写入 global_script_class_cache）
 const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
 const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
@@ -58,6 +59,7 @@ func _ready() -> void:
 	shop_ui.skip_requested.connect(_on_shop_skip)
 	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
 	player.add_to_group("player")
+	enemy_spawner.add_to_group("enemy_spawner")
 	enemy_projectile_pool.add_to_group("enemy_projectile_pool")
 	# 先连接信号，再启动昼夜状态机（否则首夜 phase_changed 发射时监听器尚未挂载，导致首夜不刷怪）
 	day_night.phase_changed.connect(_on_phase_changed)

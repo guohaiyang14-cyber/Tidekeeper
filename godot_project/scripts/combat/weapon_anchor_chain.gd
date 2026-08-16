@@ -23,4 +23,4 @@ func fire(_target: EnemyBase) -> void:
 	var targets: Array = hash.query_radius(origin, radius)
 	for e in targets:
 		if e is EnemyBase:
-			(e as EnemyBase).take_damage(dmg)
+			(e as EnemyBase).take_damage(dmg, true)

@@ -1,18 +1,22 @@
 # ============================================================================
-# EnemyBase — 敌人基类（W2-W3 全量行为）
+# EnemyBase — 敌人基类（W2-W3 五种基础行为 + W8 四种进阶行为）
 # 职责：数据驱动配置（configure 读 config/enemies.json + §8.2 难度公式缩放）；
-#       按 behavior_type 分派 5 种原型行为；接触/弹幕/自爆伤害走 GameState；
+#       按 behavior_type 分派行为；接触/弹幕/自爆伤害走 GameState；
 #       死亡 emit enemy_died 供 World 掉落经验珠+潮币；注册自定义 SpatialHash。
-# 红线：不走 Physics2D；随机走 RNG；不分帧外分配；运行时零 instantiate（弹道走对象池）
+# 红线：不走 Physics2D；随机走 RNG；不分帧外分配；运行时零 instantiate（弹道/召唤走对象池）
 # 注册：通过 "spatial_hash" group 查 SpatialHashHolder；"enemy_projectile_pool" group 查弹道池
 # ============================================================================
 class_name EnemyBase
 extends Node2D
 
+const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+
 signal enemy_died(enemy: EnemyBase)
 
 # ---- 配置注入（由 EnemySpawner 调用 configure） ----
 var enemy_id: String = ""
+## 分裂/召唤用的原型表 id（精英可与 enemy_id 不同，如 giant_claw_king → iron_crab）
+var prototype_id: String = ""
 var behavior_type: String = "charge_linear"
 var danger: int = 1
 var update_group: int = 2
@@ -26,6 +30,7 @@ var health: int = 0
 var move_speed: float = 60.0
 var contact_damage: int = 8
 var contact_radius: float = 18.0
+var is_flying: bool = false
 var _fire_interval: float = 2.0
 var _ranged_damage: int = 0
 var _explode_radius: float = 40.0
@@ -34,9 +39,29 @@ var _burrow_duration: float = 3.0
 var _contact_interval: float = 0.5
 var _burrow_cooldown_cfg: float = 2.0
 var _burrow_initial_delay: float = 1.0
+var _summon_id: String = "small_goblin"
+var _summon_interval: float = 3.0
+var _summon_count: int = 1
+var _keep_distance: float = 180.0
+var _charge_dr: float = 0.5
+var _charge_speed_mult: float = 2.2
+var _charge_duration: float = 0.8
+var _charge_cooldown: float = 2.0
+var _charge_trigger_range: float = 160.0
+var _share_ratio: float = 0.4
+var _share_radius: float = 90.0
+var _share_max_allies: int = 8
+var _visual_size: float = 20.0
+var _tint: Color = Color(0.85, 0.25, 0.25)
 
 # ---- Boss 标记（configure_boss 置 true，configure 复位 false） ----
 var is_boss: bool = false
+
+# ---- 词缀（W8） ----
+var affix_ids: Array[String] = []
+var affix_state: Dictionary = {}
+var aura_speed_bonus: float = 0.0
+var aura_timer: float = 0.0
 
 # ---- 状态 ----
 var target: Node2D
@@ -48,10 +73,17 @@ var _burrowed: bool = false
 var _burrow_timer: float = 0.0
 var _burrow_cooldown: float = 1.0
 var _enemy_proj_pool: ObjectPool
+var _charging: bool = false
+var _charge_timer: float = 0.0
+var _charge_cd: float = 0.0
+var _charge_dir: Vector2 = Vector2.RIGHT
+var _summon_timer: float = 0.0
 
 # ---- 减速（水母炮等弹道命中） ----
 var _move_speed_mult: float = 1.0
 var _slow_timer: float = 0.0
+
+@onready var _visual: ColorRect = $Visual
 
 
 # ============================================================================
@@ -69,6 +101,15 @@ func _on_acquire() -> void:
 	_burrow_cooldown = _burrow_initial_delay
 	_move_speed_mult = 1.0
 	_slow_timer = 0.0
+	_charging = false
+	_charge_timer = 0.0
+	_charge_cd = 0.0
+	_summon_timer = 0.0
+	prototype_id = ""
+	affix_ids.clear()
+	affix_state.clear()
+	aura_speed_bonus = 0.0
+	aura_timer = 0.0
 	_ensure_hash()
 	_ensure_enemy_projectile_pool()
 
@@ -87,6 +128,10 @@ func _ensure_hash() -> void:
 		var holder: SpatialHashHolder = holders[0] as SpatialHashHolder
 		if holder != null:
 			_hash = holder.get_hash()
+
+
+func get_spatial_hash() -> SpatialHash:
+	return _hash
 
 
 func _ensure_enemy_projectile_pool() -> void:
@@ -109,12 +154,21 @@ func spawn_at(pos: Vector2, tgt: Node2D) -> void:
 ## scale=false 时跳过难度缩放（Boss 用 config 表中的 base_health 原值）
 func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	enemy_id = data.get("id", "")
+	prototype_id = String(data.get("prototype_id", enemy_id))
 	behavior_type = data.get("behavior_type", "charge_linear")
 	danger = int(data.get("danger", 1))
 	update_group = int(data.get("update_group", 2))
 	base_exp = int(data.get("base_exp", 1))
 	night = night_value
 	is_boss = false
+	affix_ids.clear()
+	affix_state.clear()
+	aura_speed_bonus = 0.0
+	aura_timer = 0.0
+	_charging = false
+	_charge_timer = 0.0
+	_charge_cd = 0.0
+	_summon_timer = 0.0
 
 	var diff: Dictionary = ConfigLoader.get_enemy_difficulty()
 	var region_coeff: float = float(diff.get("region_coeff", 1.0))
@@ -146,12 +200,29 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	_burrow_cooldown_cfg = float(data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
 	_burrow_initial_delay = float(data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
 	_burrow_cooldown = _burrow_initial_delay
+	_summon_id = String(data.get("summons", "small_goblin"))
+	_summon_interval = float(data.get("summon_interval", 3.0))
+	_summon_count = int(data.get("summon_count", 1))
+	_keep_distance = float(data.get("keep_distance", 180.0))
+	_charge_dr = float(data.get("charge_damage_reduction", 0.5))
+	_charge_speed_mult = float(data.get("charge_speed_mult", 2.2))
+	_charge_duration = float(data.get("charge_duration", 0.8))
+	_charge_cooldown = float(data.get("charge_cooldown", 2.0))
+	_charge_trigger_range = float(data.get("charge_trigger_range", 160.0))
+	_share_ratio = float(data.get("damage_share_ratio", 0.4))
+	_share_radius = float(data.get("damage_share_radius", 90.0))
+	_share_max_allies = int(data.get("damage_share_max_allies", 8))
+	_visual_size = float(data.get("visual_size", 20.0))
+	_tint = _parse_tint(data.get("tint", [0.85, 0.25, 0.25]))
+	is_flying = _has_flag(data.get("flags", []), "flying")
+	_apply_visual(1.0)
 
 
 ## Boss 占位配置（W3）：不走 §8.2 难度缩放，数值直接读 bosses.json
-## 行为默认 charge_linear 占位（完整 Boss 阶段技见 MVP W5）
+## 行为默认 charge_linear 占位（完整 Boss 阶段技见 MVP W9）
 func configure_boss(boss_data: Dictionary) -> void:
 	enemy_id = boss_data.get("id", "")
+	prototype_id = enemy_id
 	behavior_type = String(boss_data.get("behavior_type", "charge_linear"))
 	danger = int(boss_data.get("danger", 5))
 	update_group = int(boss_data.get("update_group", 2))
@@ -176,6 +247,48 @@ func configure_boss(boss_data: Dictionary) -> void:
 	_burrow_cooldown_cfg = float(boss_data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
 	_burrow_initial_delay = float(boss_data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
 	_burrow_cooldown = _burrow_initial_delay
+	affix_ids.clear()
+	affix_state.clear()
+	_apply_visual(1.4)
+
+
+func apply_affixes(ids: Array[String]) -> void:
+	AffixSystem.apply(self, ids)
+
+
+func has_affix(id: String) -> bool:
+	return id in affix_ids
+
+
+func apply_visual_scale(mult: float) -> void:
+	_apply_visual(mult)
+
+
+func _parse_tint(raw: Variant) -> Color:
+	if raw is Array and (raw as Array).size() >= 3:
+		var arr: Array = raw as Array
+		return Color(float(arr[0]), float(arr[1]), float(arr[2]), 1.0)
+	return Color(0.85, 0.25, 0.25)
+
+
+func _has_flag(raw: Variant, flag: String) -> bool:
+	if raw is Array:
+		return flag in (raw as Array)
+	return false
+
+
+func _apply_visual(size_mult: float) -> void:
+	var vis: ColorRect = _visual
+	if vis == null:
+		vis = get_node_or_null("Visual") as ColorRect
+	if vis == null:
+		return
+	var s: float = _visual_size * size_mult
+	vis.offset_left = -s * 0.5
+	vis.offset_top = -s * 0.5
+	vis.offset_right = s * 0.5
+	vis.offset_bottom = s * 0.5
+	vis.color = _tint
 
 
 # ============================================================================
@@ -197,6 +310,8 @@ func _process(delta: float) -> void:
 		if _slow_timer <= 0.0:
 			_move_speed_mult = 1.0
 
+	AffixSystem.tick(self, delta)
+
 	# 分帧：仅移动逻辑走 update_group（SKILL.md §5.3）
 	var do_move: bool = (Engine.get_process_frames() % update_group == 0)
 
@@ -214,8 +329,12 @@ func _process(delta: float) -> void:
 				_move_toward(player_pos, delta)
 			if global_position.distance_to(player_pos) <= _explode_radius:
 				_explode()
+		"summoner":
+			_tick_summoner(delta, player_pos, do_move)
+		"charge_damage_reduction":
+			_tick_charge(delta, player_pos, do_move)
 		_:
-			# charge_linear / slow_melee_armor_break / 默认：朝玩家移动
+			# charge_linear / slow_melee_armor_break / flying_swarm / damage_share / 默认
 			if do_move:
 				_move_toward(player_pos, delta)
 
@@ -224,10 +343,21 @@ func _process(delta: float) -> void:
 		_try_contact_damage(player_pos)
 
 
+func _effective_speed() -> float:
+	if _charging:
+		return move_speed * _charge_speed_mult * _move_speed_mult
+	return move_speed * _move_speed_mult * (1.0 + aura_speed_bonus)
+
+
 func _move_toward(player_pos: Vector2, delta: float) -> void:
+	_move_in_dir(player_pos - global_position, delta)
+
+
+func _move_in_dir(dir: Vector2, delta: float) -> void:
+	if dir.length_squared() < 0.0001:
+		return
 	var old_pos: Vector2 = global_position
-	var dir: Vector2 = (player_pos - global_position).normalized()
-	global_position += dir * move_speed * _move_speed_mult * delta
+	global_position += dir.normalized() * _effective_speed() * delta
 	if _hash != null:
 		_hash.update(self, old_pos)
 
@@ -242,6 +372,10 @@ func apply_slow(factor: float, duration: float) -> void:
 
 func get_move_speed_mult() -> float:
 	return _move_speed_mult
+
+
+func get_effective_move_speed() -> float:
+	return _effective_speed()
 
 
 func _try_contact_damage(player_pos: Vector2) -> void:
@@ -270,6 +404,59 @@ func _tick_burrow(delta: float, player_pos: Vector2, do_move: bool) -> void:
 			_burrow_timer = _burrow_duration
 
 
+func _tick_summoner(delta: float, player_pos: Vector2, do_move: bool) -> void:
+	var dist: float = global_position.distance_to(player_pos)
+	if do_move:
+		if dist < _keep_distance:
+			_move_in_dir(global_position - player_pos, delta)
+		elif dist > _keep_distance * 1.5:
+			_move_toward(player_pos, delta)
+	_summon_timer -= delta
+	if _summon_timer <= 0.0:
+		_summon_timer = _summon_interval
+		_try_summon()
+
+
+func _try_summon() -> void:
+	if get_tree() == null:
+		return
+	var nodes: Array = get_tree().get_nodes_in_group("enemy_spawner")
+	if nodes.is_empty():
+		return
+	var spawner: Node = nodes[0]
+	if not spawner.has_method("spawn_enemy"):
+		return
+	var def: Dictionary = ConfigLoader.get_enemy(_summon_id)
+	if def.is_empty():
+		return
+	var no_affix: Array[String] = []
+	for _i in _summon_count:
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var pos: Vector2 = global_position + Vector2.from_angle(angle) * 36.0
+		if spawner.call("spawn_enemy", def, pos, no_affix, true) == null:
+			break
+
+
+func _tick_charge(delta: float, player_pos: Vector2, do_move: bool) -> void:
+	if _charging:
+		_charge_timer -= delta
+		if do_move:
+			_move_in_dir(_charge_dir, delta)
+		if _charge_timer <= 0.0:
+			_charging = false
+			_charge_cd = _charge_cooldown
+		return
+	_charge_cd -= delta
+	var dist: float = global_position.distance_to(player_pos)
+	if _charge_cd <= 0.0 and dist <= _charge_trigger_range:
+		_charging = true
+		_charge_timer = _charge_duration
+		var dir: Vector2 = player_pos - global_position
+		_charge_dir = dir.normalized() if dir.length_squared() > 0.0001 else Vector2.RIGHT
+	elif do_move:
+		_move_toward(player_pos, delta)
+
+
 func _fire_enemy_projectile(player_pos: Vector2) -> void:
 	if _enemy_proj_pool == null:
 		_ensure_enemy_projectile_pool()
@@ -291,21 +478,62 @@ func _explode() -> void:
 # 受伤 / 死亡
 # ============================================================================
 
-## 受伤（潜地中免伤）；返回是否致死
-func take_damage(amount: int) -> bool:
+## 受伤（潜地中免伤）；is_melee 供荆棘反伤；from_share 避免分摊递归/重入分裂
+func take_damage(amount: int, is_melee: bool = false, from_share: bool = false) -> bool:
 	if _dead or _burrowed:
 		return false
+	if amount <= 0:
+		return false
+	if _charging:
+		amount = maxi(1, int(round(float(amount) * (1.0 - _charge_dr))))
+	if not from_share and behavior_type == "damage_share":
+		amount = _share_damage(amount)
 	health -= amount
+	if not from_share:
+		AffixSystem.on_damaged(self, amount, is_melee)
+	else:
+		if has_affix("regen"):
+			affix_state["regen_t"] = 0.0
 	if health <= 0:
-		_die()
+		# 分摊致死不触发分裂，避免 take_damage → _die → split 重入
+		_die(not from_share)
 		return true
 	return false
 
 
-func _die() -> void:
+func _share_damage(amount: int) -> int:
+	if _hash == null or amount <= 0:
+		return amount
+	var shared: int = int(round(float(amount) * _share_ratio))
+	if shared <= 0:
+		return amount
+	var candidates: Array = _hash.query_radius(global_position, _share_radius)
+	var allies: Array[EnemyBase] = []
+	for n in candidates:
+		if not (n is EnemyBase) or n == self:
+			continue
+		var other: EnemyBase = n as EnemyBase
+		if other.is_dead() or other.is_burrowed() or other.behavior_type == "damage_share":
+			continue
+		if global_position.distance_to(other.global_position) > _share_radius:
+			continue
+		allies.append(other)
+		if allies.size() >= _share_max_allies:
+			break
+	if allies.is_empty():
+		return amount
+	var each: int = maxi(1, int(round(float(shared) / float(allies.size()))))
+	for ally in allies:
+		ally.take_damage(each, false, true)
+	return maxi(1, amount - shared)
+
+
+func _die(trigger_split: bool = true) -> void:
 	if _dead:
 		return
 	_dead = true
+	if trigger_split:
+		AffixSystem.on_death(self)
 	enemy_died.emit(self)
 	var pool: ObjectPool = get_parent() as ObjectPool
 	if pool != null:
@@ -320,3 +548,7 @@ func is_dead() -> bool:
 ## 是否处于潜地状态（测试 / 外部查询）
 func is_burrowed() -> bool:
 	return _burrowed
+
+
+func is_charging() -> bool:
+	return _charging

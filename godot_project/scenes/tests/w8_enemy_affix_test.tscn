@@ -1,0 +1,37 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/tests/w8_enemy_affix_test.gd" id="1_test"]
+[ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="2_hash"]
+[ext_resource type="Script" path="res://scripts/core/enemy_spawner.gd" id="3_spawner"]
+[ext_resource type="Script" path="res://scripts/core/enemy_pool.gd" id="4_epool"]
+[ext_resource type="Script" path="res://scripts/core/pickup_pool.gd" id="5_ppool"]
+[ext_resource type="Script" path="res://scripts/pickup/pickup_system.gd" id="6_pickup"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="7_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/exp_gem.tscn" id="8_expgem"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="9_player"]
+
+[node name="W8EnemyAffixTest" type="Node2D"]
+script = ExtResource("1_test")
+
+[node name="SpatialHashHolder" type="Node" parent="."]
+script = ExtResource("2_hash")
+cell_size = 80.0
+
+[node name="Player" parent="." instance=ExtResource("9_player")]
+position = Vector2(0, 0)
+
+[node name="EnemyPool" type="Node" parent="."]
+script = ExtResource("4_epool")
+scene = ExtResource("7_enemy")
+pool_size = 250
+
+[node name="PickupPool" type="Node" parent="."]
+script = ExtResource("5_ppool")
+scene = ExtResource("8_expgem")
+pool_size = 40
+
+[node name="PickupSystem" type="Node2D" parent="."]
+script = ExtResource("6_pickup")
+
+[node name="EnemySpawner" type="Node2D" parent="."]
+script = ExtResource("3_spawner")

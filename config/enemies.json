@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": 1,
-    "doc_source": "主设计文档 v0.3.4 §5.3 敌人 + §9.4 MVP 底数表 + §8.2 数值公式",
+    "doc_source": "主设计文档 v0.3.4 §5.3 敌人 + §5.4 词缀 + §9.4 MVP 底数表 + §8.2 数值公式",
     "mvp_scope": "9 种敌人（基础数值，运行时按 §8.2 公式缩放）",
     "ai_update_groups": {
       "1": "每帧（远程：潮汐召唤师）",
@@ -41,12 +41,20 @@
       "health_mult": 3,
       "exp_mult": 3,
       "contact_damage_mult": 2,
-      "note": "倍率在 configure() 后仍叠 §8.2 夜晚缩放，实战为正常缩放后约 health_mult×"
+      "note": "倍率在 configure() 后仍叠 §8.2 夜晚缩放，实战为正常缩放后约 health_mult×；W8 另附 2~3 词缀"
     },
     "combat": {
       "contact_interval": 0.5,
       "burrow_cooldown": 2.0,
       "burrow_initial_delay": 1.0
+    },
+    "affix_rules": {
+      "teaching_nights_no_affix": 4,
+      "elite_affix_min": 2,
+      "elite_affix_max": 3,
+      "calamity_nights": [10, 15, 20],
+      "calamity_bonus_affixes": 1,
+      "note": "§5.4 精英=基础×2~3词缀；§5.5 第10夜全场+1词缀（当夜统一抽取）；前4夜教学无词缀。侵蚀等级不进 MVP"
     },
     "exp_drop_note": "base_exp 为击杀掉落经验珠的基础经验值；W2 调参，对齐 §6.2 升级曲线 E(1)=22",
     "coin_drop_note": "原型潮币掉落 = max(1, round(base_exp))；完整掉落表见 §5.2",
@@ -67,6 +75,8 @@
       "update_group": 2,
       "move_speed": 70.0,
       "contact_radius": 18.0,
+      "visual_size": 18.0,
+      "tint": [0.85, 0.28, 0.28],
       "notes": "数量单位"
     },
     "iron_crab": {
@@ -83,6 +93,8 @@
       "update_group": 2,
       "move_speed": 35.0,
       "contact_radius": 22.0,
+      "visual_size": 24.0,
+      "tint": [0.72, 0.42, 0.18],
       "notes": "高血；破甲"
     },
     "jellyfish_drifter": {
@@ -101,6 +113,8 @@
       "update_group": 4,
       "move_speed": 30.0,
       "contact_radius": 16.0,
+      "visual_size": 18.0,
+      "tint": [0.35, 0.85, 0.9],
       "notes": "远程；接触伤害 6（弹幕）"
     },
     "deep_diver": {
@@ -120,6 +134,8 @@
       "burrow_initial_delay": 1.0,
       "move_speed": 110.0,
       "contact_radius": 18.0,
+      "visual_size": 18.0,
+      "tint": [0.18, 0.28, 0.62],
       "notes": "突袭"
     },
     "bomb_shell": {
@@ -138,6 +154,8 @@
       "update_group": 4,
       "move_speed": 75.0,
       "contact_radius": 16.0,
+      "visual_size": 16.0,
+      "tint": [0.95, 0.45, 0.12],
       "notes": "低血；自爆"
     },
     "raven_flock": {
@@ -154,6 +172,8 @@
       "update_group": 4,
       "move_speed": 130.0,
       "contact_radius": 16.0,
+      "visual_size": 16.0,
+      "tint": [0.22, 0.12, 0.32],
       "flags": ["flying", "ignore_terrain"],
       "notes": "飞行"
     },
@@ -170,8 +190,13 @@
       "base_exp": 12,
       "update_group": 1,
       "summons": "small_goblin",
+      "summon_interval": 3.0,
+      "summon_count": 1,
+      "keep_distance": 180.0,
       "move_speed": 25.0,
       "contact_radius": 16.0,
+      "visual_size": 22.0,
+      "tint": [0.22, 0.72, 0.42],
       "notes": "召唤为主"
     },
     "abyssal_pikeman": {
@@ -187,8 +212,14 @@
       "base_exp": 15,
       "update_group": 2,
       "charge_damage_reduction": 0.5,
+      "charge_speed_mult": 2.2,
+      "charge_duration": 0.8,
+      "charge_cooldown": 2.0,
+      "charge_trigger_range": 160.0,
       "move_speed": 85.0,
       "contact_radius": 20.0,
+      "visual_size": 22.0,
+      "tint": [0.45, 0.55, 0.72],
       "notes": "冲锋；冲锋时免伤 50%"
     },
     "reef_giant": {
@@ -204,21 +235,63 @@
       "base_exp": 30,
       "update_group": 2,
       "damage_share": true,
+      "damage_share_ratio": 0.4,
+      "damage_share_radius": 90.0,
+      "damage_share_max_allies": 8,
       "move_speed": 28.0,
       "contact_radius": 26.0,
+      "visual_size": 36.0,
+      "tint": [0.42, 0.52, 0.38],
       "notes": "分摊"
     }
   },
   "affixes": {
     "_meta": {
       "doc_source": "§5.4 精英与词缀",
-      "rule": "精英 = 基础敌人 × 词缀（2~3 个），提供 3 倍潮币"
+      "rule": "精英 = 基础敌人 × 词缀（2~3 个），提供 3 倍潮币；数值字段供运行时读取"
     },
-    "split": { "name": "分裂", "effect": "死亡时分裂为 2 只低血同种", "counter": "范围伤" },
-    "teleport": { "name": "传送", "effect": "每 5 秒短距传送", "counter": "预判落点" },
-    "thorns": { "name": "荆棘", "effect": "近战反伤 30%", "counter": "远程" },
-    "swift": { "name": "迅捷", "effect": "移速 +40%", "counter": "减速/定身" },
-    "regen": { "name": "再生", "effect": "脱战 5 秒回复 30% 血", "counter": "不脱战" },
-    "chain": { "name": "锁链", "effect": "被攻击时绑定玩家 0.5 秒", "counter": "保持距离" }
+    "split": {
+      "name": "分裂",
+      "effect": "死亡时分裂为 2 个小号自身",
+      "counter": "范围伤害/穿透",
+      "count": 2,
+      "hp_ratio": 0.4,
+      "offset": 24.0
+    },
+    "teleport": {
+      "name": "传送",
+      "effect": "每 8 秒随机传送一次",
+      "counter": "控制/持续伤害",
+      "interval": 8.0,
+      "range": 140.0
+    },
+    "thorns": {
+      "name": "荆棘",
+      "effect": "近战攻击者受伤",
+      "counter": "远程武器",
+      "melee_reflect_ratio": 0.3
+    },
+    "swift": {
+      "name": "迅捷光环",
+      "effect": "周围敌人 +25% 移速",
+      "counter": "优先击杀",
+      "aura_radius": 90.0,
+      "speed_bonus": 0.25,
+      "aura_refresh": 0.25
+    },
+    "regen": {
+      "name": "再生",
+      "effect": "脱战 5 秒回复 30% 血",
+      "counter": "不脱战",
+      "out_of_combat": 5.0,
+      "heal_ratio": 0.3
+    },
+    "chain": {
+      "name": "锁链",
+      "effect": "被攻击时绑定玩家 0.5 秒",
+      "counter": "保持距离",
+      "bind_duration": 0.5,
+      "cooldown": 2.0
+    }
   }
 }

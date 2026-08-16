@@ -1,8 +1,8 @@
 # ============================================================================
-# EnemySpawner — 潮汐刷怪（W2-W3）
-# 职责：按 config/enemies.json 的 spawn_night 解锁 5 种行为敌人；
+# EnemySpawner — 潮汐刷怪（W2-W3 + W8 进阶敌人/词缀）
+# 职责：按 config/enemies.json 的 spawn_night 解锁 9 种行为敌人；
 #       依据 metadata.spawn 密度曲线（前 12s 稀疏 → 中段密集 → 末段加压）刷怪；
-#       精英夜（第 5 夜=巨钳王，强化铁壳蟹）/ 天灾夜（第 10/15/20 夜= Boss 占位）；
+#       精英夜（第 5 夜=巨钳王 + 2~3 词缀）/ 天灾夜（第 10/15/20 夜= Boss 占位 + 全场 +1 词缀）；
 #       敌人死亡 → 经 PickupSystem 掉经验珠 + 潮币。
 # 红线：运行时禁止 instantiate（走 EnemyPool 对象池）；随机走 RNG；难度走 §8.2（Boss 除外）
 # 架构：World 子节点；setup 注入 EnemyPool/Player/PickupSystem（也可从父节点自动解析）
@@ -13,13 +13,19 @@ extends Node2D
 ## 同屏敌人上限（原型验收 2.2.4：峰值 100）
 const MAX_ENEMIES: int = 100
 
-## 已实现的 5 种行为（spawn_night ≤5 的敌人）；其余敌人行为占位到 MVP
+const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+
+## 已实现的 9 种行为（W7 基础 5 + W8 进阶 4）
 const IMPLEMENTED_BEHAVIORS: Array[String] = [
 	"charge_linear",
 	"slow_melee_armor_break",
 	"ranged_barrage",
 	"burrow_ambush",
 	"self_destruct",
+	"flying_swarm",
+	"summoner",
+	"charge_damage_reduction",
+	"damage_share",
 ]
 
 # 夜晚时长常量（镜像 SKILL.md §5.1，供密度曲线分段；与 DayNightStateMachine 保持一致）
@@ -45,9 +51,12 @@ var _spawn_meta: Dictionary = {}
 
 # 当前夜可刷敌人定义缓存
 var _eligible: Array[Dictionary] = []
+## 天灾夜全场统一词缀（§5.5 第 10 夜 +1；当夜抽取一次后复用）
+var _night_bonus_affixes: Array[String] = []
 
 
 func _ready() -> void:
+	add_to_group("enemy_spawner")
 	# 未显式 setup 时，从父节点（Main/World）自动解析引用
 	if enemy_pool == null or target == null or pickup_system == null:
 		var parent: Node = get_parent()
@@ -81,8 +90,11 @@ func start_night(night: int) -> void:
 	_spawn_timer = 0.0
 	_remaining = _compute_count(night)
 	_eligible = _build_eligible(night)
+	_night_bonus_affixes = _pick_night_bonus_affixes(night)
 	_spawning = true
-	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d)" % [night, _remaining, _eligible.size()])
+	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s)" % [
+		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes),
+	])
 	# 精英 / Boss 占位（开局立即登场；同样受 MAX_ENEMIES 约束）
 	if night == 5:
 		_spawn_elite(night)
@@ -131,25 +143,44 @@ func _process(delta: float) -> void:
 # 刷怪实现
 # ============================================================================
 
+## 从池中刷一只敌人并施加词缀。
+## skip_night_affix：召唤物/分裂体不吃天灾全场词缀。
+## allow_over_cap：分裂时父体尚未 release，允许短暂超过 MAX_ENEMIES。
+func spawn_enemy(def: Dictionary, pos: Vector2, extra_affixes: Array[String] = [], skip_night_affix: bool = false, allow_over_cap: bool = false) -> EnemyBase:
+	if target == null or enemy_pool == null:
+		return null
+	if enemy_pool.available_count() <= 0:
+		return null
+	if not allow_over_cap and enemy_pool.active_count() >= MAX_ENEMIES:
+		return null
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	if e == null:
+		return null
+	e.configure(def, _night)
+	e.spawn_at(pos, target)
+	_connect_died(e)
+	var ids: Array[String] = []
+	if not skip_night_affix:
+		ids.append_array(_night_bonus_affixes)
+	for a in extra_affixes:
+		if a not in ids:
+			ids.append(a)
+	if not ids.is_empty():
+		e.apply_affixes(ids)
+	return e
+
+
 ## 成功刷出一只返回 true（失败不扣 _remaining）
 func _spawn_one() -> bool:
-	if not _can_spawn_more():
-		return false
 	var def: Dictionary = _pick_enemy_def()
 	if def.is_empty():
 		return false
-	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
-	if e == null:
-		return false
-	e.configure(def, _night)
 	var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
 	var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
 	var angle: float = RNG.randf_range(0.0, TAU)
 	var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
 	var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
-	e.spawn_at(pos, target)
-	_connect_died(e)
-	return true
+	return spawn_enemy(def, pos) != null
 
 
 ## 同屏未达上限且池仍有可用实例
@@ -176,19 +207,23 @@ func _spawn_elite(night: int) -> void:
 	var dmg_m: int = int(elite.get("contact_damage_mult", 2))
 	var edata: Dictionary = base.duplicate()
 	edata["id"] = String(elite.get("id", "giant_claw_king"))
+	edata["prototype_id"] = base_id
 	edata["name"] = String(elite.get("name", "巨钳王"))
 	edata["base_health"] = int(base.get("base_health", 55)) * hp_m
 	edata["base_exp"] = int(base.get("base_exp", 5)) * exp_m
 	edata["base_contact_damage"] = int(base.get("base_contact_damage", 12)) * dmg_m
-	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
-	if e == null:
-		return
-	e.configure(edata, night)
 	var offset_y: float = float(_spawn_meta.get("elite_offset_y", -200.0))
 	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
-	e.spawn_at(pos, target)
-	_connect_died(e)
-	print("[EnemySpawner] 精英登场：%s" % edata.get("name", "精英"))
+	var rules: Dictionary = ConfigLoader.get_affix_rules()
+	var amin: int = int(rules.get("elite_affix_min", 2))
+	var amax: int = int(rules.get("elite_affix_max", 3))
+	if amax < amin:
+		amax = amin
+	var extra: Array[String] = AffixSystem.pick(RNG.randi_range(amin, amax))
+	var e: EnemyBase = spawn_enemy(edata, pos, extra, false)
+	if e == null:
+		return
+	print("[EnemySpawner] 精英登场：%s 词缀=%s" % [edata.get("name", "精英"), ",".join(e.affix_ids)])
 
 
 ## 天灾夜：Boss 占位（configure_boss，不走 §8.2 缩放）
@@ -277,6 +312,31 @@ func _pick_enemy_def() -> Dictionary:
 		return {}
 	var idx: int = RNG.randi_range(0, _eligible.size() - 1)
 	return _eligible[idx]
+
+
+## 天灾夜全场统一词缀（当夜抽取一次）；教学夜 / 非天灾返回空
+func _pick_night_bonus_affixes(night: int) -> Array[String]:
+	var rules: Dictionary = ConfigLoader.get_affix_rules()
+	var teaching: int = int(rules.get("teaching_nights_no_affix", 4))
+	if night <= teaching:
+		return []
+	if not _is_calamity_night(night, rules):
+		return []
+	var n: int = int(rules.get("calamity_bonus_affixes", 1))
+	return AffixSystem.pick(n)
+
+
+func _is_calamity_night(night: int, rules: Dictionary) -> bool:
+	var calamity: Variant = rules.get("calamity_nights", [10, 15, 20])
+	if calamity is Array:
+		for v in calamity:
+			if int(v) == night:
+				return true
+	return false
+
+
+func get_night_bonus_affixes() -> Array[String]:
+	return _night_bonus_affixes
 
 
 ## 夜晚时长（镜像 DayNightStateMachine §5.1）

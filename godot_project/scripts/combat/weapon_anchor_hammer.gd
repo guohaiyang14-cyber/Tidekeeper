@@ -27,4 +27,4 @@ func fire(target: EnemyBase) -> void:
 			var to_e: Vector2 = (e as EnemyBase).global_position - origin
 			# 前方半球（点积 ≥ 0）；身后漏打以区分「爆发近战」与全周环绕
 			if forward.dot(to_e) >= 0.0:
-				(e as EnemyBase).take_damage(dmg)
+				(e as EnemyBase).take_damage(dmg, true)
