@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §6.5 进化 + §5.4 掉落上限 + 附录 A.1",
+    "mvp_scope": "8 条进化路径（#1~#8）；#9/#10 延后",
+    "note": "运行时只读；融合规则与掉落上限改表不改脚本"
+  },
+  "rules": {
+    "weapon_max_level": 7,
+    "passive_max_level": 5,
+    "soft_cap_unused_items": 2,
+    "resonance_duration": 1.5,
+    "evolved_damage_mult": 1.35,
+    "require_evolvable_for_drop": true
+  },
+  "drops": {
+    "elite_night_guaranteed": [5],
+    "elite_per_night_cap": 1,
+    "boss_drop_count": {
+      "10": 1,
+      "15": 2,
+      "20": 2
+    }
+  },
+  "paths": {
+    "harpoon": {
+      "weapon_id": "harpoon",
+      "passive_id": "tide_compass",
+      "evolved_name": "深渊鱼叉",
+      "path_index": 1
+    },
+    "holy_fire": {
+      "weapon_id": "holy_fire",
+      "passive_id": "lamp_oil",
+      "evolved_name": "永昼圣火",
+      "path_index": 2
+    },
+    "anchor_hammer": {
+      "weapon_id": "anchor_hammer",
+      "passive_id": "iron_chain",
+      "evolved_name": "风暴之锚",
+      "path_index": 3
+    },
+    "spore": {
+      "weapon_id": "spore",
+      "passive_id": "humus",
+      "evolved_name": "水母巢",
+      "path_index": 4
+    },
+    "storm_cloud": {
+      "weapon_id": "storm_cloud",
+      "passive_id": "storm_flask",
+      "evolved_name": "湮灭雷暴",
+      "path_index": 5
+    },
+    "jellyfish_cannon": {
+      "weapon_id": "jellyfish_cannon",
+      "passive_id": "abyss_eye",
+      "evolved_name": "深渊水母王",
+      "path_index": 6
+    },
+    "anchor_chain": {
+      "weapon_id": "anchor_chain",
+      "passive_id": "coral_barrier",
+      "evolved_name": "永恒锚轮",
+      "path_index": 7
+    },
+    "albatross": {
+      "weapon_id": "albatross",
+      "passive_id": "exp_sac",
+      "evolved_name": "永恒鸥群",
+      "path_index": 8
+    }
+  }
+}

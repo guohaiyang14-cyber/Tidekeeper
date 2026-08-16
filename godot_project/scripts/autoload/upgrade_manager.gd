@@ -208,40 +208,51 @@ func _note_offers_and_recompute_pity(offered: Array) -> void:
 			_series_miss_streak[series] = int(_pity_baseline_series.get(series, 0)) + 1
 
 
-## 构建当前候选池（来自 config，过滤已拥有 / 槽位已满）
-## 注：不含已持有武器升级 —— 延后 W5
+## 构建当前候选池（来自 config；含未持有与可升级项）
 func _build_candidate_pool() -> Array[Dictionary]:
 	var cfg: Dictionary = ConfigLoader.get_upgrade_config()
 	var weight_weapon: int = int(cfg.get("weight_weapon", 10))
 	var weight_passive: int = int(cfg.get("weight_passive", 8))
 	var pool: Array[Dictionary] = []
-	if GameState.weapon_slots.size() < GameState.MAX_WEAPON_SLOTS:
-		for wid in ConfigLoader.get_all_weapon_ids():
-			if wid not in GameState.weapon_slots:
-				var w: Dictionary = ConfigLoader.get_weapon(wid)
-				pool.append({
-					"id": wid,
-					"type": "weapon",
-					"name": w.get("name", wid),
-					"category": w.get("attack_type", ""),
-					"series": "",
-					"description": w.get("level_1_trait", ""),
-					"weight": weight_weapon,
-				})
-	if GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS:
-		for pid in ConfigLoader.get_all_passive_ids():
-			if pid not in GameState.passive_slots:
-				var p: Dictionary = ConfigLoader.get_passive(pid)
-				var series: String = str(p.get("series", ""))
-				pool.append({
-					"id": pid,
-					"type": "passive",
-					"name": p.get("name", pid),
-					"category": p.get("category", "通用被动"),
-					"series": series,
-					"description": p.get("description", ""),
-					"weight": weight_passive * _series_weight_mult(series),
-				})
+	for wid in ConfigLoader.get_all_weapon_ids():
+		var w: Dictionary = ConfigLoader.get_weapon(wid)
+		if w.is_empty():
+			continue
+		var owned: bool = wid in GameState.weapon_slots
+		if owned:
+			if GameState.get_weapon_level(wid) >= GameState.max_weapon_level:
+				continue
+		elif GameState.weapon_slots.size() >= GameState.MAX_WEAPON_SLOTS:
+			continue
+		pool.append({
+			"id": wid,
+			"type": "weapon",
+			"name": w.get("name", wid),
+			"category": w.get("attack_type", ""),
+			"series": "",
+			"description": w.get("level_1_trait", ""),
+			"weight": weight_weapon,
+		})
+	for pid in ConfigLoader.get_all_passive_ids():
+		var p: Dictionary = ConfigLoader.get_passive(pid)
+		if p.is_empty():
+			continue
+		var owned_p: bool = pid in GameState.passive_slots
+		if owned_p:
+			if GameState.get_passive_level(pid) >= GameState.max_passive_level:
+				continue
+		elif GameState.passive_slots.size() >= GameState.MAX_PASSIVE_SLOTS:
+			continue
+		var series: String = str(p.get("series", ""))
+		pool.append({
+			"id": pid,
+			"type": "passive",
+			"name": p.get("name", pid),
+			"category": p.get("category", "通用被动"),
+			"series": series,
+			"description": p.get("description", ""),
+			"weight": weight_passive * _series_weight_mult(series),
+		})
 	return pool
 
 

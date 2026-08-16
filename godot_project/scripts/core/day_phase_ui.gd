@@ -48,7 +48,7 @@ func _build_frame() -> void:
 	add_child(_subtitle)
 
 	var hint := Label.new()
-	hint.text = "右侧商店可购买强化 · 按 Q 或点「继续下一夜」进入下一夜"
+	hint.text = "右侧商店可购买强化 · 可融合时点「融合」· 按 Q 或点「继续下一夜」进入下一夜"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	hint.offset_top = -42.0

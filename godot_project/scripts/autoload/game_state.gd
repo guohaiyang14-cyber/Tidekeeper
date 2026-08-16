@@ -19,6 +19,7 @@ signal exp_gained(amount: int, total_exp: int)
 signal level_up(new_level: int)
 signal tidecoins_changed(new_total: int)
 signal player_damaged(amount: int)
+signal evolution_items_changed(new_total: int)
 
 # 局内状态
 var current_night: int = 0
@@ -33,13 +34,20 @@ var player_max_health: int = 100
 var tidecoins: int = 0
 var stardust: int = 0
 var refine_essence: int = 0
+## 未使用的进化道具数量（§6.5）
+var evolution_items: int = 0
 
 # 武器槽 / 被动槽（SKILL.md §5.2：上限 4 武器 / 6 被动）
 var weapon_slots: Array[String] = []
 var passive_slots: Array[String] = []
 # 武器等级：id → 等级（1~max_weapon_level），重复获得已持有武器则升级（W5）
 var weapon_levels: Dictionary[String, int] = {}
+# 被动等级：id → 等级（1~max_passive_level）
+var passive_levels: Dictionary[String, int] = {}
+## 已进化武器 id → 进化显示名
+var evolved_weapons: Dictionary[String, String] = {}
 var max_weapon_level: int = 7
+var max_passive_level: int = 5
 const MAX_WEAPON_SLOTS: int = 4
 const MAX_PASSIVE_SLOTS: int = 6
 
@@ -88,6 +96,9 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	weapon_slots.clear()
 	passive_slots.clear()
 	weapon_levels.clear()
+	passive_levels.clear()
+	evolved_weapons.clear()
+	evolution_items = 0
 	# 开局授予数据驱动的默认武器（避免 0 武器无法攻击的死亡螺旋，§4.2）
 	var sw: String = ConfigLoader.get_starting_weapon()
 	if sw != "":
@@ -96,6 +107,9 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	var cfg_max_lv: int = ConfigLoader.get_max_weapon_level()
 	if cfg_max_lv > 0:
 		max_weapon_level = cfg_max_lv
+	var cfg_pas_lv: int = ConfigLoader.get_max_passive_level()
+	if cfg_pas_lv > 0:
+		max_passive_level = cfg_pas_lv
 	refine_ii_count = 0
 
 	# 重置结束标记（新局可再次触发结束）
@@ -165,13 +179,63 @@ func get_weapon_level(weapon_id: String) -> int:
 	return weapon_levels.get(weapon_id, 0)
 
 
-## 添加被动到槽位（返回是否成功）
+## 添加或升级被动（返回是否成功）
+## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_passive_level），满级返回 false
 func add_passive(passive_id: String) -> bool:
+	if passive_id in passive_slots:
+		var lv: int = passive_levels.get(passive_id, 1)
+		if lv >= max_passive_level:
+			return false
+		passive_levels[passive_id] = lv + 1
+		return true
 	if passive_slots.size() >= MAX_PASSIVE_SLOTS:
 		return false
-	if passive_id in passive_slots:
-		return false
 	passive_slots.append(passive_id)
+	passive_levels[passive_id] = 1
+	return true
+
+
+## 获取被动当前等级（未持有返回 0）
+func get_passive_level(passive_id: String) -> int:
+	return passive_levels.get(passive_id, 0)
+
+
+## 移除被动并返还槽位（进化融合时调用）
+func remove_passive(passive_id: String) -> bool:
+	if passive_id not in passive_slots:
+		return false
+	passive_slots.erase(passive_id)
+	passive_levels.erase(passive_id)
+	return true
+
+
+func is_weapon_evolved(weapon_id: String) -> bool:
+	return evolved_weapons.has(weapon_id)
+
+
+func get_evolved_name(weapon_id: String) -> String:
+	return evolved_weapons.get(weapon_id, "")
+
+
+## 标记武器已进化（占原槽；被动槽由 EvolutionSystem 返还）
+func mark_weapon_evolved(weapon_id: String, evolved_name: String) -> void:
+	if weapon_id not in weapon_slots:
+		return
+	evolved_weapons[weapon_id] = evolved_name
+
+
+func add_evolution_items(amount: int) -> void:
+	if amount <= 0:
+		return
+	evolution_items += amount
+	evolution_items_changed.emit(evolution_items)
+
+
+func consume_evolution_item() -> bool:
+	if evolution_items <= 0:
+		return false
+	evolution_items -= 1
+	evolution_items_changed.emit(evolution_items)
 	return true
 
 

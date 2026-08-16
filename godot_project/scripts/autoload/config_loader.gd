@@ -21,6 +21,7 @@ var affixes: Dictionary = {}
 var passives: Dictionary = {}
 var pickups: Dictionary = {}
 var upgrade: Dictionary = {}
+var evolutions: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -51,6 +52,7 @@ func _load_all() -> void:
 	passives = _load_json("passives.json", true)
 	pickups = _load_json("pickups.json", true)
 	upgrade = _load_json("upgrade.json", true)
+	evolutions = _load_json("evolutions.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -60,13 +62,14 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d pickups=%s upgrade=%s" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
 		events.get("events", {}).size(),
 		get_all_affix_ids().size(),
 		passives.get("passives", {}).size(),
+		evolutions.get("paths", {}).size(),
 		"ok" if pickups.has("exp_gem") else "missing",
 		"ok" if upgrade.has("reroll_cost") else "missing",
 	])
@@ -99,8 +102,11 @@ func _validate_counts() -> void:
 		["enemies", "enemies", 9],
 		["bosses", "bosses", 3],
 		["events", "events", 7],
-		["passives", "passives", 4],
+		["passives", "passives", 12],
 	]
+	var evo_paths: int = evolutions.get("paths", {}).size()
+	if evo_paths != 8:
+		push_warning("[ConfigLoader] evolutions.paths 计数 %d != 预期 8（MVP 红线）" % evo_paths)
 	for check in checks:
 		var table_key: String = check[0]
 		var data_key: String = check[1]
@@ -260,3 +266,32 @@ func get_all_passive_series() -> Array[String]:
 ## 三选一数值配置（§6.2）
 func get_upgrade_config() -> Dictionary:
 	return upgrade
+
+
+## 进化总表
+func get_evolutions() -> Dictionary:
+	return evolutions
+
+
+func get_evolution_rules() -> Dictionary:
+	return evolutions.get("rules", {})
+
+
+func get_evolution_drops() -> Dictionary:
+	return evolutions.get("drops", {})
+
+
+func get_evolution_path(weapon_id: String) -> Dictionary:
+	return evolutions.get("paths", {}).get(weapon_id, {})
+
+
+func get_all_evolution_weapon_ids() -> Array:
+	return evolutions.get("paths", {}).keys()
+
+
+## 被动等级上限
+func get_max_passive_level() -> int:
+	var from_evo: int = int(get_evolution_rules().get("passive_max_level", 0))
+	if from_evo > 0:
+		return from_evo
+	return int(passives.get("metadata", {}).get("max_passive_level", 5))

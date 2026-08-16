@@ -6,7 +6,10 @@
     "slot_limit": 4,
     "starting_weapon": "harpoon",
     "damage_per_level": 0.15,
-    "shop": { "cost": 30, "discount": 0.2 },
+    "shop": {
+      "cost": 30,
+      "discount": 0.2
+    },
     "mvp_scope": "8 种武器 / 8 条进化路径（路径 #9、#10 为内容扩充阶段，不在本表）",
     "note": "运行时只读；调参改表不改公式。武器等级上限见 §6.3，槽位上限见 §6.1；damage_per_level 见 §6.3"
   },
@@ -34,7 +37,8 @@
         "passive_series": "潮汐",
         "passive_effect_hint": "攻速",
         "trait": "自动追踪、命中弹射",
-        "refine_path_id": 1
+        "refine_path_id": 1,
+        "required_passive_id": "tide_compass"
       }
     },
     "holy_fire": {
@@ -58,7 +62,8 @@
         "passive_effect_hint": "燃烧",
         "trait": "持续灼烧地面 5 秒",
         "refine_path_id": 2,
-        "naming_note": "进化钥被动「燃灯油」≠ 局外升级树「灯油」，实现/本地化须分 key"
+        "naming_note": "进化钥被动「燃灯油」≠ 局外升级树「灯油」，实现/本地化须分 key",
+        "required_passive_id": "lamp_oil"
       }
     },
     "anchor_hammer": {
@@ -82,7 +87,8 @@
         "passive_series": "灯塔",
         "passive_effect_hint": "范围",
         "trait": "链式闪电（2 次跳转；相对上一跳 ×0.6，递减 40%/跳）",
-        "refine_path_id": 3
+        "refine_path_id": 3,
+        "required_passive_id": "iron_chain"
       }
     },
     "spore": {
@@ -108,7 +114,8 @@
         "passive_series": "灯塔",
         "passive_effect_hint": "持续伤",
         "trait": "召唤物死亡时爆炸",
-        "refine_path_id": 4
+        "refine_path_id": 4,
+        "required_passive_id": "humus"
       }
     },
     "storm_cloud": {
@@ -131,7 +138,8 @@
         "passive_series": "潮汐",
         "passive_effect_hint": "减 CD",
         "trait": "落雷连锁 2 次（相对上一击 ×0.7，递减 30%/次）",
-        "refine_path_id": 5
+        "refine_path_id": 5,
+        "required_passive_id": "storm_flask"
       }
     },
     "jellyfish_cannon": {
@@ -157,7 +165,8 @@
         "passive_effect_hint": "暴击率",
         "trait": "6 道螺旋弹幕 + 中等漩涡吸附 + 每轮至多 1 次 50% 暴击定身（0.6 秒）",
         "refine_path_id": 6,
-        "impl_note": "定身「每轮至多 1 次」=1.0s 时间窗，武器维护冷却；弹幕数仅提高触发机会"
+        "impl_note": "定身「每轮至多 1 次」=1.0s 时间窗，武器维护冷却；弹幕数仅提高触发机会",
+        "required_passive_id": "abyss_eye"
       }
     },
     "anchor_chain": {
@@ -180,7 +189,8 @@
         "passive_series": "礁石",
         "passive_effect_hint": "伤害反弹",
         "trait": "6 圈递增伤害（+15%/层）+ 近战反弹 30%",
-        "refine_path_id": 7
+        "refine_path_id": 7,
+        "required_passive_id": "coral_barrier"
       }
     },
     "albatross": {
@@ -206,7 +216,8 @@
         "passive_series": "夜风",
         "passive_effect_hint": "经验获取",
         "trait": "4 只信天翁 + 1 只鸥王（2.5×伤害）+ 击杀额外经验珠",
-        "refine_path_id": 8
+        "refine_path_id": 8,
+        "required_passive_id": "exp_sac"
       }
     }
   }

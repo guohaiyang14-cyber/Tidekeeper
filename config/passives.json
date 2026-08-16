@@ -1,12 +1,12 @@
 {
   "metadata": {
     "schema_version": 1,
-    "doc_source": "主设计文档 v0.3.4 §6.4 被动与槽位（4 通用被动为 MVP 范围；8 进化钥被动为 W10 内容）",
+    "doc_source": "主设计文档 v0.3.4 §6.4 被动与槽位 + 附录 A.1 进化钥",
     "max_passive_level": 5,
     "slot_limit": 6,
     "shop": { "cost": 20, "discount": 0.2 },
-    "mvp_scope": "4 通用被动（夜明珠/护身符/潮信铃/灯芯石）",
-    "note": "运行时只读。原型阶段数值为占位，待 W12 被动系统统一校准（§6.4 要求 W12 前补齐通用被动完整表）"
+    "mvp_scope": "4 通用被动 + 8 进化钥被动（W10）",
+    "note": "运行时只读。进化钥 key ≠ 局外灯塔树「灯油/灯芯」"
   },
   "passives": {
     "pearl": {
@@ -44,6 +44,87 @@
       "max_level": 5,
       "description": "伤害 +8%（每级 +8%）",
       "effect_hint": "伤害/范围"
+    },
+    "tide_compass": {
+      "id": "tide_compass",
+      "name": "潮汐罗盘",
+      "series": "潮汐",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "攻速（进化钥：鱼叉枪 → 深渊鱼叉）",
+      "effect_hint": "攻速",
+      "evolution_weapon_id": "harpoon"
+    },
+    "lamp_oil": {
+      "id": "lamp_oil",
+      "name": "燃灯油",
+      "series": "灯塔",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "燃烧（进化钥：灯塔圣火 → 永昼圣火）",
+      "effect_hint": "燃烧",
+      "evolution_weapon_id": "holy_fire",
+      "naming_note": "≠ 局外升级树「灯油」"
+    },
+    "iron_chain": {
+      "id": "iron_chain",
+      "name": "铁链",
+      "series": "灯塔",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "范围（进化钥：锚锤 → 风暴之锚）",
+      "effect_hint": "范围",
+      "evolution_weapon_id": "anchor_hammer"
+    },
+    "humus": {
+      "id": "humus",
+      "name": "腐殖质",
+      "series": "灯塔",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "持续伤（进化钥：水母孢子 → 水母巢）",
+      "effect_hint": "持续伤",
+      "evolution_weapon_id": "spore"
+    },
+    "storm_flask": {
+      "id": "storm_flask",
+      "name": "风暴瓶",
+      "series": "潮汐",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "减 CD（进化钥：雷暴云 → 湮灭雷暴）",
+      "effect_hint": "减 CD",
+      "evolution_weapon_id": "storm_cloud"
+    },
+    "abyss_eye": {
+      "id": "abyss_eye",
+      "name": "深海之眼",
+      "series": "潮汐",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "暴击率（进化钥：水母炮 → 深渊水母王）",
+      "effect_hint": "暴击率",
+      "evolution_weapon_id": "jellyfish_cannon"
+    },
+    "coral_barrier": {
+      "id": "coral_barrier",
+      "name": "珊瑚屏障",
+      "series": "礁石",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "伤害反弹（进化钥：锚链 → 永恒锚轮）",
+      "effect_hint": "伤害反弹",
+      "evolution_weapon_id": "anchor_chain"
+    },
+    "exp_sac": {
+      "id": "exp_sac",
+      "name": "经验囊",
+      "series": "夜风",
+      "category": "进化钥被动",
+      "max_level": 5,
+      "description": "经验获取（进化钥：信天翁 → 永恒鸥群）",
+      "effect_hint": "经验获取",
+      "evolution_weapon_id": "albatross"
     }
   }
 }

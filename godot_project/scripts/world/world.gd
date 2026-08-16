@@ -14,6 +14,7 @@ const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 # 显式预加载 UI 脚本，确保 headless 下 class_name 可用（新脚本可能尚未写入 global_script_class_cache）
 const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
 const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
+const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -32,6 +33,7 @@ const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 @onready var shop_ui: ShopUI = $UI/ShopUI
 @onready var day_phase_ui: DayPhaseUI = $UI/DayPhaseUI
 @onready var result_ui: ResultUI = $UI/ResultUI
+@onready var evolution_effect_ui: EvolutionEffectUI = $UI/EvolutionEffectUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 
@@ -59,6 +61,7 @@ func _ready() -> void:
 	shop_manager.setup(shop_ui)
 	shop_ui.setup(shop_manager)
 	shop_ui.skip_requested.connect(_on_shop_skip)
+	shop_ui.evolution_fused.connect(_on_evolution_fused)
 	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
 	player.add_to_group("player")
 	enemy_spawner.add_to_group("enemy_spawner")
@@ -183,6 +186,11 @@ func _clear_night_entities() -> void:
 
 ## 升级结算后同步武器实例（获得/升级武器）
 func _on_upgrade_resolved(_offer: Dictionary, _is_skip: bool) -> void:
+	weapon_manager.sync_from_game_state()
+
+
+## 进化融合后同步武器等级/传说标记到实例
+func _on_evolution_fused(_weapon_id: String) -> void:
 	weapon_manager.sync_from_game_state()
 
 

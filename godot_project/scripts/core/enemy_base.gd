@@ -57,6 +57,8 @@ var _tint: Color = Color(0.85, 0.25, 0.25)
 
 # ---- Boss 标记（configure_boss 置 true，configure 复位 false） ----
 var is_boss: bool = false
+## 命名精英（巨钳王等；进化道具掉落用）
+var is_elite: bool = false
 var _boss_brain: BossBrain
 var _boss_data: Dictionary = {}
 ## 灯塔位置（潮汐波安全区圆心；由 Spawner 注入）
@@ -112,6 +114,7 @@ func _on_acquire() -> void:
 	_summon_timer = 0.0
 	prototype_id = ""
 	is_boss = false
+	is_elite = false
 	_boss_brain = null
 	_boss_data = {}
 	affix_ids.clear()
@@ -169,6 +172,7 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	base_exp = int(data.get("base_exp", 1))
 	night = night_value
 	is_boss = false
+	is_elite = false
 	_boss_brain = null
 	_boss_data = {}
 	affix_ids.clear()
@@ -236,6 +240,7 @@ func configure_boss(boss_data: Dictionary) -> void:
 	danger = int(boss_data.get("danger", 5))
 	update_group = int(boss_data.get("update_group", 1))
 	is_boss = true
+	is_elite = false
 	_boss_data = boss_data
 	night = GameState.current_night
 	var bexp: int = int(boss_data.get("base_exp", 50))

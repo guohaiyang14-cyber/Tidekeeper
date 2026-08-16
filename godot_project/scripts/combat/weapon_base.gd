@@ -41,9 +41,14 @@ func get_base_damage() -> int:
 
 
 ## 等级缩放伤害（§6.3：每级系数来自 weapons.json metadata.damage_per_level）
+## 进化后额外乘 evolutions.json rules.evolved_damage_mult（W10 MVP 传说口径）
 func get_leveled_damage() -> int:
 	var per_lv: float = ConfigLoader.get_damage_per_level()
-	return int(round(float(get_base_damage()) * (1.0 + per_lv * float(level - 1))))
+	var dmg: float = float(get_base_damage()) * (1.0 + per_lv * float(level - 1))
+	if GameState.is_weapon_evolved(weapon_id):
+		var mult: float = float(ConfigLoader.get_evolution_rules().get("evolved_damage_mult", 1.35))
+		dmg *= mult
+	return int(round(dmg))
 
 
 ## 读取 behavior 子表数值（缺省回退 default）

@@ -102,6 +102,7 @@ func start_night(night: int) -> void:
 	_pincer_mode = _is_pincer_night(night)
 	_pincer_side = 1
 	_spawning = true
+	EvolutionSystem.on_night_start(night)
 	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s)" % [
 		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
 	])
@@ -257,6 +258,7 @@ func _spawn_elite(night: int) -> void:
 	var e: EnemyBase = spawn_enemy(edata, pos, extra, false)
 	if e == null:
 		return
+	e.is_elite = true
 	print("[EnemySpawner] 精英登场：%s 词缀=%s" % [edata.get("name", "精英"), ",".join(e.affix_ids)])
 
 
@@ -295,6 +297,10 @@ func _on_enemy_died(enemy: EnemyBase) -> void:
 	if pickup_system != null:
 		pickup_system.spawn_exp_gem(pos, enemy.base_exp)
 		pickup_system.spawn_coin(pos, enemy.coin_drop)
+	if enemy.is_boss:
+		EvolutionSystem.try_boss_drop(GameState.current_night)
+	elif enemy.is_elite:
+		EvolutionSystem.try_elite_drop(GameState.current_night, true)
 	if was_final_boss:
 		# 立刻锁通关（挡同帧接触判负）；信号/清场延后，避免死亡栈内嵌套切阶段
 		stop()
