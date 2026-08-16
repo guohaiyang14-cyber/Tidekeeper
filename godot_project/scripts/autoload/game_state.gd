@@ -162,7 +162,7 @@ func add_exp(amount: int) -> void:
 ## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_weapon_level），满级返回 false
 func add_weapon(weapon_id: String) -> bool:
 	if weapon_id in weapon_slots:
-		var lv: int = weapon_levels.get(weapon_id, 1)
+		var lv: int = get_weapon_level(weapon_id)
 		if lv >= max_weapon_level:
 			return false  # 已满级，无法再升级
 		weapon_levels[weapon_id] = lv + 1
@@ -174,16 +174,18 @@ func add_weapon(weapon_id: String) -> bool:
 	return true
 
 
-## 获取武器当前等级（未持有返回 0）
+## 获取武器当前等级（未持有返回 0；在槽但缺 levels 条目视为 1）
 func get_weapon_level(weapon_id: String) -> int:
-	return weapon_levels.get(weapon_id, 0)
+	if weapon_id not in weapon_slots:
+		return 0
+	return int(weapon_levels.get(weapon_id, 1))
 
 
 ## 添加或升级被动（返回是否成功）
 ## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_passive_level），满级返回 false
 func add_passive(passive_id: String) -> bool:
 	if passive_id in passive_slots:
-		var lv: int = passive_levels.get(passive_id, 1)
+		var lv: int = get_passive_level(passive_id)
 		if lv >= max_passive_level:
 			return false
 		passive_levels[passive_id] = lv + 1
@@ -195,9 +197,11 @@ func add_passive(passive_id: String) -> bool:
 	return true
 
 
-## 获取被动当前等级（未持有返回 0）
+## 获取被动当前等级（未持有返回 0；在槽但缺 levels 条目视为 1）
 func get_passive_level(passive_id: String) -> int:
-	return passive_levels.get(passive_id, 0)
+	if passive_id not in passive_slots:
+		return 0
+	return int(passive_levels.get(passive_id, 1))
 
 
 ## 移除被动并返还槽位（进化融合时调用）

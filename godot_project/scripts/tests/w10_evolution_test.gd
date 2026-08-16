@@ -118,11 +118,20 @@ func _test_soft_cap() -> void:
 	_max_weapon("harpoon")
 	var soft: int = int(ConfigLoader.get_evolution_rules().get("soft_cap_unused_items", 2))
 	GameState.evolution_items = soft
-	var got: int = EvolutionSystem.grant_items(3, true)
-	_assert(got == 0, "达软上限不再发放")
+	var got: int = EvolutionSystem.grant_items(3, true, true)
+	_assert(got == 0, "达软上限不再发放（宝箱/事件路径）")
 	GameState.evolution_items = 0
-	got = EvolutionSystem.grant_items(5, true)
+	got = EvolutionSystem.grant_items(5, true, true)
 	_assert(got == soft, "发放受软上限截断 (= %d)" % soft)
+	# Boss / 第5夜保底精英无视软上限
+	GameState.evolution_items = soft
+	var b: int = EvolutionSystem.try_boss_drop(10)
+	_assert(b == 1, "Boss 必掉无视软上限")
+	_assert(GameState.evolution_items == soft + 1, "Boss 掉落后可超过软上限")
+	EvolutionSystem.on_night_start(5)
+	GameState.evolution_items = soft
+	var e: int = EvolutionSystem.try_elite_drop(5, true)
+	_assert(e == 1, "第5夜保底精英无视软上限")
 
 
 func _test_elite_and_boss_drops() -> void:

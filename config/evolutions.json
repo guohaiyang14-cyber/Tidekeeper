@@ -9,6 +9,7 @@
     "weapon_max_level": 7,
     "passive_max_level": 5,
     "soft_cap_unused_items": 2,
+    "soft_cap_note": "仅约束宝箱/事件额外掉落；Boss 必掉与第5夜保底精英无视软上限",
     "resonance_duration": 1.5,
     "evolved_damage_mult": 1.35,
     "require_evolvable_for_drop": true

@@ -176,8 +176,15 @@ func _test_reroll_does_not_double_pity() -> void:
 func _test_empty_pool_auto_skip() -> void:
 	print("[empty pool auto skip]")
 	_fresh_run()
+	# 槽满且全部满级 → 无升级候选（含 W10「已持有升级」路径）
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
-	GameState.passive_slots = ["pearl", "amulet", "tide_bell", "lamp_core"]
+	for wid in GameState.weapon_slots:
+		GameState.weapon_levels[wid] = GameState.max_weapon_level
+	GameState.passive_slots = [
+		"pearl", "amulet", "tide_bell", "lamp_core", "tide_compass", "lamp_oil",
+	]
+	for pid in GameState.passive_slots:
+		GameState.passive_levels[pid] = GameState.max_passive_level
 	GameState.add_exp(22)
 	_assert(not UpgradeManager.is_presenting(), "候选池空 → 不停留在三选一")
 	_assert(not get_tree().paused, "候选池空 → 不保持暂停")
@@ -249,11 +256,18 @@ func _test_reroll_empty_pool_auto_skip() -> void:
 	print("[reroll empty pool auto skip]")
 	_fresh_run()
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
+	for wid in GameState.weapon_slots:
+		GameState.weapon_levels[wid] = GameState.max_weapon_level
 	GameState.passive_slots = []
+	GameState.passive_levels.clear()
 	_level_up_once()
 	_assert(UpgradeManager.is_presenting(), "先进入三选一")
-	# 中途塞满，使重铸候选为空
-	GameState.passive_slots = ["pearl", "amulet", "tide_bell", "lamp_core"]
+	# 中途塞满被动且满级，使重铸候选为空
+	GameState.passive_slots = [
+		"pearl", "amulet", "tide_bell", "lamp_core", "tide_compass", "lamp_oil",
+	]
+	for pid in GameState.passive_slots:
+		GameState.passive_levels[pid] = GameState.max_passive_level
 	UpgradeManager._reroll_offers()
 	_assert(not UpgradeManager.is_presenting(), "重铸空池 → 自动结束")
 	_assert(not get_tree().paused, "重铸空池 → 恢复树")
