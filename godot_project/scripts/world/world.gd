@@ -62,6 +62,8 @@ func _ready() -> void:
 	shop_ui.setup(shop_manager)
 	shop_ui.skip_requested.connect(_on_shop_skip)
 	shop_ui.evolution_fused.connect(_on_evolution_fused)
+	if not GameState.loadout_changed.is_connected(_on_loadout_changed):
+		GameState.loadout_changed.connect(_on_loadout_changed)
 	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
 	player.add_to_group("player")
 	enemy_spawner.add_to_group("enemy_spawner")
@@ -134,6 +136,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全
 			_clear_night_entities()
+			# 休息夜：灯塔大回血（W13）
+			RestSystem.try_apply_rest_for_night(day_night.get_current_night())
 			# 显示白昼选择页面框架（技术选型.md：DayPhaseUI = 抉择之昼）
 			day_phase_ui.enter_day(day_night.get_current_night())
 			shop_manager.open_shop()
@@ -192,6 +196,12 @@ func _on_upgrade_resolved(_offer: Dictionary, _is_skip: bool) -> void:
 ## 进化融合后同步武器等级/传说标记到实例
 func _on_evolution_fused(_weapon_id: String) -> void:
 	weapon_manager.sync_from_game_state()
+
+
+## 商店重铸卸下武器/被动后同步实例
+func _on_loadout_changed() -> void:
+	weapon_manager.sync_from_game_state()
+	_update_debug_label()
 
 
 func _unhandled_input(event: InputEvent) -> void:

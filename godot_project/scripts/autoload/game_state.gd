@@ -21,6 +21,8 @@ signal tidecoins_changed(new_total: int)
 signal player_damaged(amount: int)
 signal evolution_items_changed(new_total: int)
 signal refine_essence_changed(new_total: int)
+signal player_health_changed(new_health: int)
+signal loadout_changed()
 
 # 局内状态
 var current_night: int = 0
@@ -188,6 +190,17 @@ func get_weapon_level(weapon_id: String) -> int:
 	return int(weapon_levels.get(weapon_id, 1))
 
 
+## 移除武器并返还槽位（重铸回收时调用；同步清除进化标记与精炼阶）
+func remove_weapon(weapon_id: String) -> bool:
+	if weapon_id not in weapon_slots:
+		return false
+	weapon_slots.erase(weapon_id)
+	weapon_levels.erase(weapon_id)
+	evolved_weapons.erase(weapon_id)
+	refine_tiers.erase(weapon_id)
+	return true
+
+
 ## 添加或升级被动（返回是否成功）
 ## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_passive_level），满级返回 false
 func add_passive(passive_id: String) -> bool:
@@ -218,6 +231,44 @@ func remove_passive(passive_id: String) -> bool:
 	passive_slots.erase(passive_id)
 	passive_levels.erase(passive_id)
 	return true
+
+
+## 重铸回收：卸下被动并退还 config 比例的实付潮币（W13；MVP 不随等级浮动）
+## 返回退还金额；未持有返回 0
+func reroll_passive(passive_id: String) -> int:
+	if passive_id not in passive_slots:
+		return 0
+	var paid: int = ConfigLoader.get_shop_paid_cost("passive")
+	var refund: int = roundi(float(paid) * ConfigLoader.get_shop_refund_ratio("passive"))
+	remove_passive(passive_id)
+	add_tidecoins(refund)
+	loadout_changed.emit()
+	return refund
+
+
+## 重铸回收：卸下武器并退还 config 比例的实付潮币（W13；同步清进化/精炼）
+## 至少保留 1 把武器（禁止清空槽导致夜晚无输出）；末把返回 0
+func reroll_weapon(weapon_id: String) -> int:
+	if weapon_id not in weapon_slots:
+		return 0
+	if weapon_slots.size() <= 1:
+		return 0
+	var paid: int = ConfigLoader.get_shop_paid_cost("weapon")
+	var refund: int = roundi(float(paid) * ConfigLoader.get_shop_refund_ratio("weapon"))
+	remove_weapon(weapon_id)
+	add_tidecoins(refund)
+	loadout_changed.emit()
+	return refund
+
+
+## 灯塔回血至上限（RestSystem 调用）；返回实际回复量
+func heal_player_to_full() -> int:
+	var before: int = player_health
+	player_health = player_max_health
+	var healed: int = player_health - before
+	if healed > 0:
+		player_health_changed.emit(player_health)
+	return healed
 
 
 ## 被动槽已用数量（被动槽管理，W12）

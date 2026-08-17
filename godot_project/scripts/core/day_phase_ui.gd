@@ -58,10 +58,13 @@ func _build_frame() -> void:
 	add_child(hint)
 
 
-## 进入昼：显示框架并更新夜数副标题
+## 进入昼：显示框架并更新夜数副标题（休息夜提示灯塔回血）
 func enter_day(night: int) -> void:
 	if _subtitle != null:
-		_subtitle.text = "第 %d 夜结束" % night
+		if RestSystem.is_rest_night(night):
+			_subtitle.text = "第 %d 夜结束 · 灯塔休息回血" % night
+		else:
+			_subtitle.text = "第 %d 夜结束" % night
 	visible = true
 
 

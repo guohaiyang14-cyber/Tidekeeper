@@ -8,7 +8,8 @@
     "damage_per_level": 0.15,
     "shop": {
       "cost": 30,
-      "discount": 0.2
+      "discount": 0.2,
+      "refund_ratio": 0.8
     },
     "mvp_scope": "8 种武器 / 8 条进化路径（路径 #9、#10 为内容扩充阶段，不在本表）",
     "note": "运行时只读；调参改表不改公式。武器等级上限见 §6.3，槽位上限见 §6.1；damage_per_level 见 §6.3"

@@ -4,7 +4,7 @@
     "doc_source": "主设计文档 v0.3.4 §6.4 被动与槽位 + 附录 A.1 进化钥",
     "max_passive_level": 5,
     "slot_limit": 6,
-    "shop": { "cost": 20, "discount": 0.2 },
+    "shop": { "cost": 20, "discount": 0.2, "refund_ratio": 0.8 },
     "mvp_scope": "4 通用被动 + 8 进化钥被动（W12 被动全量：效果经 PassiveSystem 通用桶接入玩法）",
     "note": "运行时只读。进化钥 key ≠ 局外灯塔树「灯油/灯芯」。effect 为 per-level 百分比，由 PassiveSystem 聚合为通用数值桶（伤害/攻速/拾取/减伤/经验/暴击/范围/CD）；钥被动深机制（燃烧/反弹/持续伤）MVP 简化为桶数值。减伤 MVP：线性百分比累加钳制 ≤0.9（≠ GDD §6.9 公式与 0.70 封顶）。暴击率 MVP：硬钳 ≤1.0（≠ GDD 软上限 60%+衰减；现仅 abyss_eye 满级 40%）。范围 MVP：无 +120% 软上限。暴击按每次命中独立掷骰。",
     "crit_damage_mult": 1.8,

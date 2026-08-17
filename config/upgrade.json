@@ -6,6 +6,7 @@
   },
   "max_offers": 3,
   "reroll_cost": 10,
+  "rest_interval_nights": 5,
   "weight_weapon": 10,
   "weight_passive": 8,
   "weapon_pity_threshold": 2,

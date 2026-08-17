@@ -180,6 +180,30 @@ func get_damage_per_level() -> float:
 func get_passive_shop_meta() -> Dictionary:
 	return passives.get("metadata", {}).get("shop", {})
 
+
+## 商店折扣后实付价（购买与重铸退款共用，单一真源）
+func discounted_shop_price(base: int, discount: float) -> int:
+	return maxi(1, roundi(float(base) * (1.0 - discount)))
+
+
+## 某类商品实付价（weapon / passive；全局统一定价，不按 id）
+func get_shop_paid_cost(kind: String) -> int:
+	var meta: Dictionary = get_weapon_shop_meta() if kind == "weapon" else get_passive_shop_meta()
+	var default_cost: int = 30 if kind == "weapon" else 20
+	return discounted_shop_price(int(meta.get("cost", default_cost)), float(meta.get("discount", 0.2)))
+
+
+## 重铸回收比例（metadata.shop.refund_ratio，默认 0.8）
+func get_shop_refund_ratio(kind: String) -> float:
+	var meta: Dictionary = get_weapon_shop_meta() if kind == "weapon" else get_passive_shop_meta()
+	return float(meta.get("refund_ratio", 0.8))
+
+
+## 休息夜间隔（upgrade.json rest_interval_nights，每 N 夜一次灯塔大回血）
+func get_rest_interval_nights() -> int:
+	return int(get_upgrade_config().get("rest_interval_nights", 5))
+
+
 ## 获取全部敌人 id 列表
 func get_all_enemy_ids() -> Array:
 	return enemies.get("enemies", {}).keys()

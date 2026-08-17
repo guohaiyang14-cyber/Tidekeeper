@@ -84,6 +84,8 @@ func buy(item: Dictionary) -> bool:
 		purchase_failed.emit("slot_full")
 		return false
 	purchase_made.emit(item)
+	# 武器入槽/升级后通知 World 同步 WeaponManager（被动同步为幂等空操作）
+	GameState.loadout_changed.emit()
 	return true
 
 
@@ -131,15 +133,9 @@ func _shuffle(arr: Array[Dictionary]) -> void:
 
 ## 武器单价（config 折扣后）
 func _weapon_cost() -> int:
-	var meta: Dictionary = ConfigLoader.get_weapon_shop_meta()
-	return _discounted(int(meta.get("cost", 30)), float(meta.get("discount", 0.2)))
+	return ConfigLoader.get_shop_paid_cost("weapon")
 
 
 ## 被动单价（config 折扣后）
 func _passive_cost() -> int:
-	var meta: Dictionary = ConfigLoader.get_passive_shop_meta()
-	return _discounted(int(meta.get("cost", 20)), float(meta.get("discount", 0.2)))
-
-
-func _discounted(base: int, discount: float) -> int:
-	return maxi(1, roundi(float(base) * (1.0 - discount)))
+	return ConfigLoader.get_shop_paid_cost("passive")
