@@ -330,3 +330,8 @@ func get_max_passive_level() -> int:
 	if from_evo > 0:
 		return from_evo
 	return int(passives.get("metadata", {}).get("max_passive_level", 5))
+
+
+## 暴击伤害倍率（passives.json metadata.crit_damage_mult，对齐 GDD ×1.8）
+func get_crit_damage_mult() -> float:
+	return float(passives.get("metadata", {}).get("crit_damage_mult", 1.8))

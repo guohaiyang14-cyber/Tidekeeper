@@ -15,6 +15,7 @@ func fire(_target: EnemyBase) -> void:
 	if pool == null:
 		return
 	var origin: Vector2 = get_owner_pos.call()
+	# 弹道携带 leveled 伤害；暴击在 Projectile 每次命中时独立掷骰
 	var dmg: int = get_leveled_damage()
 	var count: int = get_behavior_int("base_count", 4) + get_behavior_int("count_per_level", 1) * (level - 1)
 	var slow_factor: float = get_behavior_float("hit_slow_factor", 0.8)

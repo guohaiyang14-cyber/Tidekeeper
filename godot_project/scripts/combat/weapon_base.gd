@@ -31,9 +31,22 @@ func configure(data: Dictionary, lv: int) -> void:
 func get_attack_rate() -> float:
 	# 召唤型表载 attack_rate 可为 null；改读 pulse_rate（默认 1.0，§4.2）
 	var raw: Variant = weapon_data.get("attack_rate", 1.0)
+	var base: float
 	if raw == null:
-		return float(weapon_data.get("pulse_rate", 1.0))
-	return float(raw)
+		base = float(weapon_data.get("pulse_rate", 1.0))
+	else:
+		base = float(raw)
+	# 被动通用攻速桶（W12）：攻速提升 = 更高频率
+	return base * PassiveSystem.get_attack_speed_mult()
+
+
+## 攻击间隔（秒）：1/攻速 × (1 − 被动 CD 减免)；CD 桶与攻速桶独立可叠
+## 返回 ≤0 表示本帧不可开火（攻速无效）
+func get_attack_interval() -> float:
+	var rate: float = get_attack_rate()
+	if rate <= 0.0:
+		return -1.0
+	return (1.0 / rate) * (1.0 - PassiveSystem.get_cd_reduction())
 
 
 func get_base_damage() -> int:
@@ -43,6 +56,7 @@ func get_base_damage() -> int:
 ## 等级缩放伤害（§6.3：每级系数来自 weapons.json metadata.damage_per_level）
 ## 进化后额外乘 evolutions.json rules.evolved_damage_mult（W10 MVP 传说口径）
 ## 精炼再乘 refine_paths.json 对应路径的累积 tier_I×tier_II 倍率（W11，与进化乘区分离可叠加）
+## 被动再乘 PassiveSystem 通用伤害桶（W12，与进化/精炼乘区分离可叠加）
 func get_leveled_damage() -> int:
 	var per_lv: float = ConfigLoader.get_damage_per_level()
 	var dmg: float = float(get_base_damage()) * (1.0 + per_lv * float(level - 1))
@@ -52,7 +66,18 @@ func get_leveled_damage() -> int:
 	var rt: int = GameState.get_refine_tier(weapon_id)
 	if rt > 0:
 		dmg *= ConfigLoader.get_refine_multiplier(weapon_id, rt)
+	dmg *= PassiveSystem.get_damage_mult()
 	return int(round(dmg))
+
+
+## 范围半径 × 被动 area 桶（W12；铁链等）
+func scale_area_radius(radius: float) -> float:
+	return radius * PassiveSystem.get_area_mult()
+
+
+## 单次命中伤害（含暴击掷骰）。齐射/AoE 应对每个目标分别调用；弹道在命中时掷骰
+func roll_hit_damage() -> int:
+	return PassiveSystem.apply_crit_to_damage(get_leveled_damage())
 
 
 ## 读取 behavior 子表数值（缺省回退 default）
@@ -119,14 +144,13 @@ func _insert_nearest(out_enemies: Array[EnemyBase], out_d2: Array[float], enemy:
 func tick(delta: float) -> void:
 	if get_target.is_null() or get_owner_pos.is_null():
 		return
-	var rate: float = get_attack_rate()
-	if rate <= 0.0:
+	var interval: float = get_attack_interval()
+	if interval <= 0.0:
 		return
 	var target: EnemyBase = get_target.call()
 	if target == null:
 		return
 	attack_timer += delta
-	var interval: float = 1.0 / rate
 	while attack_timer >= interval:
 		attack_timer -= interval
 		fire(target)

@@ -147,9 +147,11 @@ func end_night() -> void:
 
 
 ## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
+## 应用被动通用经验桶（W12）：实际获得 = amount × 经验倍率
 func add_exp(amount: int) -> void:
-	player_exp += amount
-	exp_gained.emit(amount, player_exp)
+	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult()))
+	player_exp += gained
+	exp_gained.emit(gained, player_exp)
 	while player_level < ExpTable.get_max_level():
 		var need: int = ExpTable.get_exp(player_level)
 		if need <= 0:
@@ -216,6 +218,16 @@ func remove_passive(passive_id: String) -> bool:
 	passive_slots.erase(passive_id)
 	passive_levels.erase(passive_id)
 	return true
+
+
+## 被动槽已用数量（被动槽管理，W12）
+func passive_slot_usage() -> int:
+	return passive_slots.size()
+
+
+## 是否还能新增被动（被动槽管理，W12）
+func can_add_passive() -> bool:
+	return passive_slots.size() < MAX_PASSIVE_SLOTS
 
 
 func is_weapon_evolved(weapon_id: String) -> bool:
@@ -288,11 +300,13 @@ func consume_refine_essence(amount: int) -> bool:
 
 
 ## 玩家受伤（敌人接触/弹幕/自爆调用）；归零触发游戏结束
+## 应用被动通用减伤桶（W12）：实际伤害 = amount × (1 - 减伤)
 func damage_player(amount: int) -> void:
 	if is_over or amount <= 0:
 		return
-	player_health -= amount
-	player_damaged.emit(amount)
+	var applied: int = int(round(float(amount) * (1.0 - PassiveSystem.get_damage_reduction())))
+	player_health -= applied
+	player_damaged.emit(applied)
 	if player_health <= 0:
 		player_health = 0
 		trigger_game_over("hp_zero")

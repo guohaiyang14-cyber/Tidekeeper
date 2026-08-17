@@ -80,7 +80,8 @@ func _process(delta: float) -> void:
 			if node is EnemyBase and not _hit_set.has(node):
 				_hit_set[node] = true
 				var enemy: EnemyBase = node as EnemyBase
-				enemy.take_damage(_damage)
+				# 每次命中独立掷暴击（穿透多段各自判定，W12）
+				enemy.take_damage(PassiveSystem.apply_crit_to_damage(_damage))
 				if _slow_duration > 0.0 and _slow_factor < 1.0:
 					enemy.apply_slow(_slow_factor, _slow_duration)
 				_pierce -= 1

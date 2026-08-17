@@ -5,8 +5,10 @@
     "max_passive_level": 5,
     "slot_limit": 6,
     "shop": { "cost": 20, "discount": 0.2 },
-    "mvp_scope": "4 通用被动 + 8 进化钥被动（W10）",
-    "note": "运行时只读。进化钥 key ≠ 局外灯塔树「灯油/灯芯」"
+    "mvp_scope": "4 通用被动 + 8 进化钥被动（W12 被动全量：效果经 PassiveSystem 通用桶接入玩法）",
+    "note": "运行时只读。进化钥 key ≠ 局外灯塔树「灯油/灯芯」。effect 为 per-level 百分比，由 PassiveSystem 聚合为通用数值桶（伤害/攻速/拾取/减伤/经验/暴击/范围/CD）；钥被动深机制（燃烧/反弹/持续伤）MVP 简化为桶数值。减伤 MVP：线性百分比累加钳制 ≤0.9（≠ GDD §6.9 公式与 0.70 封顶）。暴击率 MVP：硬钳 ≤1.0（≠ GDD 软上限 60%+衰减；现仅 abyss_eye 满级 40%）。范围 MVP：无 +120% 软上限。暴击按每次命中独立掷骰。",
+    "crit_damage_mult": 1.8,
+    "effect_buckets": ["damage_pct", "attack_speed_pct", "pickup_radius_pct", "damage_reduction_pct", "exp_pct", "crit_chance_pct", "area_pct", "cd_reduction_pct"]
   },
   "passives": {
     "pearl": {
@@ -16,7 +18,8 @@
       "category": "通用被动",
       "max_level": 5,
       "description": "拾取半径 +15%（每级 +15%）",
-      "effect_hint": "拾取/经验"
+      "effect_hint": "拾取/经验",
+      "effect": { "pickup_radius_pct": 15 }
     },
     "amulet": {
       "id": "amulet",
@@ -25,7 +28,8 @@
       "category": "通用被动",
       "max_level": 5,
       "description": "受到伤害 -6%（每级 -6%）",
-      "effect_hint": "防御/减伤"
+      "effect_hint": "防御/减伤",
+      "effect": { "damage_reduction_pct": 6 }
     },
     "tide_bell": {
       "id": "tide_bell",
@@ -34,7 +38,8 @@
       "category": "通用被动",
       "max_level": 5,
       "description": "攻速 +8%（每级 +8%）",
-      "effect_hint": "攻速/暴击"
+      "effect_hint": "攻速/暴击",
+      "effect": { "attack_speed_pct": 8 }
     },
     "lamp_core": {
       "id": "lamp_core",
@@ -43,7 +48,8 @@
       "category": "通用被动",
       "max_level": 5,
       "description": "伤害 +8%（每级 +8%）",
-      "effect_hint": "伤害/范围"
+      "effect_hint": "伤害/范围",
+      "effect": { "damage_pct": 8 }
     },
     "tide_compass": {
       "id": "tide_compass",
@@ -53,7 +59,8 @@
       "max_level": 5,
       "description": "攻速（进化钥：鱼叉枪 → 深渊鱼叉）",
       "effect_hint": "攻速",
-      "evolution_weapon_id": "harpoon"
+      "evolution_weapon_id": "harpoon",
+      "effect": { "attack_speed_pct": 8 }
     },
     "lamp_oil": {
       "id": "lamp_oil",
@@ -64,7 +71,8 @@
       "description": "燃烧（进化钥：灯塔圣火 → 永昼圣火）",
       "effect_hint": "燃烧",
       "evolution_weapon_id": "holy_fire",
-      "naming_note": "≠ 局外升级树「灯油」"
+      "naming_note": "≠ 局外升级树「灯油」",
+      "effect": { "damage_pct": 8 }
     },
     "iron_chain": {
       "id": "iron_chain",
@@ -74,7 +82,8 @@
       "max_level": 5,
       "description": "范围（进化钥：锚锤 → 风暴之锚）",
       "effect_hint": "范围",
-      "evolution_weapon_id": "anchor_hammer"
+      "evolution_weapon_id": "anchor_hammer",
+      "effect": { "area_pct": 8 }
     },
     "humus": {
       "id": "humus",
@@ -84,7 +93,8 @@
       "max_level": 5,
       "description": "持续伤（进化钥：水母孢子 → 水母巢）",
       "effect_hint": "持续伤",
-      "evolution_weapon_id": "spore"
+      "evolution_weapon_id": "spore",
+      "effect": { "damage_pct": 6 }
     },
     "storm_flask": {
       "id": "storm_flask",
@@ -94,7 +104,8 @@
       "max_level": 5,
       "description": "减 CD（进化钥：雷暴云 → 湮灭雷暴）",
       "effect_hint": "减 CD",
-      "evolution_weapon_id": "storm_cloud"
+      "evolution_weapon_id": "storm_cloud",
+      "effect": { "cd_reduction_pct": 8 }
     },
     "abyss_eye": {
       "id": "abyss_eye",
@@ -104,7 +115,8 @@
       "max_level": 5,
       "description": "暴击率（进化钥：水母炮 → 深渊水母王）",
       "effect_hint": "暴击率",
-      "evolution_weapon_id": "jellyfish_cannon"
+      "evolution_weapon_id": "jellyfish_cannon",
+      "effect": { "crit_chance_pct": 8 }
     },
     "coral_barrier": {
       "id": "coral_barrier",
@@ -114,7 +126,8 @@
       "max_level": 5,
       "description": "伤害反弹（进化钥：锚链 → 永恒锚轮）",
       "effect_hint": "伤害反弹",
-      "evolution_weapon_id": "anchor_chain"
+      "evolution_weapon_id": "anchor_chain",
+      "effect": { "damage_reduction_pct": 6 }
     },
     "exp_sac": {
       "id": "exp_sac",
@@ -124,7 +137,8 @@
       "max_level": 5,
       "description": "经验获取（进化钥：信天翁 → 永恒鸥群）",
       "effect_hint": "经验获取",
-      "evolution_weapon_id": "albatross"
+      "evolution_weapon_id": "albatross",
+      "effect": { "exp_pct": 10 }
     }
   }
 }

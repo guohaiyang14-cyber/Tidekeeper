@@ -109,12 +109,12 @@ func get_current_speed() -> float:
 	return base_move_speed * minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * UNIT_TO_PIXEL
 
 
-## 获取有效拾取半径（基础 × 被动倍率，夜明珠被动可扩大）
+## 获取有效拾取半径（基础 × 灯塔光环倍率 × 被动拾取桶，W12）
 func get_pickup_radius() -> float:
-	return base_pickup_radius * _pickup_radius_mult
+	return base_pickup_radius * _pickup_radius_mult * PassiveSystem.get_pickup_radius_mult()
 
 
-## 设置拾取半径倍率（夜明珠被动 / 灯塔光环局外升级调用）
+## 设置拾取半径倍率（局外灯塔光环等；夜明珠走 PassiveSystem 拾取桶，勿双乘）
 func set_pickup_radius_mult(mult: float) -> void:
 	_pickup_radius_mult = mult
 	queue_redraw()

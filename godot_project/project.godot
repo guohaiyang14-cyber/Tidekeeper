@@ -25,6 +25,7 @@ GameState="*res://scripts/autoload/game_state.gd"
 UpgradeManager="*res://scripts/autoload/upgrade_manager.gd"
 EvolutionSystem="*res://scripts/autoload/evolution_system.gd"
 RefineSystem="*res://scripts/autoload/refine_system.gd"
+PassiveSystem="*res://scripts/autoload/passive_system.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
 
 [display]

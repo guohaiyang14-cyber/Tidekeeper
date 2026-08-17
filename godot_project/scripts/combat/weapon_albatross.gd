@@ -17,14 +17,13 @@ func fire(target: EnemyBase) -> void:
 	if hash == null:
 		return
 	var origin: Vector2 = get_owner_pos.call()
-	var dmg: int = get_leveled_damage()
 	var base_r: float = get_behavior_float("base_radius", 280.0)
 	var r_per: float = get_behavior_float("radius_per_level", 20.0)
-	var radius: float = base_r + r_per * float(level - 1)
+	var radius: float = scale_area_radius(base_r + r_per * float(level - 1))
 	var dive_count: int = get_behavior_int("base_targets", 2) + get_behavior_int("targets_per_level", 1) * (level - 1)
 	var ranked: Array[EnemyBase] = query_nearest_enemies(hash, origin, radius, dive_count)
 	if ranked.is_empty():
-		target.take_damage(dmg)
+		target.take_damage(roll_hit_damage())
 		return
 	for e in ranked:
-		e.take_damage(dmg)
+		e.take_damage(roll_hit_damage())

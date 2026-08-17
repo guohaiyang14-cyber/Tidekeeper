@@ -16,11 +16,10 @@ func fire(_target: EnemyBase) -> void:
 	if hash == null:
 		return
 	var origin: Vector2 = get_owner_pos.call()
-	var dmg: int = get_leveled_damage()
 	var base_r: float = get_behavior_float("base_radius", 60.0)
 	var per_lv: float = get_behavior_float("radius_per_level", 15.0)
-	var radius: float = base_r + per_lv * float(level - 1)
+	var radius: float = scale_area_radius(base_r + per_lv * float(level - 1))
 	var targets: Array = hash.query_radius(origin, radius)
 	for e in targets:
 		if e is EnemyBase:
-			(e as EnemyBase).take_damage(dmg, true)
+			(e as EnemyBase).take_damage(roll_hit_damage(), true)
