@@ -22,6 +22,7 @@ var passives: Dictionary = {}
 var pickups: Dictionary = {}
 var upgrade: Dictionary = {}
 var evolutions: Dictionary = {}
+var refine: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -53,6 +54,7 @@ func _load_all() -> void:
 	pickups = _load_json("pickups.json", true)
 	upgrade = _load_json("upgrade.json", true)
 	evolutions = _load_json("evolutions.json", true)
+	refine = _load_json("refine_paths.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -107,6 +109,9 @@ func _validate_counts() -> void:
 	var evo_paths: int = evolutions.get("paths", {}).size()
 	if evo_paths != 8:
 		push_warning("[ConfigLoader] evolutions.paths 计数 %d != 预期 8（MVP 红线）" % evo_paths)
+	var refine_paths: int = refine.get("paths", {}).size()
+	if refine_paths != 8:
+		push_warning("[ConfigLoader] refine.paths 计数 %d != 预期 8（MVP 红线）" % refine_paths)
 	for check in checks:
 		var table_key: String = check[0]
 		var data_key: String = check[1]
@@ -287,6 +292,36 @@ func get_evolution_path(weapon_id: String) -> Dictionary:
 
 func get_all_evolution_weapon_ids() -> Array:
 	return evolutions.get("paths", {}).keys()
+
+
+## 精炼总表
+func get_refine() -> Dictionary:
+	return refine
+
+
+func get_refine_rules() -> Dictionary:
+	return refine.get("rules", {})
+
+
+func get_refine_path(weapon_id: String) -> Dictionary:
+	return refine.get("paths", {}).get(weapon_id, {})
+
+
+func get_all_refine_weapon_ids() -> Array:
+	return refine.get("paths", {}).keys()
+
+
+## 精炼累积伤害倍率：tier>=1 乘 tier_I.dps_mult；tier>=2 再乘 tier_II.dps_mult（与设计 §6.6 乘区分离一致）
+func get_refine_multiplier(weapon_id: String, tier: int) -> float:
+	var path: Dictionary = get_refine_path(weapon_id)
+	if path.is_empty() or tier <= 0:
+		return 1.0
+	var m: float = 1.0
+	if tier >= 1 and path.has("tier_I"):
+		m *= float(path["tier_I"].get("dps_mult", 1.0))
+	if tier >= 2 and path.has("tier_II"):
+		m *= float(path["tier_II"].get("dps_mult", 1.0))
+	return m
 
 
 ## 被动等级上限

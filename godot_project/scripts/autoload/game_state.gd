@@ -20,6 +20,7 @@ signal level_up(new_level: int)
 signal tidecoins_changed(new_total: int)
 signal player_damaged(amount: int)
 signal evolution_items_changed(new_total: int)
+signal refine_essence_changed(new_total: int)
 
 # 局内状态
 var current_night: int = 0
@@ -46,6 +47,8 @@ var weapon_levels: Dictionary[String, int] = {}
 var passive_levels: Dictionary[String, int] = {}
 ## 已进化武器 id → 进化显示名
 var evolved_weapons: Dictionary[String, String] = {}
+## 精炼等级：weapon_id → 0/1/2（0=未精炼；W11 精炼系统）
+var refine_tiers: Dictionary[String, int] = {}
 var max_weapon_level: int = 7
 var max_passive_level: int = 5
 const MAX_WEAPON_SLOTS: int = 4
@@ -80,6 +83,7 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	tidecoins = 0
 	stardust = 0
 	refine_essence = 0
+	refine_essence_changed.emit(refine_essence)
 
 	# 角色基础属性（对齐 §9.4 角色表）
 	match character:
@@ -99,6 +103,7 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	passive_levels.clear()
 	evolved_weapons.clear()
 	evolution_items = 0
+	refine_tiers.clear()
 	# 开局授予数据驱动的默认武器（避免 0 武器无法攻击的死亡螺旋，§4.2）
 	var sw: String = ConfigLoader.get_starting_weapon()
 	if sw != "":
@@ -240,6 +245,45 @@ func consume_evolution_item() -> bool:
 		return false
 	evolution_items -= 1
 	evolution_items_changed.emit(evolution_items)
+	return true
+
+
+## 获取武器当前精炼等级（未持有返回 0）
+func get_refine_tier(weapon_id: String) -> int:
+	return int(refine_tiers.get(weapon_id, 0))
+
+
+## 设置武器精炼等级（钳制到 0/1/2；由 RefineSystem 调用，门控在系统侧）
+## 同时维护 refine_ii_count（达到/离开 II 阶的武器数），使「全局最多 2 把 II」上限与等级强绑定。
+func set_refine_tier(weapon_id: String, tier: int) -> void:
+	var old: int = int(refine_tiers.get(weapon_id, 0))
+	var clamped: int = clampi(tier, 0, 2)
+	refine_tiers[weapon_id] = clamped
+	if old < 2 and clamped >= 2:
+		refine_ii_count += 1
+	elif old >= 2 and clamped < 2:
+		refine_ii_count -= 1
+
+
+## 武器是否已精炼（任意阶）
+func is_weapon_refined(weapon_id: String) -> bool:
+	return get_refine_tier(weapon_id) > 0
+
+
+func add_refine_essence(amount: int) -> void:
+	if amount <= 0:
+		return
+	refine_essence += amount
+	refine_essence_changed.emit(refine_essence)
+
+
+func consume_refine_essence(amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if refine_essence < amount:
+		return false
+	refine_essence -= amount
+	refine_essence_changed.emit(refine_essence)
 	return true
 
 

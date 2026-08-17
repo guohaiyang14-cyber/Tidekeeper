@@ -1,7 +1,7 @@
 # ============================================================================
-# ShopUI — 商店界面（W4 雏形 + W10 进化融合入口）
-# 职责：订阅 ShopManager 信号，渲染在售列表；融合按钮调用 EvolutionSystem.fuse
-# 红线：仅消费 ShopManager / EvolutionSystem，不自行改潮币/槽位
+# ShopUI — 商店界面（W4 雏形 + W10 进化融合 + W11 精炼入口）
+# 职责：订阅 ShopManager 信号，渲染在售列表；融合/精炼按钮调用 EvolutionSystem / RefineSystem
+# 红线：仅消费 ShopManager / EvolutionSystem / RefineSystem，不自行改潮币/槽位/精华
 # ============================================================================
 class_name ShopUI
 extends Control
@@ -17,7 +17,9 @@ signal evolution_fused(weapon_id: String)
 @onready var _coin_label: Label = $VBox/CoinLabel
 var _skip_btn: Button
 var _evo_label: Label
+var _refine_label: Label
 var _fuse_btns: Array[Button] = []
+var _refine_btns: Array[Button] = []
 
 
 func _ready() -> void:
@@ -27,12 +29,18 @@ func _ready() -> void:
 	_evo_label.add_theme_font_size_override("font_size", 16)
 	_evo_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
 	_vbox.add_child(_evo_label)
+	_refine_label = Label.new()
+	_refine_label.add_theme_font_size_override("font_size", 16)
+	_refine_label.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
+	_vbox.add_child(_refine_label)
 	_skip_btn = Button.new()
 	_skip_btn.text = "继续下一夜 (Q)"
 	_skip_btn.pressed.connect(func(): skip_requested.emit())
 	_vbox.add_child(_skip_btn)
 	if not GameState.evolution_items_changed.is_connected(_on_evo_items_changed):
 		GameState.evolution_items_changed.connect(_on_evo_items_changed)
+	if not GameState.refine_essence_changed.is_connected(_on_refine_essence_changed):
+		GameState.refine_essence_changed.connect(_on_refine_essence_changed)
 
 
 ## 注入 ShopManager（由 World 调用）
@@ -81,38 +89,49 @@ func _clear_dynamic_rows() -> void:
 		if is_instance_valid(b):
 			b.queue_free()
 	_fuse_btns.clear()
+	for b in _refine_btns:
+		if is_instance_valid(b):
+			b.queue_free()
+	_refine_btns.clear()
 	if _skip_btn != null and _skip_btn.get_parent() == _vbox:
 		_vbox.remove_child(_skip_btn)
 	if _evo_label != null and _evo_label.get_parent() == _vbox:
 		_vbox.remove_child(_evo_label)
+	if _refine_label != null and _refine_label.get_parent() == _vbox:
+		_vbox.remove_child(_refine_label)
 	for child in _vbox.get_children():
 		if child != _coin_label:
 			child.queue_free()
 
 
 func _place_tail_controls() -> void:
-	_refresh_fusion_buttons_only()
-	if _evo_label != null:
-		_vbox.add_child(_evo_label)
-	if _skip_btn != null:
-		_vbox.add_child(_skip_btn)
+	_refresh_fusion()
 
 
 func _refresh_fusion() -> void:
 	if not visible:
 		return
-	# 重建融合钮：摘尾部 → 清旧融合钮 → 重挂
+	# 重建尾部：摘尾部控件 → 清旧钮 → 重挂（融合钮 + 精炼钮 + 标签 + 跳过）
 	if _skip_btn != null and _skip_btn.get_parent() == _vbox:
 		_vbox.remove_child(_skip_btn)
 	if _evo_label != null and _evo_label.get_parent() == _vbox:
 		_vbox.remove_child(_evo_label)
+	if _refine_label != null and _refine_label.get_parent() == _vbox:
+		_vbox.remove_child(_refine_label)
 	for b in _fuse_btns:
 		if is_instance_valid(b):
 			b.queue_free()
 	_fuse_btns.clear()
+	for b in _refine_btns:
+		if is_instance_valid(b):
+			b.queue_free()
+	_refine_btns.clear()
 	_refresh_fusion_buttons_only()
+	_refresh_refine_buttons_only()
 	if _evo_label != null:
 		_vbox.add_child(_evo_label)
+	if _refine_label != null:
+		_vbox.add_child(_refine_label)
 	if _skip_btn != null:
 		_vbox.add_child(_skip_btn)
 
@@ -122,7 +141,7 @@ func _refresh_fusion_buttons_only() -> void:
 		_evo_label.text = "进化道具：%d" % GameState.evolution_items
 	var ready: Array[String] = EvolutionSystem.list_ready()
 	for wid in ready:
-		var path: Dictionary = EvolutionSystem.get_path(wid)
+		var path: Dictionary = EvolutionSystem.evolution_path(wid)
 		var btn: Button = Button.new()
 		btn.text = "融合 · %s → %s" % [
 			ConfigLoader.get_weapon(wid).get("name", wid),
@@ -133,9 +152,40 @@ func _refresh_fusion_buttons_only() -> void:
 		_fuse_btns.append(btn)
 
 
+func _refresh_refine_buttons_only() -> void:
+	if _refine_label != null:
+		_refine_label.text = "淬炼精华：%d（II 上限 %d）" % [GameState.refine_essence, GameState.MAX_REFINE_II]
+	var ready: Array[String] = RefineSystem.list_ready()
+	for wid in ready:
+		var path: Dictionary = RefineSystem.refine_path(wid)
+		var target: int = RefineSystem.next_refine_tier(wid)
+		var cost: int = int(RefineSystem.get_rules().get("tier_%d_cost" % target, 1 if target == 1 else 2))
+		# MVP 只应用 dps_mult；按钮展示本阶倍率与相对未精炼的累积倍率，避免行为 desc 误导
+		var step_mult: float = ConfigLoader.get_refine_multiplier(wid, target) / ConfigLoader.get_refine_multiplier(wid, target - 1)
+		var cum_mult: float = ConfigLoader.get_refine_multiplier(wid, target)
+		var btn: Button = Button.new()
+		btn.text = "精炼 T%d · %s → %s（本阶×%.2f / 累积×%.2f，精华 %d）" % [
+			target,
+			ConfigLoader.get_weapon(wid).get("name", wid),
+			path.get("name", "?"),
+			step_mult,
+			cum_mult,
+			cost,
+		]
+		btn.pressed.connect(_on_refine_pressed.bind(wid))
+		_vbox.add_child(btn)
+		_refine_btns.append(btn)
+
+
 func _on_fuse_pressed(weapon_id: String) -> void:
 	if EvolutionSystem.fuse(weapon_id):
 		evolution_fused.emit(weapon_id)
+		_refresh_fusion()
+
+
+func _on_refine_pressed(weapon_id: String) -> void:
+	# 伤害实时读 GameState.refine_tiers，无需通知 World 重建实例
+	if RefineSystem.refine(weapon_id) > 0:
 		_refresh_fusion()
 
 
@@ -151,6 +201,13 @@ func _on_tidecoins_changed(_total: int) -> void:
 func _on_evo_items_changed(_total: int) -> void:
 	if _evo_label != null:
 		_evo_label.text = "进化道具：%d" % GameState.evolution_items
+	if visible:
+		_refresh_fusion()
+
+
+func _on_refine_essence_changed(_total: int) -> void:
+	if _refine_label != null:
+		_refine_label.text = "淬炼精华：%d（II 上限 %d）" % [GameState.refine_essence, GameState.MAX_REFINE_II]
 	if visible:
 		_refresh_fusion()
 

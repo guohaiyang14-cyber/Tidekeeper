@@ -81,7 +81,7 @@ func _test_fuse_all_eight() -> void:
 		GameState.weapon_slots.clear()
 		GameState.weapon_levels.clear()
 		GameState.evolved_weapons.clear()
-		var path: Dictionary = EvolutionSystem.get_path(wid)
+		var path: Dictionary = EvolutionSystem.evolution_path(wid)
 		var pid: String = String(path.get("passive_id", ""))
 		_max_weapon(wid)
 		_max_passive(pid)

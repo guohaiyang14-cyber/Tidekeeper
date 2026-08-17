@@ -1,0 +1,90 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 v0.3.4 §6.6 精炼 + 附录 B（精炼路径数据）",
+    "mvp_scope": "8 条精炼路径（#1~#8）的 I/II；III 与 #9/#10 延后至封测前",
+    "note": "运行时只读；路径与规则改表不改脚本。dps_mult 为各阶相对上一阶的乘区（累积乘积）；tier desc 为设计意图文案，MVP 战斗仅应用 dps_mult。require_evolved=true 对齐 §6.6「进化后的终局养成层」。平衡约束：全局最多 2 把 II、不可撤销、不加生命/经验"
+  },
+  "rules": {
+    "tier_1_unlock_night": 10,
+    "tier_2_unlock_night": 15,
+    "tier_1_cost": 1,
+    "tier_2_cost": 2,
+    "essence_cap": 9,
+    "elite_min_night": 12,
+    "elite_drop_chance": 0.3,
+    "elite_per_night_cap": 1,
+    "require_evolved": true,
+    "boss_drop_count": {
+      "10": 1,
+      "15": 2,
+      "20": 3
+    }
+  },
+  "paths": {
+    "harpoon": {
+      "weapon_id": "harpoon",
+      "path_index": 1,
+      "name": "深溯之径",
+      "type": "定向弹幕",
+      "tier_I": { "desc": "追踪精度 +100%", "dps_mult": 1.15 },
+      "tier_II": { "desc": "弹射 +2（总 5），衰减 10%", "dps_mult": 1.40 }
+    },
+    "holy_fire": {
+      "weapon_id": "holy_fire",
+      "path_index": 2,
+      "name": "耀阳之径",
+      "type": "范围型",
+      "tier_I": { "desc": "灼烧范围 +40%，燃烧 +2s", "dps_mult": 1.35 },
+      "tier_II": { "desc": "灼烧伤害 +80%，被灼烧移速 -15%", "dps_mult": 1.80 }
+    },
+    "anchor_hammer": {
+      "weapon_id": "anchor_hammer",
+      "path_index": 3,
+      "name": "雷霆之径",
+      "type": "链式",
+      "tier_I": { "desc": "链跳 +2（总 4），链速 +50%", "dps_mult": 1.50 },
+      "tier_II": { "desc": "闪电伤害 +60%，25% 减速", "dps_mult": 1.60 }
+    },
+    "spore": {
+      "weapon_id": "spore",
+      "path_index": 4,
+      "name": "群生之径",
+      "type": "召唤",
+      "tier_I": { "desc": "爆炸范围 +50%，伤害 +40%", "dps_mult": 1.40 },
+      "tier_II": { "desc": "召唤物 +1（总 4），伤害 +30%", "dps_mult": 1.30 }
+    },
+    "storm_cloud": {
+      "weapon_id": "storm_cloud",
+      "path_index": 5,
+      "name": "苍穹之径",
+      "type": "范围型",
+      "tier_I": { "desc": "连锁 +2（总 4），范围 +30%", "dps_mult": 1.50 },
+      "tier_II": { "desc": "落雷伤害 +50%，CD -0.5s", "dps_mult": 1.70 }
+    },
+    "jellyfish_cannon": {
+      "weapon_id": "jellyfish_cannon",
+      "path_index": 6,
+      "name": "漩涡之径",
+      "type": "定向弹幕",
+      "tier_I": { "desc": "弹幕 +2（总 8），漩涡 +40%", "dps_mult": 1.35 },
+      "tier_II": { "desc": "定身 60%，时长 +0.3s", "dps_mult": 1.10 }
+    },
+    "anchor_chain": {
+      "weapon_id": "anchor_chain",
+      "path_index": 7,
+      "name": "不屈之径",
+      "type": "环绕型",
+      "tier_I": { "desc": "锚链 +2（总 8），递增 +25%", "dps_mult": 1.30 },
+      "tier_II": { "desc": "反震之力：反弹提升至 50%，转为真实伤害", "dps_mult": 1.15 }
+    },
+    "albatross": {
+      "weapon_id": "albatross",
+      "path_index": 8,
+      "name": "翱翔之径",
+      "type": "召唤",
+      "tier_I": { "desc": "鸥群 +1，鸥王 +50%", "dps_mult": 1.40 },
+      "tier_II": { "desc": "+15% 暴击，暴伤 +80%", "dps_mult": 1.35 }
+    }
+  }
+}

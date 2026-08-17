@@ -21,7 +21,7 @@ func on_night_start(_night: int) -> void:
 	_elite_drops_this_night = 0
 
 
-func get_path(weapon_id: String) -> Dictionary:
+func evolution_path(weapon_id: String) -> Dictionary:
 	return ConfigLoader.get_evolution_path(weapon_id)
 
 
@@ -30,13 +30,13 @@ func has_evolvable_owned() -> bool:
 	for wid in GameState.weapon_slots:
 		if GameState.is_weapon_evolved(wid):
 			continue
-		if not get_path(wid).is_empty():
+		if not evolution_path(wid).is_empty():
 			return true
 	return false
 
 
 func can_fuse(weapon_id: String) -> bool:
-	var path: Dictionary = get_path(weapon_id)
+	var path: Dictionary = evolution_path(weapon_id)
 	if path.is_empty():
 		return false
 	if GameState.is_weapon_evolved(weapon_id):
@@ -69,7 +69,7 @@ func list_ready() -> Array[String]:
 func fuse(weapon_id: String) -> bool:
 	if not can_fuse(weapon_id):
 		return false
-	var path: Dictionary = get_path(weapon_id)
+	var path: Dictionary = evolution_path(weapon_id)
 	var pid: String = String(path.get("passive_id", ""))
 	var evo_name: String = String(path.get("evolved_name", "传说武器"))
 	if not GameState.consume_evolution_item():
