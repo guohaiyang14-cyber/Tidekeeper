@@ -235,11 +235,17 @@ func get_event(event_id: String) -> Dictionary:
 	return events.get("events", {}).get(event_id, {})
 
 ## 获取第 N 夜可用事件池（排除 excluded_nights 命中的事件）
+## 注意：JSON 数值解析为 float，需 int 比较（否则 15 in [15.0] 判定为 false，导致第 15 夜排除失效）
 func get_events_for_night(night: int) -> Array:
 	var result: Array = []
 	for event in events.get("events", {}).values():
 		var excluded: Array = event.get("excluded_nights", [])
-		if night in excluded:
+		var skip: bool = false
+		for v in excluded:
+			if int(v) == night:
+				skip = true
+				break
+		if skip:
 			continue
 		result.append(event)
 	return result

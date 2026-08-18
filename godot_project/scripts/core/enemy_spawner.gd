@@ -99,7 +99,8 @@ func start_night(night: int) -> void:
 	_remaining = _compute_count(night)
 	_eligible = _build_eligible(night)
 	_night_bonus_affixes = _pick_night_bonus_affixes(night)
-	_pincer_mode = _is_pincer_night(night)
+	# 第 15 夜天灾「潮汐夹击」两侧刷怪；事件「潮汐反转」在非 15 夜也强制两侧夹击（两者 OR，不叠乘位置逻辑）
+	_pincer_mode = _is_pincer_night(night) or EventSystem.is_event_pincer()
 	_pincer_side = 1
 	_spawning = true
 	EvolutionSystem.on_night_start(night)
@@ -112,6 +113,10 @@ func start_night(night: int) -> void:
 		_spawn_elite(night)
 	elif night in [10, 15, 20]:
 		_spawn_boss(night)
+	# 鱼群回游事件：本夜开局额外刷一波精英（§5.6）
+	if EventSystem.has_elite_wave():
+		_spawn_elite_wave()
+		EventSystem.consume_elite_wave()
 
 
 ## 停止刷怪（夜晚结束 / 进入昼）
@@ -263,6 +268,29 @@ func _spawn_elite(night: int) -> void:
 	print("[EnemySpawner] 精英登场：%s 词缀=%s" % [edata.get("name", "精英"), ",".join(e.affix_ids)])
 
 
+## 鱼群回游事件：本夜开局额外刷一波精英（§5.6；受 MAX_ENEMIES 约束）
+func _spawn_elite_wave() -> void:
+	var rules: Dictionary = ConfigLoader.get_affix_rules()
+	var amin: int = int(rules.get("elite_affix_min", 2))
+	var amax: int = int(rules.get("elite_affix_max", 3))
+	if amax < amin:
+		amax = amin
+	var count: int = EventSystem.get_elite_wave_count()
+	if count <= 0:
+		return
+	for _i in count:
+		if not _can_spawn_more() or _eligible.is_empty():
+			break
+		var def: Dictionary = _pick_enemy_def()
+		var extra: Array[String] = AffixSystem.pick(RNG.randi_range(amin, amax))
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var dist: float = float(_spawn_meta.get("ring_min", 180.0)) + RNG.randf_range(0.0, float(_spawn_meta.get("ring_extra", 220.0)))
+		var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
+		var e: EnemyBase = spawn_enemy(def, pos, extra, false)
+		if e != null:
+			e.is_elite = true
+
+
 ## 天灾夜：Boss（configure_boss + BossBrain）
 func _spawn_boss(night: int) -> void:
 	if not _can_spawn_more():
@@ -296,8 +324,8 @@ func _on_enemy_died(enemy: EnemyBase) -> void:
 	var pos: Vector2 = enemy.global_position
 	var was_final_boss: bool = enemy.is_boss and GameState.current_night >= 20
 	if pickup_system != null:
-		pickup_system.spawn_exp_gem(pos, enemy.base_exp)
-		pickup_system.spawn_coin(pos, enemy.coin_drop)
+		pickup_system.spawn_exp_gem(pos, EventSystem.scale_drop_amount(enemy.base_exp))
+		pickup_system.spawn_coin(pos, EventSystem.scale_coin_amount(enemy.coin_drop))
 	if enemy.is_boss:
 		EvolutionSystem.try_boss_drop(GameState.current_night)
 		RefineSystem.try_boss_drop(GameState.current_night)

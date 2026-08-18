@@ -367,9 +367,11 @@ func _process(delta: float) -> void:
 
 
 func _effective_speed() -> float:
+	# 事件「暴风雨」全场敌人移速倍率（W14；无事件时为 1.0）
+	var event_mult: float = EventSystem.get_enemy_speed_mult()
 	if _charging:
-		return move_speed * _charge_speed_mult * _move_speed_mult
-	return move_speed * _move_speed_mult * (1.0 + aura_speed_bonus)
+		return move_speed * _charge_speed_mult * _move_speed_mult * event_mult
+	return move_speed * _move_speed_mult * (1.0 + aura_speed_bonus) * event_mult
 
 
 func _move_toward(player_pos: Vector2, delta: float) -> void:

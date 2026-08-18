@@ -93,8 +93,8 @@ func _handle_movement() -> void:
 		input_vector.x += 1.0
 
 	input_vector = input_vector.normalized()
-	# 移速 = 基础 × 加成（受软上限约束），单位→像素换算
-	var speed: float = base_move_speed * minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP)
+	# 移速 = 基础 × 加成（受软上限约束）× 事件移速（W14 灯塔共鸣），单位→像素换算
+	var speed: float = base_move_speed * _effective_move_mult()
 	velocity = input_vector * speed * UNIT_TO_PIXEL
 	move_and_slide()
 
@@ -104,9 +104,14 @@ func set_move_speed_mult(mult: float) -> void:
 	_move_speed_mult = minf(mult, MOVE_SPEED_SOFT_CAP)
 
 
+## 局内移速倍率：被动/其它加成受软上限，再乘事件移速（灯塔共鸣 0.80 为惩罚，独立于软上限）
+func _effective_move_mult() -> float:
+	return minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * EventSystem.get_move_speed_mult()
+
+
 ## 获取当前移速（像素/秒）
 func get_current_speed() -> float:
-	return base_move_speed * minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * UNIT_TO_PIXEL
+	return base_move_speed * _effective_move_mult() * UNIT_TO_PIXEL
 
 
 ## 获取有效拾取半径（基础 × 灯塔光环倍率 × 被动拾取桶，W12）

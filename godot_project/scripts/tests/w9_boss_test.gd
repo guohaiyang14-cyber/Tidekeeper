@@ -40,6 +40,8 @@ func _ready() -> void:
 	await _test_elite_night5()
 	await _test_calamity_affix_night10()
 	await _test_pincer_night15()
+	await _test_event_tidal_reversal_pincer()
+	await _test_event_fish_migration_elite_wave()
 	await _test_final_boss_kill_wins()
 
 	print("------------------------------------------------------------")
@@ -137,8 +139,14 @@ func _test_tide_archon_wave_aura() -> void:
 			break
 	_assert(hurt, "光晕外吃到潮汐波")
 	# 玩家回到光晕内 → 潮汐波应免伤
+	# 隔离接触伤害（杂兵/Boss 向心移动会触发 _try_contact_damage，与潮汐波光晕判定无关），
+	# 仅验证「潮汐波在光晕内不造成伤害」。
 	player.global_position = Vector2.ZERO
 	boss.lighthouse_position = Vector2.ZERO
+	for n in enemy_pool.get_active():
+		if n is EnemyBase:
+			(n as EnemyBase).contact_radius = 0.0
+			(n as EnemyBase).contact_damage = 0
 	GameState.player_health = 100
 	await _run_frames(480)
 	_assert(GameState.player_health == 100, "光晕内潮汐波免伤")
@@ -212,17 +220,53 @@ func _test_pincer_night15() -> void:
 	_clear()
 	spawner.start_night(15)
 	_assert(spawner.is_pincer_mode(), "第15夜夹击模式开启")
-	await _run_frames(90)
-	var left: bool = false
-	var right: bool = false
+	# 夹击：直接验证刷怪点位两侧交替（避免被敌人向心移动导致收敛、误判为单侧）
+	spawner._pincer_side = 1
+	var ps1: Vector2 = spawner._pincer_spawn_pos()
+	var ps2: Vector2 = spawner._pincer_spawn_pos()
+	var ps3: Vector2 = spawner._pincer_spawn_pos()
+	var saw_left: bool = ps1.x < 0.0 or ps2.x < 0.0 or ps3.x < 0.0
+	var saw_right: bool = ps1.x > 0.0 or ps2.x > 0.0 or ps3.x > 0.0
+	_assert(saw_left and saw_right, "夹击两侧均有刷怪点位")
+	_clear()
+
+
+## 潮汐反转事件：非 15 夜也强制夹击（与天灾 OR）
+func _test_event_tidal_reversal_pincer() -> void:
+	print("[潮汐反转事件→夹击]")
+	_clear()
+	EventSystem.reset()
+	EventSystem.apply_event("tidal_reversal")
+	spawner.start_night(7)
+	_assert(spawner.is_pincer_mode(), "非15夜+潮汐反转 → 夹击开启")
+	spawner._pincer_side = 1
+	var a: Vector2 = spawner._pincer_spawn_pos()
+	var b: Vector2 = spawner._pincer_spawn_pos()
+	_assert(a.x * b.x < 0.0, "事件夹击点位左右交替")
+	EventSystem.reset()
+	_clear()
+	spawner.start_night(7)
+	_assert(not spawner.is_pincer_mode(), "无事件第7夜不夹击")
+	_clear()
+
+
+## 鱼群回游：start_night 消费精英波标记并刷出 is_elite
+func _test_event_fish_migration_elite_wave() -> void:
+	print("[鱼群回游→精英波实刷]")
+	_clear()
+	EventSystem.reset()
+	EventSystem.apply_event("fish_migration")
+	_assert(EventSystem.has_elite_wave(), "arm/apply 后精英波 pending")
+	var want: int = EventSystem.get_elite_wave_count()
+	_assert(want == 3, "精英波数量=config 3")
+	spawner.start_night(3)
+	await _run_frames(2)
+	_assert(not EventSystem.has_elite_wave(), "start_night 后精英波已消费")
+	var elites: int = 0
 	for n in enemy_pool.get_active():
-		if n is EnemyBase and not (n as EnemyBase).is_boss:
-			var dx: float = (n as EnemyBase).global_position.x - player.global_position.x
-			if dx < -50.0:
-				left = true
-			elif dx > 50.0:
-				right = true
-	_assert(left and right, "夹击两侧均有刷怪")
+		if n is EnemyBase and (n as EnemyBase).is_elite and not (n as EnemyBase).is_boss:
+			elites += 1
+	_assert(elites >= want, "刷出 ≥%d 只精英（实际 %d）" % [want, elites])
 	_clear()
 
 

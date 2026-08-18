@@ -207,7 +207,10 @@ func _refresh_reroll_buttons_only() -> void:
 		var paid: int = ConfigLoader.get_shop_paid_cost("weapon")
 		var refund: int = roundi(float(paid) * ConfigLoader.get_shop_refund_ratio("weapon"))
 		var btn: Button = Button.new()
-		if can_reroll_weapon:
+		if GameState.is_weapon_locked(wid):
+			btn.text = "重铸 · 武器 %s（事件锁定中）" % ConfigLoader.get_weapon(wid).get("name", wid)
+			btn.disabled = true
+		elif can_reroll_weapon:
 			btn.text = "重铸 · 武器 %s（退 %d）" % [ConfigLoader.get_weapon(wid).get("name", wid), refund]
 			btn.pressed.connect(_on_reroll_weapon_pressed.bind(wid))
 		else:

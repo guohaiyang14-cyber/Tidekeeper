@@ -61,6 +61,10 @@ var refine_ii_count: int = 0
 const MAX_REFINE_II: int = 2
 const MAX_REFINE_III: int = 0  # MVP 不做 III
 
+# 武器槽锁定（迷途航船事件：锁定 N 夜禁止重铸，§5.6）
+var _locked_weapon: String = ""
+var _lock_nights: int = 0
+
 # 局内种子（确定性回放）
 var run_seed: int = 0
 
@@ -119,6 +123,11 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 		max_passive_level = cfg_pas_lv
 	refine_ii_count = 0
 
+	# 重置武器槽锁定与事件态（新局不受上局事件影响）
+	_locked_weapon = ""
+	_lock_nights = 0
+	EventSystem.reset()
+
 	# 重置结束标记（新局可再次触发结束）
 	clear_over_state()
 
@@ -143,15 +152,17 @@ func enter_night(night: int) -> void:
 ## 夜晚结束进入抉择之昼
 func end_night() -> void:
 	is_day_phase = true
+	# 本夜结束：递减迷途航船武器锁定（锁定随夜数解除，§5.6）
+	tick_weapon_lock()
 	night_ended.emit(current_night)
 	day_started.emit()
 	print("[GameState] 第 %d 夜结束 → 抉择之昼" % current_night)
 
 
 ## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
-## 应用被动通用经验桶（W12）：实际获得 = amount × 经验倍率
+## 应用被动通用经验桶（W12）+ 事件经验倍率（W14）：实际获得 = amount × 被动倍率 × 事件倍率
 func add_exp(amount: int) -> void:
-	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult()))
+	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult()))
 	player_exp += gained
 	exp_gained.emit(gained, player_exp)
 	while player_level < ExpTable.get_max_level():
@@ -248,10 +259,13 @@ func reroll_passive(passive_id: String) -> int:
 
 ## 重铸回收：卸下武器并退还 config 比例的实付潮币（W13；同步清进化/精炼）
 ## 至少保留 1 把武器（禁止清空槽导致夜晚无输出）；末把返回 0
+## 迷途航船锁定的武器在锁定期内禁止重铸（返回 0，§5.6）
 func reroll_weapon(weapon_id: String) -> int:
 	if weapon_id not in weapon_slots:
 		return 0
 	if weapon_slots.size() <= 1:
+		return 0
+	if is_weapon_locked(weapon_id):
 		return 0
 	var paid: int = ConfigLoader.get_shop_paid_cost("weapon")
 	var refund: int = roundi(float(paid) * ConfigLoader.get_shop_refund_ratio("weapon"))
@@ -269,6 +283,34 @@ func heal_player_to_full() -> int:
 	if healed > 0:
 		player_health_changed.emit(player_health)
 	return healed
+
+
+## 锁定某武器槽 N 夜（迷途航船事件；禁止期间重铸，§5.6）
+func lock_weapon(weapon_id: String, nights: int) -> void:
+	if nights <= 0:
+		return
+	_locked_weapon = weapon_id
+	_lock_nights = nights
+
+
+## 该武器当前是否处于锁定（禁止重铸）
+func is_weapon_locked(weapon_id: String) -> bool:
+	return weapon_id == _locked_weapon and _lock_nights > 0
+
+
+## 每夜结束递减锁定计数（锁定随夜数自然解除；end_night 调用，§5.6）
+func tick_weapon_lock() -> void:
+	if _lock_nights > 0:
+		_lock_nights -= 1
+		if _lock_nights <= 0:
+			_locked_weapon = ""
+
+
+## 增加星尘（局外货币；事件「星尘雨」结算时调用，§5.6）
+func add_stardust(amount: int) -> void:
+	if amount <= 0:
+		return
+	stardust += amount
 
 
 ## 被动槽已用数量（被动槽管理，W12）

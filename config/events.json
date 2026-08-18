@@ -61,6 +61,7 @@
       "risk_reward": "快速成型",
       "effects": {
         "spawn_elite_wave": true,
+        "elite_wave_count": 3,
         "drop_evolution_item": 1
       },
       "applies_to": "instant",
@@ -84,7 +85,8 @@
       "risk_reward": "局外收益",
       "effects": {
         "tidecoin_mult": 1.80,
-        "end_of_night_stardust_bonus": true
+        "end_of_night_stardust_bonus": true,
+        "stardust_bonus_amount": 1
       },
       "applies_to": "current_night",
       "notes": "本夜潮币 +80%；结束时额外星尘"

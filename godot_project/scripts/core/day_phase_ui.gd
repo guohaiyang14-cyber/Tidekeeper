@@ -11,6 +11,7 @@ class_name DayPhaseUI
 extends Control
 
 var _subtitle: Label
+var _event_label: Label
 
 
 func _ready() -> void:
@@ -47,6 +48,17 @@ func _build_frame() -> void:
 	_subtitle.add_theme_color_override("font_color", Color(0.75, 0.82, 0.95))
 	add_child(_subtitle)
 
+	# 事件卡提示（W14：抉择之昼抽到的事件卡，无事件时隐藏）
+	_event_label = Label.new()
+	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_event_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_event_label.offset_top = 126.0
+	_event_label.offset_bottom = 156.0
+	_event_label.add_theme_font_size_override("font_size", 22)
+	_event_label.add_theme_color_override("font_color", Color(0.65, 0.95, 0.85))
+	_event_label.visible = false
+	add_child(_event_label)
+
 	var hint := Label.new()
 	hint.text = "右侧商店可购买强化 · 可融合时点「融合」· 按 Q 或点「继续下一夜」进入下一夜"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -58,13 +70,19 @@ func _build_frame() -> void:
 	add_child(hint)
 
 
-## 进入昼：显示框架并更新夜数副标题（休息夜提示灯塔回血）
-func enter_day(night: int) -> void:
+## 进入昼：显示框架并更新夜数副标题（休息夜提示灯塔回血；有事件卡则展示事件名）
+func enter_day(night: int, event_name: String = "") -> void:
 	if _subtitle != null:
 		if RestSystem.is_rest_night(night):
 			_subtitle.text = "第 %d 夜结束 · 灯塔休息回血" % night
 		else:
 			_subtitle.text = "第 %d 夜结束" % night
+	if _event_label != null:
+		if event_name != "":
+			_event_label.text = "事件：%s" % event_name
+			_event_label.visible = true
+		else:
+			_event_label.visible = false
 	visible = true
 
 

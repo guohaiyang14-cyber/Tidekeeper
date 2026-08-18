@@ -36,8 +36,8 @@ func get_attack_rate() -> float:
 		base = float(weapon_data.get("pulse_rate", 1.0))
 	else:
 		base = float(raw)
-	# 被动通用攻速桶（W12）：攻速提升 = 更高频率
-	return base * PassiveSystem.get_attack_speed_mult()
+	# 被动通用攻速桶（W12）× 事件攻速（W14 灯塔共鸣）；无事件时为 1.0
+	return base * PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult()
 
 
 ## 攻击间隔（秒）：1/攻速 × (1 − 被动 CD 减免)；CD 桶与攻速桶独立可叠

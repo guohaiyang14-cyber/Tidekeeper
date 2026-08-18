@@ -131,15 +131,26 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 	match phase:
 		DayNightStateMachine.Phase.NIGHT:
 			print("[World] → 夜晚阶段 (第 %d 夜)" % day_night.get_current_night())
+			# 昼阶段 pick 只 arm 即时效果；进夜再加载战斗倍率（避免商店阶段吃到移速/攻速等）
+			EventSystem.begin_night()
 			enemy_spawner.start_night(day_night.get_current_night())
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全
 			_clear_night_entities()
+			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）
+			if EventSystem.has_stardust_bonus():
+				GameState.add_stardust(EventSystem.get_stardust_bonus_amount())
 			# 休息夜：灯塔大回血（W13）
 			RestSystem.try_apply_rest_for_night(day_night.get_current_night())
+			# 抽下夜事件卡（仅 arm identity+即时效果；战斗倍率待下一夜 begin_night）
+			var upcoming: int = day_night.get_current_night() + 1
+			if upcoming <= 20:
+				EventSystem.pick_for_night(upcoming)
+				# 迷途航船等即时入槽后同步武器实例（loadout_changed 亦会触发；此处兜底）
+				weapon_manager.sync_from_game_state()
 			# 显示白昼选择页面框架（技术选型.md：DayPhaseUI = 抉择之昼）
-			day_phase_ui.enter_day(day_night.get_current_night())
+			day_phase_ui.enter_day(day_night.get_current_night(), EventSystem.get_active_event_name())
 			shop_manager.open_shop()
 		DayNightStateMachine.Phase.TRANSITION:
 			pass  # 过渡帧，无需处理
