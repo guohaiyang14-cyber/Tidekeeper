@@ -78,6 +78,12 @@ func _test_offers_count_and_types() -> void:
 func _test_apply_adds_to_slots() -> void:
 	print("[apply adds to slots]")
 	_fresh_run()
+	# 清空开局授予的默认武器/被动，隔离「应用新项 → 入槽」语义
+	# （start_new_run 会授予数据驱动默认武器，否则首次三选一可能选到已持有武器走升级分支，槽数不 +1）
+	GameState.weapon_slots.clear()
+	GameState.passive_slots.clear()
+	GameState.weapon_levels.clear()
+	GameState.passive_levels.clear()
 	var offers: Array = _level_up_once()
 	# 选第一个武器（若有），否则任一
 	var idx: int = 0
@@ -118,16 +124,18 @@ func _test_reroll_cost() -> void:
 
 
 func _test_weapon_slots_full_only_passives() -> void:
-	print("[weapon slots full -> only passives]")
+	print("[weapon slots full -> only passives or owned upgrades]")
 	_fresh_run()
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
 	GameState.passive_slots = []
 	var offers: Array = _level_up_once()
-	var only_passives: bool = true
+	# 武器槽已满（4/4）：已持有武器仍可升级（W5 武器升级路径），但不得出现「新武器」
+	# （新武器无槽位，§6.2）——这是真实不变量；原断言「只出被动」过严。
+	var only_passives_or_owned_upgrades: bool = true
 	for o in offers:
-		if o.get("type") != "passive":
-			only_passives = false
-	_assert(only_passives, "武器槽满时只出被动")
+		if o.get("type") == "weapon" and o.get("id", "") not in GameState.weapon_slots:
+			only_passives_or_owned_upgrades = false
+	_assert(only_passives_or_owned_upgrades, "武器槽满时只出被动或已持有武器升级（不出新武器）")
 	UpgradeManager.skip()
 
 
@@ -163,7 +171,11 @@ func _test_weapon_pity_force() -> void:
 func _test_reroll_does_not_double_pity() -> void:
 	print("[reroll does not double pity]")
 	_fresh_run()
+	# 4 把武器全部满级 → 候选池剔除武器（含升级），仅剩被动，
+	# 从而稳定复现「本轮只展示被动」前提（否则已持有武器升级也会清零 miss）
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
+	for wid in GameState.weapon_slots:
+		GameState.weapon_levels[wid] = GameState.max_weapon_level
 	GameState.passive_slots = []
 	_level_up_once()
 	_assert(UpgradeManager._no_weapon_streak == 1, "仅被动展示 → 武器 miss=1")

@@ -236,14 +236,20 @@ func _test_elite_split_uses_prototype() -> void:
 		_clear()
 		return
 	_assert(elite.prototype_id == "iron_crab", "精英 prototype_id=iron_crab (实际 %s)" % elite.prototype_id)
+	# 记录精英死亡前已存在的铁壳蟹（start_night 首帧可能已刷出普通铁壳蟹），
+	# 只统计精英分裂新增的子体，避免把既有杂兵一起计入（原断言「实际 3」的根因）。
+	var pre_crabs: int = 0
+	for n in enemy_pool.get_active():
+		if n is EnemyBase and (n as EnemyBase).enemy_id == "iron_crab":
+			pre_crabs += 1
 	elite.apply_affixes(["split"])
 	elite.take_damage(99999)
 	await _run_frames(2)
-	var crabs: int = 0
+	var total_crabs: int = 0
 	for n3 in enemy_pool.get_active():
 		if n3 is EnemyBase and (n3 as EnemyBase).enemy_id == "iron_crab":
-			crabs += 1
-	_assert(crabs == 2, "精英分裂出 2 只铁壳蟹 (实际 %d)" % crabs)
+			total_crabs += 1
+	_assert(total_crabs - pre_crabs == 2, "精英分裂出 2 只铁壳蟹 (实际新增 %d)" % (total_crabs - pre_crabs))
 	_clear()
 
 

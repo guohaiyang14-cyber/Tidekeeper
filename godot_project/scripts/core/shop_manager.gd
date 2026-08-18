@@ -93,32 +93,50 @@ func buy(item: Dictionary) -> bool:
 # 内部
 # ============================================================================
 
-## 构建在售列表：全部武器 + 全部被动，RNG 洗牌后取前 6 件（≥4）
+## 构建在售列表：全部武器 + 全部被动，分别洗牌后保底各 ≥1 件，交替补齐至 6 件（≥4）
 func _build_items() -> Array[Dictionary]:
-	var candidates: Array[Dictionary] = []
+	var weapons: Array[Dictionary] = []
 	for wid in ConfigLoader.get_all_weapon_ids():
 		var w: Dictionary = ConfigLoader.get_weapon(wid)
 		if w.is_empty():
 			continue
-		candidates.append({
+		weapons.append({
 			"id": wid,
 			"name": w.get("name", wid),
 			"kind": "weapon",
 			"cost": _weapon_cost(),
 		})
+	var passives: Array[Dictionary] = []
 	for pid in ConfigLoader.get_all_passive_ids():
 		var p: Dictionary = ConfigLoader.get_passive(pid)
 		if p.is_empty():
 			continue
-		candidates.append({
+		passives.append({
 			"id": pid,
 			"name": p.get("name", pid),
 			"kind": "passive",
 			"cost": _passive_cost(),
 		})
-	_shuffle(candidates)
-	var take: int = mini(6, candidates.size())
-	return candidates.slice(0, take)
+	_shuffle(weapons)
+	_shuffle(passives)
+	var items: Array[Dictionary] = []
+	var iw: int = 0
+	var ip: int = 0
+	# 保底：武器/被动至少各 1 件（§3.2 商店须可买到武器与被动），顺带改善商店 UX
+	if not weapons.is_empty():
+		items.append(weapons[iw]); iw += 1
+	if not passives.is_empty():
+		items.append(passives[ip]); ip += 1
+	# 交替补齐至 6 件，保持武器/被动比例均衡
+	var want: int = mini(6, weapons.size() + passives.size())
+	while items.size() < want and (iw < weapons.size() or ip < passives.size()):
+		if iw < weapons.size() and (ip >= passives.size() or items.size() % 2 == 0):
+			items.append(weapons[iw]); iw += 1
+		elif ip < passives.size():
+			items.append(passives[ip]); ip += 1
+		else:
+			break
+	return items
 
 
 ## 确定性 Fisher–Yates 洗牌（RNG）
