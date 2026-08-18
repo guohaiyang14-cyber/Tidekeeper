@@ -44,7 +44,7 @@ func _do_tidal_wave() -> void:
 		return
 	var dist: float = host.target.global_position.distance_to(light_pos)
 	if dist > aura:
-		GameState.damage_player(dmg)
+		GameState.damage_player(dmg, "boss_tide_archon")
 
 
 func _lighthouse_aura_radius() -> float:

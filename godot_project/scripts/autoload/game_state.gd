@@ -23,6 +23,8 @@ signal evolution_items_changed(new_total: int)
 signal refine_essence_changed(new_total: int)
 signal player_health_changed(new_health: int)
 signal loadout_changed()
+## W17 挫败感控制：玩家复活（kind = "first_night" | "struggle"）
+signal player_revived(kind: String)
 
 # 局内状态
 var current_night: int = 0
@@ -73,9 +75,35 @@ var is_over: bool = false
 ## arm_game_win() 已置 is_over，但 game_win 信号尚未发出（防死亡栈内清场）
 var _game_win_armed: bool = false
 
+# ============================================================================
+# W17 挫败感控制：运行时态（数据驱动 config/frustration.json）
+# ============================================================================
+## 首夜保护已用复活次数（每局上限 max_revives）
+var _first_night_revives: int = 0
+## 挣扎模式是否激活（免死窗口中）
+var _struggle_active: bool = false
+## 挣扎模式免死窗口剩余秒数
+var _struggle_timer: float = 0.0
+## 本次挣扎窗口内累计击杀
+var _struggle_kills: int = 0
+## 挣扎模式已用复活次数（每局上限 max_revives）
+var _struggle_revives: int = 0
+## 当前无敌剩余秒数（复活后短暂无敌 / 挣扎免死窗口内）
+var _invuln_remaining: float = 0.0
+## 伤害来源累计：source_id(String) -> 累计伤害(int)（W17 死因可视化）
+var _damage_taken: Dictionary = {}
+## 最后一击来源与伤害量
+var _last_hit_source: String = ""
+var _last_hit_amount: int = 0
+
 
 func _ready() -> void:
 	print("[GameState] 就绪（尚未开始新局）")
+
+
+## 每帧推进挫败感计时器（免死窗口 / 复活无敌倒计时）
+func _process(delta: float) -> void:
+	_advance_timers(delta)
 
 
 ## 开始新局（初始化所有局内状态）
@@ -91,16 +119,8 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	refine_essence = 0
 	refine_essence_changed.emit(refine_essence)
 
-	# 角色基础属性（对齐 §9.4 角色表）
-	match character:
-		"watcher":
-			player_max_health = 100
-		"blacksmith":
-			player_max_health = 120
-		"stargazer":
-			player_max_health = 85
-		_:
-			player_max_health = 100
+	# 角色基础属性（对齐 §9.4 角色表，数据驱动 config/characters.json；叠加灯塔最大生命）
+	player_max_health = ConfigLoader.get_character_max_health(character) + MetaSystem.get_max_health_bonus()
 	player_health = player_max_health
 
 	weapon_slots.clear()
@@ -110,8 +130,8 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	evolved_weapons.clear()
 	evolution_items = 0
 	refine_tiers.clear()
-	# 开局授予数据驱动的默认武器（避免 0 武器无法攻击的死亡螺旋，§4.2）
-	var sw: String = ConfigLoader.get_starting_weapon()
+	# 开局授予数据驱动的角色默认武器（避免 0 武器无法攻击的死亡螺旋，§4.2）
+	var sw: String = ConfigLoader.get_character_starting_weapon(character)
 	if sw != "":
 		add_weapon(sw)
 	# 武器等级上限来自 config（避免硬编码，§6.3）
@@ -130,6 +150,8 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 
 	# 重置结束标记（新局可再次触发结束）
 	clear_over_state()
+	# 重置 W17 挫败感控制计数（每局 fresh）
+	_reset_frustration_state()
 
 	# 种子
 	if seed_value < 0:
@@ -162,7 +184,7 @@ func end_night() -> void:
 ## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
 ## 应用被动通用经验桶（W12）+ 事件经验倍率（W14）：实际获得 = amount × 被动倍率 × 事件倍率
 func add_exp(amount: int) -> void:
-	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult()))
+	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult() * MetaSystem.get_exp_mult()))
 	player_exp += gained
 	exp_gained.emit(gained, player_exp)
 	while player_level < ExpTable.get_max_level():
@@ -285,6 +307,18 @@ func heal_player_to_full() -> int:
 	return healed
 
 
+## 回复指定生命（不超过上限）；返回实际回复量
+func heal_player(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	var before: int = player_health
+	player_health = mini(player_max_health, player_health + amount)
+	var healed: int = player_health - before
+	if healed > 0:
+		player_health_changed.emit(player_health)
+	return healed
+
+
 ## 锁定某武器槽 N 夜（迷途航船事件；禁止期间重铸，§5.6）
 func lock_weapon(weapon_id: String, nights: int) -> void:
 	if nights <= 0:
@@ -392,18 +426,130 @@ func consume_refine_essence(amount: int) -> bool:
 	return true
 
 
-## 玩家受伤（敌人接触/弹幕/自爆调用）；归零触发游戏结束
+## 玩家受伤（敌人接触/弹幕/自爆/荆棘调用）；归零触发游戏结束
 ## 应用被动通用减伤桶（W12）：实际伤害 = amount × (1 - 减伤)
-func damage_player(amount: int) -> void:
+## source_id：伤害来源标识（W17 死因可视化用，如 "enemy_contact" / "boss_tide_archon" / ""）
+func damage_player(amount: int, source_id: String = "") -> void:
 	if is_over or amount <= 0:
 		return
+	if _invuln_remaining > 0.0:
+		return  # 免死/复活后短暂无敌期内忽略伤害
+	# 减伤只走 PassiveSystem 桶（已含灯塔/角色减伤）；禁止再减一次 MetaSystem
 	var applied: int = int(round(float(amount) * (1.0 - PassiveSystem.get_damage_reduction())))
+	# 伤害来源追踪（W17 死因可视化）
+	_record_damage(source_id, applied)
 	player_health -= applied
 	player_damaged.emit(applied)
-	if player_health <= 0:
-		player_health = 0
-		trigger_game_over("hp_zero")
+	if player_health > 0:
 		return
+	player_health = 0
+	# 致命伤：先尝试挫败感控制的复活保护，否则判负
+	if _try_revive_on_lethal():
+		return
+	trigger_game_over("hp_zero")
+
+
+## 记录一次伤害来源与量（W17 死因可视化）
+func _record_damage(source_id: String, applied: int) -> void:
+	var key: String = source_id if source_id != "" else "unknown"
+	_damage_taken[key] = int(_damage_taken.get(key, 0)) + applied
+	_last_hit_source = key
+	_last_hit_amount = applied
+
+
+## 致命伤时尝试复活保护（首夜保护 / 挣扎模式）。返回 true 表示已复活（不判负）
+## 仅在正式开局（MetaSystem.begin_run）后生效，与角色/灯塔特性同门控，避免单元机检误食复活
+func _try_revive_on_lethal() -> bool:
+	if not MetaSystem.is_run_active():
+		return false
+	var cfg: Dictionary = ConfigLoader.get_frustration_config()
+	# 1) 首夜保护：前 protect_nights 夜，最多 max_revives 次满血复活
+	var fn: Dictionary = cfg.get("first_night", {})
+	if bool(fn.get("enabled", false)) and _first_night_revives < int(fn.get("max_revives", 0)):
+		var protect_nights: int = int(fn.get("protect_nights", 4))
+		if current_night <= protect_nights:
+			_first_night_revives += 1
+			revive_to_full()
+			_invuln_remaining = float(fn.get("revive_invuln_sec", 1.5))  # 复活后短暂无敌，避免同帧再死
+			player_revived.emit("first_night")
+			print("[GameState] 首夜保护复活（第 %d 次，剩余无敌 %.1fs）" % [_first_night_revives, _invuln_remaining])
+			return true
+	# 2) 挣扎模式：进入免死窗口（invuln_sec 秒），期间击杀 kills_to_revive 敌则满血复活
+	var st: Dictionary = cfg.get("struggle", {})
+	if bool(st.get("enabled", false)) and not _struggle_active and _struggle_revives < int(st.get("max_revives", 0)):
+		_struggle_active = true
+		_struggle_timer = float(st.get("invuln_sec", 3.0))
+		_struggle_kills = 0
+		_invuln_remaining = _struggle_timer
+		print("[GameState] 进入挣扎模式（免死 %.1fs，需击杀 %d 敌）" % [_struggle_timer, int(st.get("kills_to_revive", 5))])
+		return true
+	return false
+
+
+## 满血复活（不重置局内进度，仅回血至上限）
+func revive_to_full() -> void:
+	player_health = player_max_health
+	player_health_changed.emit(player_health)
+
+
+## 击杀登记（enemy_base._die 的 enemy_died 信号回调调用）：挣扎模式累计击杀，达标则复活
+func register_enemy_kill() -> void:
+	if not _struggle_active:
+		return
+	var st: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
+	_struggle_kills += 1
+	var need: int = int(st.get("kills_to_revive", 5))
+	if _struggle_kills >= need:
+		_struggle_active = false
+		_struggle_revives += 1
+		revive_to_full()
+		_invuln_remaining = float(st.get("revive_invuln_sec", 2.0))  # 复活后短暂无敌
+		player_revived.emit("struggle")
+		print("[GameState] 挣扎模式复活（窗口内击杀 %d 敌达标）" % _struggle_kills)
+
+
+## 当前是否处于无敌（免死窗口 / 复活后）
+func is_invulnerable() -> bool:
+	return _invuln_remaining > 0.0
+
+
+## 当前是否处于挣扎模式（免死窗口中）
+func is_struggling() -> bool:
+	return _struggle_active
+
+
+## 死亡原因分析（W17 死因可视化）：最后一击来源 + 伤害来源 TopN
+func get_death_analysis() -> Dictionary:
+	var cfg: Dictionary = ConfigLoader.get_frustration_config().get("death_analysis", {})
+	var top_n: int = int(cfg.get("top_sources", 3))
+	var ranked: Array = []
+	for src in _damage_taken.keys():
+		ranked.append({"source": String(src), "damage": int(_damage_taken[src])})
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["damage"] > b["damage"])
+	var top: Array = ranked.slice(0, mini(top_n, ranked.size()))
+	var total: int = 0
+	for v in _damage_taken.values():
+		total += int(v)
+	return {
+		"last_hit_source": _last_hit_source,
+		"last_hit_amount": _last_hit_amount,
+		"top_sources": top,
+		"total_damage": total,
+	}
+
+
+## 推进挫败感计时器（免死窗口 / 复活无敌）。_process 自动调用；机检可手动驱动
+func _advance_timers(delta: float) -> void:
+	if _invuln_remaining > 0.0:
+		_invuln_remaining = maxf(0.0, _invuln_remaining - delta)
+	if _struggle_active:
+		_struggle_timer -= delta
+		if _struggle_timer <= 0.0:
+			# 免死窗口结束仍未击杀达标 → 判负
+			_struggle_active = false
+			_invuln_remaining = 0.0
+			player_health = 0
+			trigger_game_over("hp_zero")
 
 
 ## 增加潮币（击杀掉落拾取时调用）
@@ -460,3 +606,20 @@ func is_final_night() -> bool:
 func clear_over_state() -> void:
 	is_over = false
 	_game_win_armed = false
+	# 清空挣扎/无敌瞬时态（防止跨局残留）
+	_struggle_active = false
+	_struggle_timer = 0.0
+	_invuln_remaining = 0.0
+
+
+## 重置 W17 挫败感控制全部运行时态（每局开始调用）
+func _reset_frustration_state() -> void:
+	_first_night_revives = 0
+	_struggle_active = false
+	_struggle_timer = 0.0
+	_struggle_kills = 0
+	_struggle_revives = 0
+	_invuln_remaining = 0.0
+	_damage_taken.clear()
+	_last_hit_source = ""
+	_last_hit_amount = 0

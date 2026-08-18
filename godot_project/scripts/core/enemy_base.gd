@@ -407,7 +407,7 @@ func _try_contact_damage(player_pos: Vector2) -> void:
 	if _contact_cd > 0.0:
 		return
 	if global_position.distance_to(player_pos) <= contact_radius:
-		GameState.damage_player(contact_damage)
+		GameState.damage_player(contact_damage, enemy_id)
 		_contact_cd = _contact_interval
 
 
@@ -544,7 +544,7 @@ func get_boss_phase() -> int:
 
 
 func _explode() -> void:
-	GameState.damage_player(_self_destruct_damage)
+	GameState.damage_player(_self_destruct_damage, enemy_id)
 	_die()
 
 
@@ -615,6 +615,8 @@ func _die(trigger_split: bool = true) -> void:
 	if trigger_split:
 		AffixSystem.on_death(self)
 	enemy_died.emit(self)
+	# W17 挣扎模式：每次击杀累计（仅挣扎窗口内生效，否则为廉价 no-op）
+	GameState.register_enemy_kill()
 	var pool: ObjectPool = get_parent() as ObjectPool
 	if pool != null:
 		pool.release(self)

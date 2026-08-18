@@ -28,6 +28,10 @@ func _ready() -> void:
 	var dn: Node = world.get_node("DayNightStateMachine")
 	var wm: Node = world.get_node("WeaponManager")
 
+	# W17 挫败感复活会改变致死语义；本集成测试专验「致死→昼夜冻结」管线，故关闭复活以验证原始流程
+	ConfigLoader.frustration["first_night"]["enabled"] = false
+	ConfigLoader.frustration["struggle"]["enabled"] = false
+
 	# 1) 开局应授予默认武器，且实例已生成
 	_assert(GameState.weapon_slots.has("harpoon"), "开局授予 harpoon（数据驱动默认武器）")
 	_assert(dn.get_phase() == DayNightStateMachine.Phase.NIGHT, "开局进入夜晚战斗阶段")
@@ -41,11 +45,13 @@ func _ready() -> void:
 	var rem1: float = dn.get_night_remaining()
 	_assert(rem1 < rem0, "夜晚计时器在递减（循环运行：%.2f→%.2f）" % [rem0, rem1])
 
-	# 3) 强制血量归零 → 游戏结束 → 昼夜循环冻结，不滚入抉择之昼
+	# 3) 开局不计入局数；血量归零结算后才 +1（GDD §6.8 须完整结算）
+	_assert(int(SaveSystem.get_save_meta().get("total_runs", -1)) == 0, "开局不计入 total_runs")
 	GameState.damage_player(99999)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_assert(GameState.is_over, "hp 归零触发 is_over 标记")
+	_assert(int(SaveSystem.get_save_meta().get("total_runs", -1)) == 1, "结算后 total_runs = 1")
 	_assert(dn.get_phase() == DayNightStateMachine.Phase.INIT, "游戏结束后昼夜循环冻结(INIT)，未滚入 DAY")
 	# 即便再推进 30 帧，仍保持冻结（夜晚计时器不再递减）
 	for _i in 30:

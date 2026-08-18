@@ -23,6 +23,14 @@ var pickups: Dictionary = {}
 var upgrade: Dictionary = {}
 var evolutions: Dictionary = {}
 var refine: Dictionary = {}
+# W15-W16 局外进度配置
+var characters: Dictionary = {}
+var lighthouse: Dictionary = {}
+var meta_cfg: Dictionary = {}
+# 灯塔节点扁平表（branch.nodes 展开，便于按 id 查询）
+var _lighthouse_nodes: Dictionary = {}
+# W17 挫败感控制配置
+var frustration: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -55,6 +63,13 @@ func _load_all() -> void:
 	upgrade = _load_json("upgrade.json", true)
 	evolutions = _load_json("evolutions.json", true)
 	refine = _load_json("refine_paths.json", true)
+	# W15-W16 局外进度配置（角色 / 灯塔树 / 星尘结算参数）
+	characters = _load_json("characters.json", true)
+	lighthouse = _load_json("lighthouse_tree.json", true)
+	meta_cfg = _load_json("meta.json", true)
+	_flatten_lighthouse_nodes()
+	# W17 挫败感控制配置（首夜保护 / 挣扎模式 / 失败保底 / 死因可视化）
+	frustration = _load_json("frustration.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -365,3 +380,66 @@ func get_max_passive_level() -> int:
 ## 暴击伤害倍率（passives.json metadata.crit_damage_mult，对齐 GDD ×1.8）
 func get_crit_damage_mult() -> float:
 	return float(passives.get("metadata", {}).get("crit_damage_mult", 1.8))
+
+
+# ============================================================================
+# W15-W16 局外进度配置查询接口
+# ============================================================================
+
+## 将 lighthouse_tree.json 的 branches.*.nodes 展开为 id → 节点 的扁平表
+func _flatten_lighthouse_nodes() -> void:
+	_lighthouse_nodes = {}
+	for branch in lighthouse.get("branches", {}).values():
+		for node_id in (branch as Dictionary).get("nodes", {}).keys():
+			_lighthouse_nodes[node_id] = (branch as Dictionary)["nodes"][node_id]
+
+
+## 全部角色 id（排除 _meta/metadata）
+func get_all_character_ids() -> Array[String]:
+	var out: Array[String] = []
+	for k in characters.get("characters", {}).keys():
+		out.append(String(k))
+	return out
+
+
+## 角色数据（按 id）
+func get_character(id: String) -> Dictionary:
+	return characters.get("characters", {}).get(id, {})
+
+
+## 角色开局武器（按 id；缺省回退全局 starting_weapon）
+func get_character_starting_weapon(id: String) -> String:
+	var c: Dictionary = get_character(id)
+	if not c.is_empty() and c.has("starting_weapon"):
+		return String(c["starting_weapon"])
+	return get_starting_weapon()
+
+
+## 角色最大生命（按 id；缺省 100）
+func get_character_max_health(id: String) -> int:
+	return int(get_character(id).get("max_health", 100))
+
+
+## 全部灯塔节点（扁平）
+func get_all_lighthouse_nodes() -> Dictionary:
+	return _lighthouse_nodes
+
+
+## 灯塔节点（按 id）
+func get_lighthouse_node(node_id: String) -> Dictionary:
+	return _lighthouse_nodes.get(node_id, {})
+
+
+## 灯塔全部分支（branch_id → {name, desc, nodes}）
+func get_lighthouse_branches() -> Dictionary:
+	return lighthouse.get("branches", {})
+
+
+## 星尘结算参数（meta.json stardust）
+func get_meta_config() -> Dictionary:
+	return meta_cfg
+
+
+## 挫败感控制参数（frustration.json；W17 首夜保护 / 挣扎模式 / 失败保底 / 死因可视化）
+func get_frustration_config() -> Dictionary:
+	return frustration

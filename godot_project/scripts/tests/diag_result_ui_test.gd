@@ -15,6 +15,11 @@ func _ready() -> void:
 	print("============================================================")
 	print("DiagResultUI (加载真实 main 场景，验证结算界面显示)")
 	print("============================================================")
+	# 清空局外进度：本场景加载真实 World（会 begin_run），需干净存档才能断言 max_health=100
+	MetaSystem.reset_progress()
+	# W17 挫败感复活会改变致死语义；本诊断专验「致死→结算界面」管线，故关闭复活以验证原始流程
+	ConfigLoader.frustration["first_night"]["enabled"] = false
+	ConfigLoader.frustration["struggle"]["enabled"] = false
 	var main: Node = MAIN_SCENE.instantiate()
 	add_child(main)
 	await get_tree().process_frame

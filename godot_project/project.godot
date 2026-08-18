@@ -29,6 +29,7 @@ PassiveSystem="*res://scripts/autoload/passive_system.gd"
 RestSystem="*res://scripts/autoload/rest_system.gd"
 EventSystem="*res://scripts/autoload/event_system.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
+MetaSystem="*res://scripts/autoload/meta_system.gd"
 
 [display]
 

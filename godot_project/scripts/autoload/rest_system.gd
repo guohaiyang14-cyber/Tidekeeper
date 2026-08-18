@@ -24,7 +24,7 @@ func apply_rest() -> int:
 	return GameState.heal_player_to_full()
 
 
-## 若该夜为休息夜则回血，否则返回 0（World 进昼时调用）
+## 若该夜为休息夜则回血至上限，否则返回 0（World 进昼时调用）
 func try_apply_rest_for_night(night: int) -> int:
 	if not is_rest_night(night):
 		return 0
@@ -33,4 +33,15 @@ func try_apply_rest_for_night(night: int) -> int:
 		print("[RestSystem] 第 %d 夜休息：灯塔回血 +%d" % [night, healed])
 	else:
 		print("[RestSystem] 第 %d 夜休息：生命已满" % night)
+	return healed
+
+
+## 灯塔 regen_per_night：每次进昼、未满血时回复（休息夜若已回满则自然为 0）
+func try_apply_night_regen() -> int:
+	var regen: int = MetaSystem.get_regen_per_night()
+	if regen <= 0:
+		return 0
+	var healed: int = GameState.heal_player(regen)
+	if healed > 0:
+		print("[RestSystem] 灯塔 regen +%d" % healed)
 	return healed

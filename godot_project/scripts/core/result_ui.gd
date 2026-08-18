@@ -19,8 +19,12 @@ const VIEW_W: float = 1280.0
 var _title: Label
 var _reason: Label
 var _stats: Label
+var _stardust: Label
 var _restart_btn: Button
+var _meta_btn: Button
 var _hint: Label
+## W17 死因可视化：最后一击 + 伤害来源 Top3
+var _death_cause: Label
 
 
 func _ready() -> void:
@@ -60,21 +64,48 @@ func _build_frame() -> void:
 	_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stats.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	_stats.offset_top = 290.0
-	_stats.offset_bottom = 400.0
+	_stats.offset_bottom = 360.0
 	_stats.add_theme_font_size_override("font_size", 22)
 	_stats.add_theme_color_override("font_color", Color(0.75, 0.82, 0.95))
 	add_child(_stats)
 
+	_stardust = Label.new()
+	_stardust.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stardust.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_stardust.offset_top = 368.0
+	_stardust.offset_bottom = 400.0
+	_stardust.add_theme_font_size_override("font_size", 22)
+	_stardust.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	add_child(_stardust)
+
+	# W17 死因可视化：最后一击 + 伤害来源 Top3（位于星尘与按钮之间）
+	_death_cause = Label.new()
+	_death_cause.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_cause.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_death_cause.offset_top = 408.0
+	_death_cause.offset_bottom = 454.0
+	_death_cause.add_theme_font_size_override("font_size", 16)
+	_death_cause.add_theme_color_override("font_color", Color(0.92, 0.78, 0.82))
+	add_child(_death_cause)
+
 	_restart_btn = Button.new()
 	_restart_btn.text = "再来一局 (Enter)"
 	_restart_btn.size = Vector2(280.0, 56.0)
-	_restart_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 430.0)
+	_restart_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 502.0)
 	_restart_btn.add_theme_font_size_override("font_size", 22)
 	_restart_btn.pressed.connect(_on_restart_pressed)
 	add_child(_restart_btn)
 
+	_meta_btn = Button.new()
+	_meta_btn.text = "角色 / 灯塔"
+	_meta_btn.size = Vector2(280.0, 48.0)
+	_meta_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 564.0)
+	_meta_btn.add_theme_font_size_override("font_size", 20)
+	_meta_btn.pressed.connect(_on_meta_pressed)
+	add_child(_meta_btn)
+
 	_hint = Label.new()
-	_hint.text = "按 Enter 或点击按钮重开 · 当前为原型结算（W10 雏形，星尘结算与存档 W16 接入）"
+	_hint.text = "按 Enter 或点击按钮重开 · 可进入角色选择 / 灯塔升级（W15-W16）"
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_hint.offset_top = -50.0
@@ -93,22 +124,26 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## 显示游戏结束（§挫败感控制：死亡原因可视化）
-func show_game_over(reason: String, night: int, level: int, tidecoins: int) -> void:
+func show_game_over(reason: String, night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
 	_title.text = "游戏结束"
 	_title.remove_theme_color_override("font_color")
 	_title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
 	_reason.text = _reason_label(reason)
 	_stats.text = "存活至第 %d 夜 · 等级 %d · 潮币 %d" % [night, level, tidecoins]
+	_stardust.text = "本局星尘 +%d（累计 %d）" % [stardust_earned, MetaSystem.get_stardust()]
+	_death_cause.text = _death_cause_text()
 	_show()
 
 
 ## 显示通关
-func show_victory(night: int, level: int, tidecoins: int) -> void:
+func show_victory(night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
 	_title.text = "通关"
 	_title.remove_theme_color_override("font_color")
 	_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.65))
 	_reason.text = "击败吞噬之星，第 20 夜结束"
 	_stats.text = "通关 · 第 %d 夜 · 等级 %d · 潮币 %d" % [night, level, tidecoins]
+	_stardust.text = "本局星尘 +%d（累计 %d）" % [stardust_earned, MetaSystem.get_stardust()]
+	_death_cause.text = ""
 	_show()
 
 
@@ -125,6 +160,13 @@ func _on_restart_pressed() -> void:
 	get_tree().reload_current_scene()
 
 
+## 进入角色选择 / 灯塔升级界面（W15-W16）
+func _on_meta_pressed() -> void:
+	if get_tree() != null:
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/character_select.tscn")
+
+
 ## 死因文案映射
 func _reason_label(reason: String) -> String:
 	match reason:
@@ -132,3 +174,33 @@ func _reason_label(reason: String) -> String:
 		"timeout": return "死因：超时"
 		"death": return "死因：生命值耗尽"
 		_: return "死因：%s" % reason
+
+
+## W17 死因可视化文案：最后一击来源 + 伤害来源 Top3（来自 GameState.get_death_analysis）
+func _death_cause_text() -> String:
+	var a: Dictionary = GameState.get_death_analysis()
+	var lines: Array[String] = []
+	var last: String = String(a.get("last_hit_source", ""))
+	var last_amt: int = int(a.get("last_hit_amount", 0))
+	lines.append("最后一击：%s（%d）" % [_source_label(last if last != "" else "unknown"), last_amt])
+	var top: Array = a.get("top_sources", [])
+	if top.is_empty():
+		lines.append("伤害来源：无记录")
+	else:
+		var parts: Array[String] = []
+		for i in top.size():
+			var s: Dictionary = top[i]
+			parts.append("%d. %s %d" % [i + 1, _source_label(String(s.get("source", "?"))), int(s.get("damage", 0))])
+		lines.append("伤害来源 Top%d：%s" % [top.size(), "  ".join(parts)])
+	return "\n".join(lines)
+
+
+## 伤害来源友好名（已知战斗来源映射；敌人 id 直出）
+func _source_label(src: String) -> String:
+	match src:
+		"enemy_contact": return "敌人接触"
+		"enemy_projectile": return "敌方弹幕"
+		"affix_thorns": return "荆棘反伤"
+		"boss_tide_archon": return "天灾潮汐"
+		"unknown": return "未知"
+		_: return src

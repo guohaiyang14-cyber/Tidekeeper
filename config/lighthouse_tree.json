@@ -1,0 +1,40 @@
+{
+  "metadata": {
+    "branches": ["vigil", "edge", "tide"]
+  },
+  "branches": {
+    "vigil": {
+      "name": "守望之径",
+      "desc": "生存与防御",
+      "nodes": {
+        "vigil_1": { "id": "vigil_1", "branch": "vigil", "tier": 1, "cost": 30, "requires": null, "effects": { "max_health": 20 } },
+        "vigil_2": { "id": "vigil_2", "branch": "vigil", "tier": 2, "cost": 60, "requires": "vigil_1", "effects": { "damage_reduction_pct": 5 } },
+        "vigil_3": { "id": "vigil_3", "branch": "vigil", "tier": 3, "cost": 100, "requires": "vigil_2", "effects": { "max_health": 30 } },
+        "vigil_4": { "id": "vigil_4", "branch": "vigil", "tier": 4, "cost": 150, "requires": "vigil_3", "effects": { "regen_per_night": 8 } },
+        "vigil_5": { "id": "vigil_5", "branch": "vigil", "tier": 5, "cost": 220, "requires": "vigil_4", "effects": { "damage_reduction_pct": 10 } }
+      }
+    },
+    "edge": {
+      "name": "锋锐之径",
+      "desc": "攻击与暴击",
+      "nodes": {
+        "edge_1": { "id": "edge_1", "branch": "edge", "tier": 1, "cost": 30, "requires": null, "effects": { "damage_pct": 5 } },
+        "edge_2": { "id": "edge_2", "branch": "edge", "tier": 2, "cost": 60, "requires": "edge_1", "effects": { "attack_speed_pct": 5 } },
+        "edge_3": { "id": "edge_3", "branch": "edge", "tier": 3, "cost": 100, "requires": "edge_2", "effects": { "crit_chance_pct": 5 } },
+        "edge_4": { "id": "edge_4", "branch": "edge", "tier": 4, "cost": 150, "requires": "edge_3", "effects": { "damage_pct": 10 } },
+        "edge_5": { "id": "edge_5", "branch": "edge", "tier": 5, "cost": 220, "requires": "edge_4", "effects": { "attack_speed_pct": 10 } }
+      }
+    },
+    "tide": {
+      "name": "潮汐之径",
+      "desc": "范围与机动",
+      "nodes": {
+        "tide_1": { "id": "tide_1", "branch": "tide", "tier": 1, "cost": 30, "requires": null, "effects": { "area_pct": 5 } },
+        "tide_2": { "id": "tide_2", "branch": "tide", "tier": 2, "cost": 60, "requires": "tide_1", "effects": { "projectile_bonus": 1 } },
+        "tide_3": { "id": "tide_3", "branch": "tide", "tier": 3, "cost": 100, "requires": "tide_2", "effects": { "move_speed_pct": 8 } },
+        "tide_4": { "id": "tide_4", "branch": "tide", "tier": 4, "cost": 150, "requires": "tide_3", "effects": { "exp_pct": 10 } },
+        "tide_5": { "id": "tide_5", "branch": "tide", "tier": 5, "cost": 220, "requires": "tide_4", "effects": { "area_pct": 10 } }
+      }
+    }
+  }
+}

@@ -1,0 +1,168 @@
+# ============================================================================
+# CharacterSelect — 角色选择界面（Control，W15）
+# 职责：列出 3 名角色，展示特性与解锁条件；已解锁可进入游戏，未解锁置灰并提示
+# 数据流：仅通过 MetaSystem / ConfigLoader，不直接改战斗状态
+# 入口：结算页「角色 / 灯塔」按钮，或游戏内 change_scene_to_file
+# ============================================================================
+extends Control
+
+const VIEW_W: float = 1280.0
+const MAIN_SCENE := "res://scenes/main.tscn"
+const LIGHTHOUSE_SCENE := "res://scenes/lighthouse_tree.tscn"
+
+var _stardust_label: Label
+
+
+func _ready() -> void:
+	_build()
+	print("[CharacterSelect] 就绪")
+
+
+func _build() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var backdrop := ColorRect.new()
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0.03, 0.05, 0.11, 0.96)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(backdrop)
+
+	var title := Label.new()
+	title.text = "选择角色"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	title.offset_top = 30.0
+	title.offset_bottom = 80.0
+	title.add_theme_font_size_override("font_size", 40)
+	add_child(title)
+
+	_stardust_label = Label.new()
+	_stardust_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stardust_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_stardust_label.offset_top = 86.0
+	_stardust_label.offset_bottom = 116.0
+	_stardust_label.add_theme_font_size_override("font_size", 20)
+	_stardust_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	add_child(_stardust_label)
+
+	var ids: Array[String] = ConfigLoader.get_all_character_ids()
+	var card_w := 360.0
+	var card_h := 300.0
+	var gap := 30.0
+	var total_w := card_w * float(ids.size()) + gap * float(maxi(ids.size() - 1, 0))
+	var start_x := (VIEW_W - total_w) / 2.0
+	var card_y := 150.0
+	for i in ids.size():
+		var panel := _make_card(String(ids[i]))
+		panel.position = Vector2(start_x + float(i) * (card_w + gap), card_y)
+		panel.size = Vector2(card_w, card_h)
+		add_child(panel)
+
+	var btn_y := card_y + card_h + 40.0
+	var lighthouse_btn := Button.new()
+	lighthouse_btn.text = "灯塔升级树"
+	lighthouse_btn.size = Vector2(240.0, 52.0)
+	lighthouse_btn.position = Vector2(VIEW_W / 2.0 - 360.0, btn_y)
+	lighthouse_btn.add_theme_font_size_override("font_size", 22)
+	lighthouse_btn.pressed.connect(_on_lighthouse_pressed)
+	add_child(lighthouse_btn)
+
+	var start_btn := Button.new()
+	start_btn.text = "开始游戏"
+	start_btn.size = Vector2(240.0, 52.0)
+	start_btn.position = Vector2(VIEW_W / 2.0 + 120.0, btn_y)
+	start_btn.add_theme_font_size_override("font_size", 22)
+	start_btn.pressed.connect(_on_start_default_pressed)
+	add_child(start_btn)
+
+	_refresh_stardust()
+
+
+func _make_card(id: String) -> Panel:
+	var data: Dictionary = ConfigLoader.get_character(id)
+	var panel := Panel.new()
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 16.0
+	vbox.offset_right = -16.0
+	vbox.offset_top = 16.0
+	vbox.offset_bottom = -16.0
+
+	var name_l := Label.new()
+	name_l.text = data.get("name", id)
+	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_l.add_theme_font_size_override("font_size", 26)
+	var desc_l := Label.new()
+	desc_l.text = String(data.get("description", ""))
+	desc_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_l.add_theme_font_size_override("font_size", 15)
+	var trait_l := Label.new()
+	trait_l.text = _traits_text(data.get("traits", {}))
+	trait_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	trait_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	trait_l.add_theme_font_size_override("font_size", 15)
+	trait_l.add_theme_color_override("font_color", Color(0.7, 0.95, 0.8))
+
+	vbox.add_child(name_l)
+	vbox.add_child(desc_l)
+	vbox.add_child(trait_l)
+	panel.add_child(vbox)
+
+	var unlocked: bool = MetaSystem.is_character_unlocked(id)
+	var btn := Button.new()
+	btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	btn.offset_left = 16.0
+	btn.offset_right = -16.0
+	btn.offset_top = -56.0
+	btn.offset_bottom = -12.0
+	if unlocked:
+		btn.text = "选择"
+		btn.pressed.connect(_on_start_pressed.bind(id))
+	else:
+		btn.text = MetaSystem.get_character_unlock_hint(id)
+		btn.disabled = true
+	panel.add_child(btn)
+	return panel
+
+
+## 特性字典 → 简短中文描述
+func _traits_text(traits: Dictionary) -> String:
+	if traits.is_empty():
+		return "无特性"
+	var label_map: Dictionary = {
+		"damage_pct": "伤害",
+		"attack_speed_pct": "攻速",
+		"area_pct": "范围",
+		"move_speed_pct": "移速",
+		"exp_pct": "经验",
+		"crit_chance_pct": "暴击",
+		"damage_reduction_pct": "减伤",
+		"projectile_bonus": "弹道",
+		"max_health": "生命",
+		"regen_per_night": "休息回血",
+	}
+	var parts: Array[String] = []
+	for k in traits.keys():
+		var v: float = float(traits[k])
+		var sign: String = "+" if v >= 0 else ""
+		var suffix: String = "%" if not (k == "projectile_bonus" or k == "max_health" or k == "regen_per_night") else ""
+		parts.append("%s %s%d%s" % [label_map.get(k, k), sign, int(v), suffix])
+	return " · ".join(parts)
+
+
+func _refresh_stardust() -> void:
+	_stardust_label.text = "星尘：%d" % MetaSystem.get_stardust()
+
+
+func _on_start_default_pressed() -> void:
+	_on_start_pressed(MetaSystem.get_active_character())
+
+
+func _on_start_pressed(id: String) -> void:
+	MetaSystem.set_active_character(id)
+	get_tree().change_scene_to_file(MAIN_SCENE)
+
+
+func _on_lighthouse_pressed() -> void:
+	get_tree().change_scene_to_file(LIGHTHOUSE_SCENE)

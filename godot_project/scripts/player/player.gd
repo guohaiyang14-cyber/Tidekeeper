@@ -104,9 +104,9 @@ func set_move_speed_mult(mult: float) -> void:
 	_move_speed_mult = minf(mult, MOVE_SPEED_SOFT_CAP)
 
 
-## 局内移速倍率：被动/其它加成受软上限，再乘事件移速（灯塔共鸣 0.80 为惩罚，独立于软上限）
+## 局内移速倍率：被动/其它加成受软上限，再乘事件移速（灯塔共鸣 0.80 为惩罚，独立于软上限）× 角色&灯塔移速（W15-W16）
 func _effective_move_mult() -> float:
-	return minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * EventSystem.get_move_speed_mult()
+	return minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * EventSystem.get_move_speed_mult() * MetaSystem.get_move_speed_mult()
 
 
 ## 获取当前移速（像素/秒）

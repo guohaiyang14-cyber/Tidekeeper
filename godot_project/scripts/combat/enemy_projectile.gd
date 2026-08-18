@@ -40,7 +40,7 @@ func _process(delta: float) -> void:
 	if _player == null:
 		_player = _find_player()
 	if _player != null and global_position.distance_to(_player.global_position) <= hit_radius:
-		GameState.damage_player(_damage)
+		GameState.damage_player(_damage, "enemy_projectile")
 		_recycle()
 		return
 	# 越界回收

@@ -1,0 +1,7 @@
+{
+  "stardust": {
+    "base": 60,
+    "difficulty": 1.0,
+    "first_clear_mult": 1.5
+  }
+}

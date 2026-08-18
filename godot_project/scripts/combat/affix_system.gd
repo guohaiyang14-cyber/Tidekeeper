@@ -75,7 +75,7 @@ static func on_damaged(enemy: EnemyBase, amount: int, is_melee: bool) -> void:
 		var th: Dictionary = ConfigLoader.get_affix("thorns")
 		var ratio: float = float(th.get("melee_reflect_ratio", 0.3))
 		var reflect: int = maxi(1, int(round(float(amount) * ratio)))
-		GameState.damage_player(reflect)
+		GameState.damage_player(reflect, "affix_thorns")
 	if enemy.has_affix("chain"):
 		_try_chain_bind(enemy)
 

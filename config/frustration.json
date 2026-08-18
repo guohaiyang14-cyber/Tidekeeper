@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "desc": "W17 挫败感控制参数（数据驱动，禁止硬编码）。四类：首夜保护 / 挣扎模式 / 失败保底 / 死因可视化"
+  },
+  "first_night": {
+    "enabled": true,
+    "protect_nights": 4,
+    "max_revives": 1,
+    "revive_invuln_sec": 1.5
+  },
+  "struggle": {
+    "enabled": true,
+    "invuln_sec": 3.0,
+    "kills_to_revive": 5,
+    "max_revives": 1,
+    "revive_invuln_sec": 2.0
+  },
+  "fallback": {
+    "enabled": true,
+    "floor_pct": 0.30
+  },
+  "death_analysis": {
+    "enabled": true,
+    "top_sources": 3
+  }
+}

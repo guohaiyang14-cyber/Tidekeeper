@@ -36,8 +36,8 @@ func get_attack_rate() -> float:
 		base = float(weapon_data.get("pulse_rate", 1.0))
 	else:
 		base = float(raw)
-	# 被动通用攻速桶（W12）× 事件攻速（W14 灯塔共鸣）；无事件时为 1.0
-	return base * PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult()
+	# 被动通用攻速桶（W12）× 事件攻速（W14 灯塔共鸣）× 角色&灯塔攻速（W15-W16）；无加成时为 1.0
+	return base * PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult() * MetaSystem.get_attack_speed_mult()
 
 
 ## 攻击间隔（秒）：1/攻速 × (1 − 被动 CD 减免)；CD 桶与攻速桶独立可叠
@@ -66,13 +66,13 @@ func get_leveled_damage() -> int:
 	var rt: int = GameState.get_refine_tier(weapon_id)
 	if rt > 0:
 		dmg *= ConfigLoader.get_refine_multiplier(weapon_id, rt)
-	dmg *= PassiveSystem.get_damage_mult()
+	dmg *= PassiveSystem.get_damage_mult() * MetaSystem.get_damage_mult()
 	return int(round(dmg))
 
 
-## 范围半径 × 被动 area 桶（W12；铁链等）
+## 范围半径 × 被动 area 桶（W12；铁链等）× 角色&灯塔范围（W15-W16）
 func scale_area_radius(radius: float) -> float:
-	return radius * PassiveSystem.get_area_mult()
+	return radius * PassiveSystem.get_area_mult() * MetaSystem.get_area_mult()
 
 
 ## 单次命中伤害（含暴击掷骰）。齐射/AoE 应对每个目标分别调用；弹道在命中时掷骰

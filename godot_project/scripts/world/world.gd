@@ -42,10 +42,10 @@ func _ready() -> void:
 	print("[World] 初始化中...")
 	# 验证配置加载
 	_verify_config()
-	# 开局：重置局内状态后再进昼夜循环
-	var character_id: String = "watcher"
-	if player is Player:
-		character_id = (player as Player).character_id
+	# 开局：重置局内状态后再进昼夜循环（角色来自 MetaSystem 选择，回退守望者）
+	var character_id: String = MetaSystem.get_active_character()
+	MetaSystem.set_active_character(character_id)
+	MetaSystem.begin_run()  # 激活角色/灯塔特性倍率（须在 start_new_run 前，否则开局生命/移速取不到加成）
 	GameState.start_new_run(character_id)
 	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
 	weapon_manager.sync_from_game_state()
@@ -141,8 +141,11 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）
 			if EventSystem.has_stardust_bonus():
 				GameState.add_stardust(EventSystem.get_stardust_bonus_amount())
-			# 休息夜：灯塔大回血（W13）
+			# 休息夜：灯塔大回血（W13）；其后灯塔 regen（未满血才生效）
 			RestSystem.try_apply_rest_for_night(day_night.get_current_night())
+			RestSystem.try_apply_night_regen()
+			# 记录本夜清空（推进解锁进度：累计通关夜次，W15）
+			MetaSystem.record_night_cleared(day_night.get_current_night())
 			# 抽下夜事件卡（仅 arm identity+即时效果；战斗倍率待下一夜 begin_night）
 			var upcoming: int = day_night.get_current_night() + 1
 			if upcoming <= 20:
@@ -166,8 +169,14 @@ func _on_game_over(reason: String) -> void:
 	day_phase_ui.exit_day()
 	# 冻结昼夜循环，阻止夜晚计时器继续滚动进入抉择之昼（§5.1）
 	day_night.stop()
+	# 一局结束：特性倍率归零（结算界面/非战斗阶段不再应用局外修正）
+	MetaSystem.end_run()
+	# 完整结算后才计入局数（GDD §6.8：含失败，须走结算）
+	MetaSystem.record_run_started(GameState.current_character)
+	# 局终星尘结算（公式 + 本局事件星尘雨等 extra）
+	var earned: int = MetaSystem.settle_stardust(day_night.get_current_night(), false, GameState.stardust)
 	# 显示结算/死因界面（§挫败感控制：死亡原因可视化）并暂停整棵树（防止玩家在结算页继续移动/交互）
-	result_ui.show_game_over(reason, day_night.get_current_night(), GameState.player_level, GameState.tidecoins)
+	result_ui.show_game_over(reason, day_night.get_current_night(), GameState.player_level, GameState.tidecoins, earned)
 	get_tree().paused = true
 	_update_debug_label()  # 树已暂停、_process 停跑，强制刷新 HUD 以显示真实 HP（致死时 player_health 已置 0）
 
@@ -177,8 +186,14 @@ func _on_game_win() -> void:
 	_clear_night_entities()
 	day_phase_ui.exit_day()
 	day_night.stop()
+	# 一局结束：特性倍率归零（结算界面不再应用局外修正）
+	MetaSystem.end_run()
+	# 记录第 20 夜清空 + 完整结算计入局数 + 星尘（含事件 extra）
+	MetaSystem.record_night_cleared(20)
+	MetaSystem.record_run_started(GameState.current_character)
+	var earned: int = MetaSystem.settle_stardust(20, true, GameState.stardust)
 	# 显示通关结算界面并暂停整棵树
-	result_ui.show_victory(day_night.get_current_night(), GameState.player_level, GameState.tidecoins)
+	result_ui.show_victory(day_night.get_current_night(), GameState.player_level, GameState.tidecoins, earned)
 	get_tree().paused = true
 	_update_debug_label()
 

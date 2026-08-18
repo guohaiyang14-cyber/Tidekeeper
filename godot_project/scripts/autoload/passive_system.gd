@@ -69,12 +69,14 @@ func get_area_mult() -> float:
 
 func get_damage_reduction() -> float:
 	## MVP：线性百分比累加钳制 ≤0.9（≠ GDD §6.9 公式减伤与 0.70 封顶）
-	return clampf(_total_pct("damage_reduction_pct") / 100.0, 0.0, 0.9)
+	## 叠加角色&灯塔减伤（W15-W16，守望者贡献 0）
+	return clampf(_total_pct("damage_reduction_pct") / 100.0 + MetaSystem.get_damage_reduction_pct() / 100.0, 0.0, 0.9)
 
 
 func get_crit_chance() -> float:
 	## MVP：硬钳 ≤1.0（≠ GDD 暴击软上限 60% + 衰减；现仅 abyss_eye 满级 40%）
-	return clampf(_total_pct("crit_chance_pct") / 100.0, 0.0, 1.0)
+	## 叠加角色&灯塔暴击（W15-W16，守望者贡献 0）
+	return clampf(_total_pct("crit_chance_pct") / 100.0 + MetaSystem.get_crit_chance_pct() / 100.0, 0.0, 1.0)
 
 
 func get_cd_reduction() -> float:
