@@ -90,6 +90,7 @@ func _run_all() -> void:
 	await _test_w6_jellyfish_cannon()
 	await _test_w6_albatross()
 	await _test_all_behavior_types_creatable()
+	await _test_projectile_bonus_hammer_chain()
 
 
 ## 在玩家附近刷一只敌人，等待武器造成掉血
@@ -283,6 +284,75 @@ func _test_all_behavior_types_creatable() -> void:
 		else:
 			_assert(false, "可创建武器实例: %s" % id)
 	_assert(created == 8, "8 种武器 behavior_type 均可创建实例 (%d/8)" % created)
+
+
+## 星象师弹道+1：锚锤额外挥击打身后；锚链外圈打到原半径外
+func _test_projectile_bonus_hammer_chain() -> void:
+	MetaSystem.reset_progress()
+	MetaSystem.record_night_cleared(5)  # 解锁星象师（否则 get_active_character 回退守望者）
+	MetaSystem.set_active_character("stargazer")
+	MetaSystem.begin_run()
+	_assert(MetaSystem.get_extra_projectiles() == 1, "星象师弹道 +1")
+	var origin: Vector2 = player.global_position
+	# 锚锤：身前更近，保证第一锤朝前；弹道+1 第二锤朝身后
+	_setup_weapon("anchor_hammer")
+	var front: EnemyBase = enemy_pool.acquire() as EnemyBase
+	front.spawn_at(origin + Vector2(40.0, 0.0), player)
+	front.move_speed = 0.0
+	var back: EnemyBase = enemy_pool.acquire() as EnemyBase
+	back.spawn_at(origin + Vector2(-50.0, 0.0), player)
+	back.move_speed = 0.0
+	await get_tree().process_frame
+	var hammer: WeaponBase = _weapon_by_id("anchor_hammer")
+	_assert(hammer != null, "锚锤实例存在")
+	var back_hp: int = back.health
+	if hammer != null:
+		hammer.fire(front)
+	_assert(back.health < back_hp, "弹道+1 锚锤额外挥击打到身后敌人")
+	enemy_pool.release(front)
+	enemy_pool.release(back)
+	# 正面两敌同半球：跨挥击不叠伤（与锚链外圈不叠伤同口径）
+	var pack_a: EnemyBase = enemy_pool.acquire() as EnemyBase
+	pack_a.spawn_at(origin + Vector2(40.0, 0.0), player)
+	pack_a.move_speed = 0.0
+	pack_a.max_health = 200
+	pack_a.health = 200
+	var pack_b: EnemyBase = enemy_pool.acquire() as EnemyBase
+	pack_b.spawn_at(origin + Vector2(55.0, 0.0), player)
+	pack_b.move_speed = 0.0
+	pack_b.max_health = 200
+	pack_b.health = 200
+	await get_tree().process_frame
+	var expected: int = hammer.get_leveled_damage() if hammer != null else 0
+	if hammer != null:
+		hammer.fire(pack_a)
+	_assert(200 - pack_a.health == expected, "弹道+1 锚锤正面集群不叠伤（近敌一次）")
+	_assert(200 - pack_b.health == expected, "弹道+1 锚锤正面集群不叠伤（远敌一次）")
+	enemy_pool.release(pack_a)
+	enemy_pool.release(pack_b)
+	# 锚链：敌人在 lv1 半径 60 外、外圈 60+15 内
+	_setup_weapon("anchor_chain")
+	var outer: EnemyBase = enemy_pool.acquire() as EnemyBase
+	outer.spawn_at(origin + Vector2(68.0, 0.0), player)
+	outer.move_speed = 0.0
+	await get_tree().process_frame
+	var chain: WeaponBase = _weapon_by_id("anchor_chain")
+	_assert(chain != null, "锚链实例存在")
+	var outer_hp: int = outer.health
+	if chain != null:
+		chain.fire(outer)
+	_assert(outer.health < outer_hp, "弹道+1 锚链外圈打到原半径外敌人")
+	enemy_pool.release(outer)
+	MetaSystem.end_run()
+	MetaSystem.set_active_character("watcher")
+	MetaSystem.reset_progress()
+
+
+func _weapon_by_id(id: String) -> WeaponBase:
+	for w in weapon_manager.get_weapons():
+		if w.weapon_id == id:
+			return w
+	return null
 
 
 func _finish() -> void:

@@ -18,6 +18,8 @@
 # ============================================================================
 extends Node
 
+const _PLAYER := preload("res://scripts/player/player.gd")
+
 var _passed: int = 0
 var _failed: int = 0
 var _fail_msgs: Array[String] = []
@@ -87,6 +89,15 @@ func _test_characters() -> void:
 	_assert(ConfigLoader.get_character_max_health("watcher") == 100, "守望者生命 100")
 	_assert(ConfigLoader.get_character_max_health("blacksmith") == 120, "铁匠生命 120")
 	_assert(ConfigLoader.get_character_max_health("stargazer") == 85, "星象师生命 85")
+	_assert(abs(ConfigLoader.get_character_move_speed("watcher") - 4.2) < 0.001, "守望者移速 4.2")
+	_assert(abs(ConfigLoader.get_character_move_speed("blacksmith") - 4.0) < 0.001, "铁匠移速 4.0")
+	_assert(abs(ConfigLoader.get_character_move_speed("stargazer") - 4.2) < 0.001, "星象师移速 4.2")
+	var p: Player = _PLAYER.new() as Player
+	p.apply_run_character("blacksmith")
+	_assert(abs(p.base_move_speed - 4.0) < 0.001, "apply_run_character 铁匠移速 4.0")
+	p.apply_run_character("watcher")
+	_assert(abs(p.base_move_speed - 4.2) < 0.001, "apply_run_character 守望者移速 4.2")
+	p.free()
 
 	# W15-e 特性数值
 	var w: Dictionary = ConfigLoader.get_character("watcher").get("traits", {})
@@ -205,3 +216,19 @@ func _test_lighthouse_and_settlement() -> void:
 	# W16-h 事件星尘并入局终结算
 	MetaSystem.reset_progress()
 	_assert(MetaSystem.settle_stardust(20, false, 1) == 61, "结算含事件星尘 +1 = 61")
+
+	# W16-i 损坏档 lighthouse 类型校正
+	MetaSystem.reset_progress()
+	var bad: Dictionary = SaveSystem.get_save_meta().duplicate(true)
+	bad["lighthouse"] = "nope"
+	SaveSystem.set_save_meta(bad)
+	_assert(SaveSystem.get_save_meta().get("lighthouse") is Dictionary, "损坏 lighthouse 校正为 Dictionary")
+	var disk_text: String = FileAccess.get_file_as_string("user://savegame_test.json")
+	var disk: Variant = JSON.parse_string(disk_text)
+	var disk_lh_ok: bool = false
+	if disk is Dictionary:
+		var meta_v: Variant = (disk as Dictionary).get("meta", {})
+		if meta_v is Dictionary:
+			disk_lh_ok = (meta_v as Dictionary).get("lighthouse") is Dictionary
+	_assert(disk_lh_ok, "set_save_meta 落盘 lighthouse 已是 Dictionary")
+	MetaSystem.reset_progress()

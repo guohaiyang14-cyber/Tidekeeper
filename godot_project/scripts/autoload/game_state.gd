@@ -25,6 +25,9 @@ signal player_health_changed(new_health: int)
 signal loadout_changed()
 ## W17 挫败感控制：玩家复活（kind = "first_night" | "struggle"）
 signal player_revived(kind: String)
+## W17 挫败感控制：玩家倒地进入挣扎（HP 归零但未判负，免死窗口中）。
+## kind = "struggle"。供 HUD/音效订阅，做「倒地」视觉与音效反馈（与 player_revived/game_over 构成完整反馈生命周期）
+signal player_down(kind: String)
 
 # 局内状态
 var current_night: int = 0
@@ -177,6 +180,10 @@ func end_night() -> void:
 	# 本夜结束：递减迷途航船武器锁定（锁定随夜数解除，§5.6）
 	tick_weapon_lock()
 	night_ended.emit(current_night)
+	# 夜尽清场后无法再击杀：挣扎窗口不得带入抉择之昼/商店。终局夜（20）走通关，不在此判负。
+	if _struggle_active and current_night < 20:
+		_fail_unresolved_struggle()
+		return
 	day_started.emit()
 	print("[GameState] 第 %d 夜结束 → 抉择之昼" % current_night)
 
@@ -299,6 +306,8 @@ func reroll_weapon(weapon_id: String) -> int:
 
 ## 灯塔回血至上限（RestSystem 调用）；返回实际回复量
 func heal_player_to_full() -> int:
+	if _struggle_active:
+		return 0  # 挣扎免死窗口中治疗中不生效，唯有击杀 K 敌可复活（P3）
 	var before: int = player_health
 	player_health = player_max_health
 	var healed: int = player_health - before
@@ -311,6 +320,8 @@ func heal_player_to_full() -> int:
 func heal_player(amount: int) -> int:
 	if amount <= 0:
 		return 0
+	if _struggle_active:
+		return 0  # 挣扎免死窗口中治疗中不生效，唯有击杀 K 敌可复活（P3）
 	var before: int = player_health
 	player_health = mini(player_max_health, player_health + amount)
 	var healed: int = player_health - before
@@ -481,6 +492,7 @@ func _try_revive_on_lethal() -> bool:
 		_struggle_timer = float(st.get("invuln_sec", 3.0))
 		_struggle_kills = 0
 		_invuln_remaining = _struggle_timer
+		player_down.emit("struggle")  # 倒地进入挣扎：供视觉/音效反馈
 		print("[GameState] 进入挣扎模式（免死 %.1fs，需击杀 %d 敌）" % [_struggle_timer, int(st.get("kills_to_revive", 5))])
 		return true
 	return false
@@ -518,6 +530,18 @@ func is_struggling() -> bool:
 	return _struggle_active
 
 
+## 是否「倒地但未死」（HP<=0 且未结束，即挣扎免死窗口中）。
+## HUD/结算应以 is_over 为「已死亡」真值，以 is_player_down() 表示「挣扎中（可复活）」，
+## 避免 player_health==0 的挣扎期被误判为已死亡（P2-#2）
+func is_player_down() -> bool:
+	return player_health <= 0 and not is_over
+
+
+## 挣扎免死窗口剩余秒数（未挣扎返回 0.0）。供 HUD 显示「挣扎倒计时」
+func get_struggle_remaining() -> float:
+	return _struggle_timer if _struggle_active else 0.0
+
+
 ## 死亡原因分析（W17 死因可视化）：最后一击来源 + 伤害来源 TopN
 func get_death_analysis() -> Dictionary:
 	var cfg: Dictionary = ConfigLoader.get_frustration_config().get("death_analysis", {})
@@ -545,11 +569,18 @@ func _advance_timers(delta: float) -> void:
 	if _struggle_active:
 		_struggle_timer -= delta
 		if _struggle_timer <= 0.0:
-			# 免死窗口结束仍未击杀达标 → 判负
-			_struggle_active = false
-			_invuln_remaining = 0.0
-			player_health = 0
-			trigger_game_over("hp_zero")
+			_fail_unresolved_struggle()
+
+
+## 挣扎未达标结束（窗口耗尽 / 夜尽清场）：关窗口并判负
+func _fail_unresolved_struggle() -> void:
+	if not _struggle_active:
+		return
+	_struggle_active = false
+	_struggle_timer = 0.0
+	_invuln_remaining = 0.0
+	player_health = 0
+	trigger_game_over("hp_zero")
 
 
 ## 增加潮币（击杀掉落拾取时调用）
@@ -613,6 +644,8 @@ func clear_over_state() -> void:
 
 
 ## 重置 W17 挫败感控制全部运行时态（每局开始调用）
+## 死因统计口径（P2-#3）：_damage_taken 每局 start_new_run 重置（无跨局泄漏）；
+## 整局累计（含复活前后）不分段，get_death_analysis 反映「最终致命全貌」。
 func _reset_frustration_state() -> void:
 	_first_night_revives = 0
 	_struggle_active = false

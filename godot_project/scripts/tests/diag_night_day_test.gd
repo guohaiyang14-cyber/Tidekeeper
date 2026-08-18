@@ -1,6 +1,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 func _ready() -> void:
 	print("================ DIAG: night timer -> DAY transition ================")
@@ -31,5 +32,5 @@ func _ready() -> void:
 		if GameState.is_over:
 			print("[DIAG] GAME OVER at t=%.1fs phase=%s" % [frame / 60.0, DayNightStateMachine.Phase.keys()[dn.get_phase()]])
 			break
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	get_tree().quit(0 if reached_day else 1)

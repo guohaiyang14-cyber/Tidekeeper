@@ -8,6 +8,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -52,9 +53,8 @@ func _ready() -> void:
 	_assert(GameState.is_over == false, "重开后 is_over 复位")
 	_assert(GameState.player_health == GameState.player_max_health, "重开后 HP 满血")
 
-	main.queue_free()
-	fresh.queue_free()
-	get_tree().paused = false  # 兜底：若 fresh._ready 未跑到 reset，避免泄漏
+	_CLEANUP.free_node(main)
+	_CLEANUP.free_node(fresh)
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	print("============================================================")

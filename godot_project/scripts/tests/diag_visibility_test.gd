@@ -8,6 +8,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 const ENEMY_PROJ_SCENE := preload("res://scripts/combat/enemy_projectile.tscn")
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 
@@ -28,7 +29,7 @@ func _ready() -> void:
 	var cam: Node = main.get_node_or_null("Player/Camera2D")
 	_assert(cam != null, "相机 Camera2D 位于 Player/Camera2D（跟随玩家）")
 	_assert(cam != null and cam is Camera2D, "Camera2D 类型正确")
-	main.queue_free()
+	_CLEANUP.free_node(main)
 
 	# 2) 敌人弹幕可见：场景实例必须含可见 Visual 子节点
 	var ep: Node = ENEMY_PROJ_SCENE.instantiate()
@@ -37,14 +38,14 @@ func _ready() -> void:
 	_assert(ep.has_node("Visual"), "敌人弹幕场景含 Visual 节点")
 	var epv: Node = ep.get_node_or_null("Visual")
 	_assert(epv != null and epv.visible, "敌人弹幕 Visual 可见（不再是隐形扣血）")
-	ep.queue_free()
+	_CLEANUP.free_node(ep)
 
 	# 3) 敌人本体可见（回归基线）：红色方块
 	var en: Node = ENEMY_SCENE.instantiate()
 	add_child(en)
 	await get_tree().process_frame
 	_assert(en.has_node("Visual"), "敌人本体场景含 Visual 节点")
-	en.queue_free()
+	_CLEANUP.free_node(en)
 
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])

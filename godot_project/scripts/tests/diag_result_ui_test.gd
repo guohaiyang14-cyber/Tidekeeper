@@ -6,6 +6,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -49,8 +50,7 @@ func _ready() -> void:
 	var dbg: Node = world.get_node_or_null("UI/HUD/DebugLabel")
 	_assert(dbg != null and "HP: 0/100" in dbg.text, "游戏结束后 HUD 显示真实 HP 0/100（不冻结旧值 21）")
 
-	get_tree().paused = false  # 结算曾暂停树；释放前恢复以免 ObjectDB 泄漏
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	print("============================================================")

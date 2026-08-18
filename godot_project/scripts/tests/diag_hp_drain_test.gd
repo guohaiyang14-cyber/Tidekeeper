@@ -1,6 +1,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 func _ready() -> void:
 	print("================ DIAG: HP drain under idle player ================")
@@ -29,7 +30,7 @@ func _ready() -> void:
 		if GameState.is_over:
 			print("[DIAG] GAME OVER at frame %d (t=%.1fs)" % [frame, frame/60.0])
 			break
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	get_tree().quit(0)
 
 

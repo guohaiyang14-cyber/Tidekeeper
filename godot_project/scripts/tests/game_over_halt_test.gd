@@ -9,6 +9,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -58,8 +59,7 @@ func _ready() -> void:
 		await get_tree().process_frame
 	_assert(dn.get_phase() == DayNightStateMachine.Phase.INIT, "冻结后 30 帧内仍保持 INIT（不进入抉择之昼）")
 
-	get_tree().paused = false  # 结算曾暂停树；释放前恢复以免 ObjectDB 泄漏
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	print("============================================================")

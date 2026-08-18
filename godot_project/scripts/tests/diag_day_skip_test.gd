@@ -1,6 +1,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 func _ready() -> void:
 	print("================ DIAG: day -> skip hides DayPhaseUI, returns to NIGHT ================")
@@ -28,7 +29,7 @@ func _ready() -> void:
 			break
 	if not reached_day:
 		print("[DIAG SKIP] FAIL: never reached DAY")
-		main.queue_free()
+		_CLEANUP.free_node(main)
 		get_tree().quit(1)
 		return
 	# 模拟玩家点「继续下一夜」(触发 _on_shop_skip：exit_day + close + skip_day_phase)
@@ -40,7 +41,7 @@ func _ready() -> void:
 	var back_to_night: bool = dn.get_phase() == DayNightStateMachine.Phase.NIGHT
 	print("[DIAG SKIP] after skip: day_ui.visible=%s shop_ui.visible=%s phase=%s night=%d" % [
 		day_ui.visible, shop_ui.visible, DayNightStateMachine.Phase.keys()[dn.get_phase()], GameState.current_night])
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	var ok: bool = day_hidden and shop_hidden and back_to_night
 	print("[DIAG SKIP] RESULT day_hidden=%s shop_hidden=%s back_to_night=%s => %s" % [
 		day_hidden, shop_hidden, back_to_night, "PASS" if ok else "FAIL"])

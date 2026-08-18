@@ -13,9 +13,13 @@
 # ============================================================================
 extends Node
 
+const _RESULT_UI := preload("res://scripts/core/result_ui.gd")
+const _DAY_NIGHT := preload("res://scripts/core/day_night_state_machine.gd")
+
 var _passed: int = 0
 var _failed: int = 0
 var _fail_msgs: Array[String] = []
+var _sig_cap: Dictionary = {}  # player_down 信号捕获（W17-11）
 
 
 func _ready() -> void:
@@ -36,6 +40,11 @@ func _ready() -> void:
 	_test_struggle_expire()
 	_test_failure_floor()
 	_test_gate_no_run()
+	_test_struggle_feedback()
+	_test_death_analysis_caliber()
+	_test_struggle_night_end()
+	_test_fallback_enabled()
+	_test_source_labels()
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	if _failed > 0:
@@ -270,3 +279,121 @@ func _test_gate_no_run() -> void:
 	_assert(GameState.is_over == true, "未 begin_run：致命直接判负")
 	_assert(GameState.is_struggling() == false, "未 begin_run：不进入挣扎")
 	_assert(GameState.player_health == 0, "未 begin_run：无首夜复活（HP=0）")
+
+
+# ============================================================================
+# W17-11 挣扎倒地反馈 / HUD 状态（P2-#2）
+# ============================================================================
+func _on_player_down(kind: String) -> void:
+	_sig_cap["fired"] = true
+	_sig_cap["kind"] = kind
+
+
+func _test_struggle_feedback() -> void:
+	print("[W17-11 挣扎倒地反馈/HUD 状态]")
+	_sig_cap = {}
+	GameState.player_down.connect(_on_player_down)
+	# 注：GDScript 4.x 无 finally，_assert 仅记录失败不抛异常，故末尾 disconnect 总会执行
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(10)
+	GameState.damage_player(9999)  # 致命 → 进入挣扎（HP=0 但未判负）
+	_assert(_sig_cap.get("fired", false) == true, "进入挣扎 player_down 信号触发")
+	_assert(_sig_cap.get("kind", "") == "struggle", "player_down kind=struggle")
+	_assert(GameState.is_player_down() == true, "挣扎期 is_player_down()=true（HP=0 未判负，不被误判死亡）")
+	_assert(GameState.is_over == false, "挣扎期未判负")
+	_assert(GameState.get_struggle_remaining() > 0.0, "挣扎期剩余免死窗口 > 0")
+	# 挣扎期内治疗不生效（P3：唯有击杀 K 敌可复活，治疗不 rescue）
+	var healed: int = GameState.heal_player(50)
+	_assert(healed == 0, "挣扎期内治疗返回 0（不生效）")
+	_assert(GameState.player_health == 0, "挣扎期内 HP 仍 0（治疗未 rescue）")
+	# 击杀达标复活后：不再 down
+	var need: int = int(ConfigLoader.get_frustration_config().get("struggle", {}).get("kills_to_revive", 5))
+	for _i in need:
+		GameState.register_enemy_kill()
+	_assert(GameState.is_player_down() == false, "复活后 is_player_down()=false")
+	GameState.player_down.disconnect(_on_player_down)
+
+
+# ============================================================================
+# W17-12 死因统计口径（P2-#3）：每局重置（无跨局泄漏）+ 整局累计（含复活前后）
+# ============================================================================
+func _test_death_analysis_caliber() -> void:
+	print("[W17-12 死因统计口径]")
+	# (a) 每局重置：跨局无泄漏
+	GameState.start_new_run("watcher")
+	GameState.damage_player(30, "enemy_contact")
+	GameState.damage_player(50, "boss_tide_archon")
+	_assert(int(GameState.get_death_analysis().get("total_damage")) == 80, "首局累计 = 80")
+	GameState.start_new_run("watcher")  # 第二局，应重置
+	var a2: Dictionary = GameState.get_death_analysis()
+	_assert(int(a2.get("total_damage")) == 0, "第二局 start_new_run 重置 _damage_taken（无跨局泄漏）")
+	_assert(a2.get("top_sources", []).size() == 0, "第二局 top_sources 为空")
+	# (b) 复活不重置统计（整局累计，含复活前后不分段）
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(1)
+	GameState.damage_player(30, "enemy_contact")    # 复活前 30
+	GameState.damage_player(100, "enemy_contact")    # 致命 → 首夜保护满血复活（100 仍计入）
+	_assert(GameState.player_health == GameState.player_max_health, "首夜复活回满")
+	_assert(int(GameState.get_death_analysis().get("total_damage")) == 130, "复活不重置：含复活前 30 + 致命 100 = 130")
+	GameState._advance_timers(2.0)  # 清掉首夜复活后 1.5s 无敌，避免后续伤害被忽略
+	GameState.damage_player(20, "boss_tide_archon")  # 复活后再受伤，继续累计
+	_assert(int(GameState.get_death_analysis().get("total_damage")) == 150, "复活后再受伤继续累计 = 150")
+
+
+# ============================================================================
+# W17-13 夜尽挣扎未达标 → 立即判负（不带入抉择之昼）
+# ============================================================================
+func _test_struggle_night_end() -> void:
+	print("[W17-13 夜尽挣扎判负]")
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(10)
+	GameState.damage_player(9999)
+	_assert(GameState.is_struggling() == true, "夜尽前处于挣扎")
+	GameState.end_night()
+	_assert(GameState.is_over == true, "夜尽挣扎未达标 → 判负")
+	_assert(GameState.is_struggling() == false, "判负后挣扎关闭")
+	_assert(GameState.is_player_down() == false, "判负后 is_player_down=false")
+	# 状态机路径：无 World.stop 时停在 TRANSITION，不得切 DAY 开商店
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(10)
+	GameState.damage_player(9999)
+	var dn: DayNightStateMachine = _DAY_NIGHT.new() as DayNightStateMachine
+	dn._current_night = 10
+	dn._phase = DayNightStateMachine.Phase.NIGHT
+	dn._end_night()
+	_assert(GameState.is_over == true, "状态机夜尽挣扎 → 判负")
+	_assert(dn.get_phase() != DayNightStateMachine.Phase.DAY, "夜尽挣扎状态机不进入抉择之昼")
+	dn.free()
+
+
+# ============================================================================
+# W17-14 失败保底尊重 fallback.enabled
+# ============================================================================
+func _test_fallback_enabled() -> void:
+	print("[W17-14 fallback.enabled]")
+	MetaSystem.reset_progress()
+	var fb: Dictionary = ConfigLoader.frustration.get("fallback", {})
+	fb["enabled"] = false
+	ConfigLoader.frustration["fallback"] = fb
+	# 2/20 × 60 = 6；关保底后不得抬到 18
+	_assert(MetaSystem.settle_stardust(2, false) == 6, "fallback.enabled=false 不触发保底（2夜=6）")
+	fb["enabled"] = true
+	ConfigLoader.frustration["fallback"] = fb
+	MetaSystem.reset_progress()
+	_assert(MetaSystem.settle_stardust(2, false) == 18, "恢复 enabled 后保底 = 18")
+
+
+# ============================================================================
+# W17-15 死因友好名：接触/自爆带敌人中文名
+# ============================================================================
+func _test_source_labels() -> void:
+	print("[W17-15 死因友好名]")
+	var ui: ResultUI = _RESULT_UI.new() as ResultUI
+	_assert(ui._source_label("contact:small_goblin") == "接触·小水鬼", "接触来源映射敌人名")
+	_assert(ui._source_label("explode:bomb_shell") == "自爆·爆炸贝", "自爆来源映射敌人名")
+	_assert(ui._source_label("enemy_projectile") == "敌方弹幕", "弹幕固定映射")
+	ui.free()

@@ -18,16 +18,21 @@ var pending_character: String = "watcher"
 ## 单元机检（w1/w12 等）不会调用 begin_run，故读到纯基线（倍率 1.0 / 加成 0），
 ## 避免未开局时误食默认守望者 +5% 特性、或被跨进程持久化存档污染（W15-W16 回归修复）
 var _run_active: bool = false
+## 灯塔效果累加缓存（购买 / begin_run / 重置时失效）
+var _lh_effects_cache: Dictionary = {}
+var _lh_effects_dirty: bool = true
 
 
 ## 标记一局正式开始（World._ready 调用）：此后角色/灯塔特性倍率才生效
 func begin_run() -> void:
 	_run_active = true
+	_lh_effects_dirty = true
 
 
 ## 标记一局结束（World 结算时调用）：特性倍率归零，结算/非战斗阶段不应用局外修正
 func end_run() -> void:
 	_run_active = false
+	_lh_effects_dirty = true
 
 
 ## 当前是否处于一局中（调试/断言用）
@@ -134,8 +139,10 @@ func record_first_clear() -> void:
 
 ## 节点是否已点亮
 func is_node_purchased(node_id: String) -> bool:
-	var lh: Dictionary = SaveSystem.get_save_meta().get("lighthouse", {})
-	return bool(lh.get(node_id, false))
+	var raw: Variant = SaveSystem.get_save_meta().get("lighthouse", {})
+	if not (raw is Dictionary):
+		return false
+	return bool((raw as Dictionary).get(node_id, false))
 
 
 ## 节点当前是否可购买（未点亮 + 前置已点亮 + 星尘充足）
@@ -162,6 +169,7 @@ func purchase_node(node_id: String) -> bool:
 	lh[node_id] = true
 	meta["lighthouse"] = lh
 	SaveSystem.set_save_meta(meta)
+	_lh_effects_dirty = true
 	print("[MetaSystem] 点亮灯塔节点 %s（剩余星尘 %d）" % [node_id, int(meta["stardust"])])
 	return true
 
@@ -182,6 +190,8 @@ func _character_traits() -> Dictionary:
 
 ## 已购灯塔节点效果累加表
 func _lighthouse_effects() -> Dictionary:
+	if not _lh_effects_dirty:
+		return _lh_effects_cache
 	var out: Dictionary = {}
 	var lh: Dictionary = SaveSystem.get_save_meta().get("lighthouse", {})
 	for node_id in lh.keys():
@@ -192,7 +202,9 @@ func _lighthouse_effects() -> Dictionary:
 			continue
 		for k in (node.get("effects", {}) as Dictionary).keys():
 			out[k] = float(out.get(k, 0.0)) + float((node["effects"] as Dictionary)[k])
-	return out
+	_lh_effects_cache = out
+	_lh_effects_dirty = false
+	return _lh_effects_cache
 
 
 ## 累加某修正 key 的总百分比（角色 + 灯塔）。
@@ -268,15 +280,16 @@ func settle_stardust(nights_survived: int, is_win: bool, extra_stardust: int = 0
 	var earned: int = roundi(base * progress * difficulty * first_mult)
 	if earned < 0:
 		earned = 0
-	# W17 失败保底：落败时不低于 floor_pct × 满通应得（floor_pct 来自 config/frustration.json）
+	# W17 失败保底：落败时不低于 floor_pct × 满通应得（须 fallback.enabled）
 	if not is_win:
 		var floor_cfg: Dictionary = ConfigLoader.get_frustration_config().get("fallback", {})
-		var floor_pct: float = float(floor_cfg.get("floor_pct", 0.0))
-		if floor_pct > 0.0:
-			var full_clear: float = base * difficulty * first_mult  # 满通应得（落败首通倍率恒 1）
-			var floor_earned: int = roundi(full_clear * floor_pct)
-			if floor_earned > earned:
-				earned = floor_earned
+		if bool(floor_cfg.get("enabled", false)):
+			var floor_pct: float = float(floor_cfg.get("floor_pct", 0.0))
+			if floor_pct > 0.0:
+				var full_clear: float = base * difficulty * first_mult  # 满通应得（落败首通倍率恒 1）
+				var floor_earned: int = roundi(full_clear * floor_pct)
+				if floor_earned > earned:
+					earned = floor_earned
 	# 本局事件星尘（星尘雨等）在保底之后叠加，避免被公式吃掉
 	earned += maxi(0, extra_stardust)
 	meta["stardust"] = int(meta.get("stardust", 0)) + earned
@@ -291,3 +304,4 @@ func settle_stardust(nights_survived: int, is_win: bool, extra_stardust: int = 0
 func reset_progress() -> void:
 	SaveSystem.reset_save_meta()
 	pending_character = "watcher"
+	_lh_effects_dirty = true

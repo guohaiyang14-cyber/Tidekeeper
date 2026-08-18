@@ -1,6 +1,7 @@
 extends Node
 
 const MAIN_SCENE := preload("res://scenes/main.tscn")
+const _CLEANUP := preload("res://scripts/tests/test_cleanup.gd")
 
 func _ready() -> void:
 	print("================ DIAG: ShopUI visible after DAY (faithful play) ================")
@@ -44,7 +45,7 @@ func _ready() -> void:
 		if GameState.is_over:
 			print("[DIAG] GAME OVER at t=%.1fs phase=%s" % [frame / 60.0, DayNightStateMachine.Phase.keys()[dn.get_phase()]])
 			break
-	main.queue_free()
+	_CLEANUP.free_node(main)
 	var ok: bool = reached_day and shop_visible_at_day and day_ui_visible_at_day and not paused_at_day
 	print("[DIAG] RESULT reached_day=%s day_ui_visible=%s shop_visible=%s not_paused=%s => %s" % [
 		reached_day, day_ui_visible_at_day, shop_visible_at_day, not paused_at_day, "PASS" if ok else "FAIL"])

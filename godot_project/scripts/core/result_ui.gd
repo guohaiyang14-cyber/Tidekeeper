@@ -195,8 +195,12 @@ func _death_cause_text() -> String:
 	return "\n".join(lines)
 
 
-## 伤害来源友好名（已知战斗来源映射；敌人 id 直出）
+## 伤害来源友好名（接触/自爆带敌人中文名；其余走固定映射）
 func _source_label(src: String) -> String:
+	if src.begins_with("contact:"):
+		return "接触·%s" % _entity_name(src.substr(8))
+	if src.begins_with("explode:"):
+		return "自爆·%s" % _entity_name(src.substr(8))
 	match src:
 		"enemy_contact": return "敌人接触"
 		"enemy_projectile": return "敌方弹幕"
@@ -204,3 +208,15 @@ func _source_label(src: String) -> String:
 		"boss_tide_archon": return "天灾潮汐"
 		"unknown": return "未知"
 		_: return src
+
+
+func _entity_name(id: String) -> String:
+	if id == "":
+		return "未知"
+	var enemy: Dictionary = ConfigLoader.get_enemy(id)
+	if not enemy.is_empty():
+		return String(enemy.get("name", id))
+	var boss: Dictionary = ConfigLoader.get_boss(id)
+	if not boss.is_empty():
+		return String(boss.get("name", id))
+	return id

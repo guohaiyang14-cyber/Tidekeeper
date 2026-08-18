@@ -40,6 +40,12 @@ func _ready() -> void:
 	])
 
 
+## 开局同步当前角色（World 在 start_new_run 后调用；覆盖场景默认 watcher）
+func apply_run_character(id: String) -> void:
+	character_id = id
+	_apply_character_stats()
+
+
 func _physics_process(_delta: float) -> void:
 	if _bind_timer > 0.0:
 		_bind_timer = maxf(0.0, _bind_timer - _delta)
@@ -49,18 +55,11 @@ func _physics_process(_delta: float) -> void:
 		queue_redraw()
 
 
-## 从配置应用角色属性（§9.4）
+## 从配置应用角色属性（§9.4；移速只读 characters.json）
 func _apply_character_stats() -> void:
-	# §9.4 角色表：守望者 100/4.2，铁匠 120/4.0，星象师 85/4.2
-	match character_id:
-		"watcher":
-			base_move_speed = 4.2
-		"blacksmith":
-			base_move_speed = 4.0
-		"stargazer":
-			base_move_speed = 4.2
-		_:
-			push_warning("[Player] 未知角色 %s，使用默认属性" % character_id)
+	if ConfigLoader.get_character(character_id).is_empty():
+		push_warning("[Player] 未知角色 %s，使用默认移速" % character_id)
+	base_move_speed = ConfigLoader.get_character_move_speed(character_id)
 
 
 ## 从 pickups.json 读取默认拾取半径

@@ -407,7 +407,7 @@ func _try_contact_damage(player_pos: Vector2) -> void:
 	if _contact_cd > 0.0:
 		return
 	if global_position.distance_to(player_pos) <= contact_radius:
-		GameState.damage_player(contact_damage, enemy_id)
+		GameState.damage_player(contact_damage, "contact:%s" % enemy_id)
 		_contact_cd = _contact_interval
 
 
@@ -544,7 +544,7 @@ func get_boss_phase() -> int:
 
 
 func _explode() -> void:
-	GameState.damage_player(_self_destruct_damage, enemy_id)
+	GameState.damage_player(_self_destruct_damage, "explode:%s" % enemy_id)
 	_die()
 
 

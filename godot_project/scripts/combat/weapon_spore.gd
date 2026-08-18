@@ -20,7 +20,7 @@ func fire(_target: EnemyBase) -> void:
 	var base_r: float = get_behavior_float("base_radius", 120.0)
 	var r_per: float = get_behavior_float("radius_per_level", 10.0)
 	var radius: float = scale_area_radius(base_r + r_per * float(level - 1))
-	var sting_count: int = get_behavior_int("base_targets", 3) + get_behavior_int("targets_per_level", 1) * (level - 1)
+	var sting_count: int = get_behavior_int("base_targets", 3) + get_behavior_int("targets_per_level", 1) * (level - 1) + MetaSystem.get_extra_projectiles()
 	var ranked: Array[EnemyBase] = query_nearest_enemies(hash, origin, radius, sting_count)
 	for e in ranked:
 		e.take_damage(roll_hit_damage())

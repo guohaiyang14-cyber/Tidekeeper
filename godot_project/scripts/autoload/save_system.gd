@@ -89,9 +89,11 @@ func load_save() -> bool:
 	_save_data = parsed as Dictionary
 	# 版本迁移（W16 实现）
 	var file_version: int = int(_save_data.get("version", 1))
-	if file_version < SAVE_VERSION:
+	if file_version > SAVE_VERSION:
+		push_warning("[SaveSystem] 存档版本 v%d > 当前 v%d，按当前结构读取（多余字段忽略）" % [file_version, SAVE_VERSION])
+	elif file_version < SAVE_VERSION:
 		_migrate(file_version)
-	# 兼容旧档：确保 meta 字段存在
+	# 兼容旧档：确保 meta 字段存在并校正类型
 	_ensure_meta()
 	print("[SaveSystem] 存档已加载: %d 个存档位 | 星尘 %d" % [
 		_save_data.get("saves", []).size(), get_save_meta().get("stardust", 0),
@@ -146,16 +148,25 @@ func _migrate(from_version: int) -> void:
 	_save_data["version"] = SAVE_VERSION
 
 
-## 确保 meta 字段存在（旧档兼容）
+## 确保 meta 字段存在（旧档兼容）并校正类型，避免损坏档把 lighthouse 写成非 Dictionary
 func _ensure_meta() -> void:
 	if not _save_data.has("meta") or not (_save_data["meta"] is Dictionary):
 		_save_data["meta"] = _default_meta()
 		return
-	# 补齐缺失子键，避免旧档缺字段报错
 	var m: Dictionary = _save_data["meta"]
-	for key in _default_meta().keys():
+	var defaults: Dictionary = _default_meta()
+	for key in defaults.keys():
 		if not m.has(key):
-			m[key] = _default_meta()[key]
+			m[key] = defaults[key]
+	m["version"] = SAVE_VERSION
+	m["total_runs"] = int(m.get("total_runs", 0))
+	m["max_night_cleared"] = int(m.get("max_night_cleared", 0))
+	m["stardust"] = int(m.get("stardust", 0))
+	m["first_clear"] = bool(m.get("first_clear", false))
+	if not (m.get("unlocks") is Array):
+		m["unlocks"] = []
+	if not (m.get("lighthouse") is Dictionary):
+		m["lighthouse"] = {}
 
 
 ## 获取局外进度（返回实时引用，调用方修改后需 set_save_meta 落盘）
@@ -165,9 +176,10 @@ func get_save_meta() -> Dictionary:
 	return _save_data["meta"]
 
 
-## 写入并持久化局外进度
+## 写入并持久化局外进度（先校正类型，避免损坏 lighthouse 等字段落盘）
 func set_save_meta(m: Dictionary) -> void:
 	_save_data["meta"] = m
+	_ensure_meta()
 	save_save()
 
 

@@ -420,6 +420,11 @@ func get_character_max_health(id: String) -> int:
 	return int(get_character(id).get("max_health", 100))
 
 
+## 角色基础移速（按 id；缺省 4.2，对齐 GDD §9.4）
+func get_character_move_speed(id: String) -> float:
+	return float(get_character(id).get("move_speed", 4.2))
+
+
 ## 全部灯塔节点（扁平）
 func get_all_lighthouse_nodes() -> Dictionary:
 	return _lighthouse_nodes

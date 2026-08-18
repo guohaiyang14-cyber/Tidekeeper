@@ -9,6 +9,7 @@
       "description": "均衡型守望者。全属性 +5%，开局鱼叉枪。新手友好，无明显短板。",
       "starting_weapon": "harpoon",
       "max_health": 100,
+      "move_speed": 4.2,
       "unlock": { "type": "always" },
       "traits": {
         "damage_pct": 5,
@@ -23,6 +24,7 @@
       "description": "范围 +30% / 攻速 -15%。高血量近战铁匠，开局锚锤，正面硬刚但出手偏慢。",
       "starting_weapon": "anchor_hammer",
       "max_health": 120,
+      "move_speed": 4.0,
       "unlock": { "type": "runs", "count": 3 },
       "traits": {
         "area_pct": 30,
@@ -35,6 +37,7 @@
       "description": "弹道 +1 / 伤害 -10%。低血量远程星象师，开局雷暴云，覆盖面广但身板脆。",
       "starting_weapon": "storm_cloud",
       "max_health": 85,
+      "move_speed": 4.2,
       "unlock": { "type": "night", "night": 5 },
       "traits": {
         "damage_pct": -10,

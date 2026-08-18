@@ -67,6 +67,9 @@ func enter_next_night() -> void:
 func _end_night() -> void:
 	_set_phase(Phase.TRANSITION)
 	GameState.end_night()
+	# 挣扎未达标会在 end_night 判负；World.stop() 已把阶段打成 INIT，禁止再进昼开商店
+	if GameState.is_over:
+		return
 	# 通关判定：第 20 夜结束 = 通关
 	if _current_night >= 20:
 		GameState.trigger_game_win()

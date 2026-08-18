@@ -47,6 +47,10 @@ func _ready() -> void:
 	MetaSystem.set_active_character(character_id)
 	MetaSystem.begin_run()  # 激活角色/灯塔特性倍率（须在 start_new_run 前，否则开局生命/移速取不到加成）
 	GameState.start_new_run(character_id)
+	# Player._ready 早于 World，须在开局后覆盖场景默认 watcher 移速
+	var p: Player = player as Player
+	if p != null:
+		p.apply_run_character(character_id)
 	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
 	weapon_manager.sync_from_game_state()
 	UpgradeManager.reset()
@@ -97,13 +101,20 @@ func _process(_delta: float) -> void:
 func _update_debug_label() -> void:
 	if debug_label == null:
 		return
-	debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %d/%d  |  经验: %d  |  珠: %d" % [
+	var hp_text: String
+	if GameState.is_player_down():
+		# 挣扎免死窗口中：HP=0 但存活，显示「挣扎中」+ 倒计时，避免误判已死（P2-#2）。
+		# 注意：已结束（is_over）时 player_health 仍为 0/满血，照常显示数值 HP，
+		# 由调用方以 is_over 为「死判」真值（不在此覆盖文案，保证结算/诊断 HUD 可读真实 HP）。
+		hp_text = "挣扎中(%.1fs)" % GameState.get_struggle_remaining()
+	else:
+		hp_text = "%d/%d" % [GameState.player_health, GameState.player_max_health]
+	debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %s  |  经验: %d  |  珠: %d" % [
 		day_night.get_current_night(),
 		_phase_label(day_night.get_phase()),
 		day_night.get_night_remaining(),
 		GameState.player_level,
-		GameState.player_health,
-		GameState.player_max_health,
+		hp_text,
 		GameState.player_exp,
 		pickup_system.active_gem_count() if pickup_system else 0,
 	]
