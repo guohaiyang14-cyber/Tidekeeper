@@ -97,13 +97,13 @@ func get_character_unlock_hint(id: String) -> String:
 	var unlock: Dictionary = data.get("unlock", {})
 	match String(unlock.get("type", "")):
 		"runs":
-			return "累计游玩 %d 局解锁（当前 %d）" % [
+			return LanguageSystem.localizef("ui.unlock.runs", [
 				int(unlock.get("count", 0)), int(SaveSystem.get_save_meta().get("total_runs", 0)),
-			]
+			])
 		"night":
-			return "通关第 %d 夜解锁（当前 %d）" % [
+			return LanguageSystem.localizef("ui.unlock.night", [
 				int(unlock.get("night", 0)), int(SaveSystem.get_save_meta().get("max_night_cleared", 0)),
-			]
+			])
 		_:
 			return ""
 

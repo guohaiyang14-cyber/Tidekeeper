@@ -157,7 +157,7 @@ func _test_first_night() -> void:
 	_assert(GameState.player_health == max_hp, "无敌期内伤害被忽略（HP 仍满）")
 	# 清空无敌后再次致命 → 首夜已用尽（max 1），转挣扎模式（仍非直接判负）
 	var fn_cfg: Dictionary = ConfigLoader.get_frustration_config().get("first_night", {})
-	GameState._advance_timers(float(fn_cfg.get("revive_invuln_sec", 1.5)) + 0.1)
+	GameState.advance_timers_for_test(float(fn_cfg.get("revive_invuln_sec", 1.5)) + 0.1)
 	GameState.damage_player(9999)
 	_assert(GameState.is_over == false, "首夜仅 1 次：二次致命进入挣扎而非判负")
 	_assert(GameState.is_struggling() == true, "二次致命触发挣扎模式（首夜未二次复活）")
@@ -222,7 +222,7 @@ func _test_struggle_once_then_death() -> void:
 		GameState.register_enemy_kill()  # 第一次挣扎复活
 	_assert(GameState.player_health == GameState.player_max_health, "挣扎第一次复活成功")
 	var st_cfg: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
-	GameState._advance_timers(float(st_cfg.get("revive_invuln_sec", 2.0)) + 0.1)  # 清掉复活后无敌
+	GameState.advance_timers_for_test(float(st_cfg.get("revive_invuln_sec", 2.0)) + 0.1)  # 清掉复活后无敌
 	GameState.damage_player(9999)    # 二次致命：挣扎已用尽、首夜已过期
 	_assert(GameState.is_over == true, "挣扎用尽后二次致命真实判负")
 	_assert(GameState.is_struggling() == false, "二次致命未再进入挣扎")
@@ -239,7 +239,7 @@ func _test_struggle_expire() -> void:
 	GameState.damage_player(9999)
 	_assert(GameState.is_struggling() == true, "致命进入挣扎")
 	var invuln: float = float(ConfigLoader.get_frustration_config().get("struggle", {}).get("invuln_sec", 3.0))
-	GameState._advance_timers(invuln + 0.1)  # 窗口耗尽且未击杀达标
+	GameState.advance_timers_for_test(invuln + 0.1)  # 窗口耗尽且未击杀达标
 	_assert(GameState.is_over == true, "挣扎窗口耗尽未达标 → 判负")
 	_assert(GameState.is_struggling() == false, "判负后挣扎窗口关闭")
 
@@ -337,7 +337,7 @@ func _test_death_analysis_caliber() -> void:
 	GameState.damage_player(100, "enemy_contact")    # 致命 → 首夜保护满血复活（100 仍计入）
 	_assert(GameState.player_health == GameState.player_max_health, "首夜复活回满")
 	_assert(int(GameState.get_death_analysis().get("total_damage")) == 130, "复活不重置：含复活前 30 + 致命 100 = 130")
-	GameState._advance_timers(2.0)  # 清掉首夜复活后 1.5s 无敌，避免后续伤害被忽略
+	GameState.advance_timers_for_test(2.0)  # 清掉首夜复活后 1.5s 无敌，避免后续伤害被忽略
 	GameState.damage_player(20, "boss_tide_archon")  # 复活后再受伤，继续累计
 	_assert(int(GameState.get_death_analysis().get("total_damage")) == 150, "复活后再受伤继续累计 = 150")
 

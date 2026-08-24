@@ -6,7 +6,86 @@ ui.game_over,游戏结束,Game Over
 ui.victory,通关,Victory
 ui.restart,再来一局 (Enter),Play Again (Enter)
 ui.meta,角色 / 灯塔,Character / Lighthouse
-ui.hint,按 Enter 或点击按钮重开 · 可进入角色选择 / 灯塔升级,Press Enter or click to restart · Character / Lighthouse upgrades
+ui.hint,"按 Enter 或点击按钮重开 · 可进入角色选择 / 灯塔升级","Press Enter or click to restart · Character / Lighthouse upgrades"
 difficulty.tier.lighthouse,灯塔守望,Lighthouse Watch
 difficulty.tier.watcher,守夜人,Night Watcher
 ui.difficulty_select,难度档位,Difficulty
+ui.hud.hp,HP %d / %d,HP %d / %d
+ui.hud.exp,Lv %d  经验 %d / %d,Lv %d  XP %d / %d
+ui.hud.night,第 %d / 20 夜%s,Night %d / 20 %s
+ui.result.stats_defeat,存活至第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s,Survived to night %d · Lv %d · Coins %d · %s
+ui.result.stats_victory,通关 · 第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s,Victory · Night %d · Lv %d · Coins %d · %s
+ui.result.stardust,本局星尘 +%d（累计 %d）,Stardust +%d (Total %d)
+ui.result.victory_reason,击败吞噬之星，第 20 夜结束,Devouring Star defeated — Night 20 complete
+ui.death.reason.hp_zero,死因：血量归零,Cause: HP depleted
+ui.death.reason.timeout,死因：超时,Cause: Time out
+ui.death.reason.death,死因：生命值耗尽,Cause: HP depleted
+ui.death.reason.other,死因：%s,Cause: %s
+ui.death.last_hit,最后一击：%s（%d）,Last hit: %s (%d)
+ui.death.no_record,伤害来源：无记录,Damage sources: none
+ui.death.top_sources,伤害来源 Top%d：%s,Top %d damage sources: %s
+ui.death.top_entry,%d. %s %d,%d. %s %d
+ui.source.contact,接触·%s,Contact · %s
+ui.source.explode,自爆·%s,Self-destruct · %s
+ui.source.enemy_contact,敌人接触,Enemy contact
+ui.source.enemy_projectile,敌方弹幕,Enemy projectile
+ui.source.affix_thorns,荆棘反伤,Thorns reflect
+ui.source.boss_tide_archon,天灾潮汐,Calamity tide
+ui.source.unknown,未知,Unknown
+ui.char_select.title,选择角色,Select Character
+ui.char_select.stardust,星尘：%d,Stardust: %d
+ui.char_select.lighthouse,灯塔升级树,Lighthouse Upgrades
+ui.char_select.start,开始游戏,Start Game
+ui.char_select.pick,选择,Select
+ui.char_select.no_traits,无特性,No traits
+ui.unlock.runs,累计游玩 %d 局解锁（当前 %d）,Unlock after %d runs (current %d)
+ui.unlock.night,通关第 %d 夜解锁（当前 %d）,Clear night %d to unlock (current %d)
+ui.trait.damage_pct,伤害,Damage
+ui.trait.attack_speed_pct,攻速,Attack speed
+ui.trait.area_pct,范围,Area
+ui.trait.move_speed_pct,移速,Move speed
+ui.trait.exp_pct,经验,EXP
+ui.trait.crit_chance_pct,暴击,Crit
+ui.trait.damage_reduction_pct,减伤,Damage reduction
+ui.trait.projectile_bonus,弹道,Projectiles
+ui.trait.max_health,生命,Max HP
+ui.trait.regen_per_night,休息回血,Rest heal
+character.watcher.name,守望者,Watcher
+character.watcher.desc,均衡型守望者。全属性 +5%，开局鱼叉枪。新手友好，无明显短板。,Balanced watcher. +5% all stats. Starts with Harpoon. Beginner-friendly.
+character.blacksmith.name,铁匠,Blacksmith
+character.blacksmith.desc,范围 +30% / 攻速 -15%。高血量近战铁匠，开局锚锤，正面硬刚但出手偏慢。,Area +30% / AS -15%. High-HP melee. Starts Anchor Hammer. Slow but sturdy.
+character.stargazer.name,星象师,Stargazer
+character.stargazer.desc,弹道 +1 / 伤害 -10%。低血量远程星象师，开局雷暴云，覆盖面广但身板脆。,+1 projectile / -10% damage. Low-HP ranged. Starts Storm Cloud. Wide coverage but fragile.
+weapon.harpoon.name,鱼叉枪,Harpoon
+weapon.holy_fire.name,灯塔圣火,Lighthouse Holy Fire
+weapon.anchor_hammer.name,锚锤,Anchor Hammer
+weapon.spore.name,水母孢子,Jelly Spore
+weapon.storm_cloud.name,雷暴云,Storm Cloud
+weapon.jellyfish_cannon.name,水母炮,Jelly Cannon
+weapon.anchor_chain.name,锚链,Anchor Chain
+weapon.albatross.name,信天翁,Albatross
+passive.pearl.name,夜明珠,Night Pearl
+passive.amulet.name,护身符,Amulet
+passive.tide_bell.name,潮信铃,Tide Bell
+passive.lamp_core.name,灯芯石,Lamp Core
+passive.tide_compass.name,潮汐罗盘,Tide Compass
+passive.lamp_oil.name,燃灯油,Lamp Oil
+passive.iron_chain.name,铁链,Iron Chain
+passive.humus.name,腐殖质,Humus
+passive.storm_flask.name,风暴瓶,Storm Flask
+passive.abyss_eye.name,深海之眼,Abyss Eye
+passive.coral_barrier.name,珊瑚屏障,Coral Barrier
+passive.exp_sac.name,经验囊,EXP Satchel
+enemy.giant_claw_king.name,巨钳王,Giant Claw King
+enemy.small_goblin.name,小水鬼,Tide Imp
+enemy.iron_crab.name,铁壳蟹,Iron Crab
+enemy.jellyfish_drifter.name,水母浮游,Jelly Drifter
+enemy.deep_diver.name,深潜者,Deep Diver
+enemy.bomb_shell.name,爆炸贝,Bomb Shell
+enemy.raven_flock.name,鸦群,Raven Flock
+enemy.tide_summoner.name,潮汐召唤师,Tide Summoner
+enemy.abyssal_pikeman.name,渊潮长枪兵,Abyss Pikeman
+enemy.reef_giant.name,暗礁巨人,Reef Giant
+boss.jellyfish_queen.name,深渊水母后,Abyss Jelly Queen
+boss.tide_archon.name,潮汐执政官,Tide Archon
+boss.devouring_star.name,吞噬之星,Devouring Star

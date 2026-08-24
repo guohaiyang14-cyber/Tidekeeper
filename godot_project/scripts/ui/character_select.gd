@@ -12,8 +12,12 @@ const LIGHTHOUSE_SCENE := "res://scenes/lighthouse_tree.tscn"
 
 var _stardust_label: Label
 var _difficulty_label: Label
+var _title_label: Label
+var _lighthouse_btn: Button
+var _start_btn: Button
 var _tier_buttons: Dictionary = {}  # tier_id -> Button
 var _tier_group: ButtonGroup
+var _char_cards: Array[Dictionary] = []  # {id, btn, name_l, desc_l, trait_l}
 
 
 func _ready() -> void:
@@ -33,7 +37,8 @@ func _build() -> void:
 	add_child(backdrop)
 
 	var title := Label.new()
-	title.text = "选择角色"
+	_title_label = title
+	title.text = LanguageSystem.localize("ui.char_select.title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 30.0
@@ -67,7 +72,8 @@ func _build() -> void:
 
 	var btn_y := card_y + card_h + 40.0
 	var lighthouse_btn := Button.new()
-	lighthouse_btn.text = "灯塔升级树"
+	_lighthouse_btn = lighthouse_btn
+	lighthouse_btn.text = LanguageSystem.localize("ui.char_select.lighthouse")
 	lighthouse_btn.size = Vector2(240.0, 52.0)
 	lighthouse_btn.position = Vector2(VIEW_W / 2.0 - 360.0, btn_y)
 	lighthouse_btn.add_theme_font_size_override("font_size", 22)
@@ -75,7 +81,8 @@ func _build() -> void:
 	add_child(lighthouse_btn)
 
 	var start_btn := Button.new()
-	start_btn.text = "开始游戏"
+	_start_btn = start_btn
+	start_btn.text = LanguageSystem.localize("ui.char_select.start")
 	start_btn.size = Vector2(240.0, 52.0)
 	start_btn.position = Vector2(VIEW_W / 2.0 + 120.0, btn_y)
 	start_btn.add_theme_font_size_override("font_size", 22)
@@ -129,9 +136,17 @@ func _on_tier_pressed(tier_id: String) -> void:
 
 
 func _on_language_changed(_lang: String) -> void:
+	if _title_label != null:
+		_title_label.text = LanguageSystem.localize("ui.char_select.title")
+	if _lighthouse_btn != null:
+		_lighthouse_btn.text = LanguageSystem.localize("ui.char_select.lighthouse")
+	if _start_btn != null:
+		_start_btn.text = LanguageSystem.localize("ui.char_select.start")
 	if _difficulty_label != null:
 		_difficulty_label.text = LanguageSystem.localize("ui.difficulty_select")
+	_refresh_stardust()
 	_refresh_tier_buttons()
+	_refresh_card_content()
 
 
 func _make_card(id: String) -> Panel:
@@ -145,11 +160,11 @@ func _make_card(id: String) -> Panel:
 	vbox.offset_bottom = -16.0
 
 	var name_l := Label.new()
-	name_l.text = data.get("name", id)
+	name_l.text = _character_name(id, data)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_l.add_theme_font_size_override("font_size", 26)
 	var desc_l := Label.new()
-	desc_l.text = String(data.get("description", ""))
+	desc_l.text = _character_desc(id, data)
 	desc_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_l.add_theme_font_size_override("font_size", 15)
@@ -173,42 +188,65 @@ func _make_card(id: String) -> Panel:
 	btn.offset_top = -56.0
 	btn.offset_bottom = -12.0
 	if unlocked:
-		btn.text = "选择"
+		btn.text = LanguageSystem.localize("ui.char_select.pick")
 		btn.pressed.connect(_on_start_pressed.bind(id))
 	else:
 		btn.text = MetaSystem.get_character_unlock_hint(id)
 		btn.disabled = true
+	_char_cards.append({"id": id, "btn": btn, "name_l": name_l, "desc_l": desc_l, "trait_l": trait_l})
 	panel.add_child(btn)
 	return panel
 
 
-## 特性字典 → 简短中文描述
+func _character_name(id: String, data: Dictionary) -> String:
+	return LanguageSystem.localize_config_name("character", id, String(data.get("name", id)))
+
+
+func _character_desc(id: String, data: Dictionary) -> String:
+	return LanguageSystem.localize_config_desc("character", id, String(data.get("description", "")))
+
+
+func _refresh_card_content() -> void:
+	for entry in _char_cards:
+		var id: String = String(entry.get("id", ""))
+		var btn: Button = entry.get("btn") as Button
+		var name_l: Label = entry.get("name_l") as Label
+		var desc_l: Label = entry.get("desc_l") as Label
+		var trait_l: Label = entry.get("trait_l") as Label
+		var data: Dictionary = ConfigLoader.get_character(id)
+		if name_l != null:
+			name_l.text = _character_name(id, data)
+		if desc_l != null:
+			desc_l.text = _character_desc(id, data)
+		if trait_l != null:
+			trait_l.text = _traits_text(data.get("traits", {}))
+		if btn == null:
+			continue
+		if MetaSystem.is_character_unlocked(id):
+			btn.text = LanguageSystem.localize("ui.char_select.pick")
+		else:
+			btn.text = MetaSystem.get_character_unlock_hint(id)
+
+
+## 特性字典 → 简短描述（i18n 键 ui.trait.*）
 func _traits_text(traits: Dictionary) -> String:
 	if traits.is_empty():
-		return "无特性"
-	var label_map: Dictionary = {
-		"damage_pct": "伤害",
-		"attack_speed_pct": "攻速",
-		"area_pct": "范围",
-		"move_speed_pct": "移速",
-		"exp_pct": "经验",
-		"crit_chance_pct": "暴击",
-		"damage_reduction_pct": "减伤",
-		"projectile_bonus": "弹道",
-		"max_health": "生命",
-		"regen_per_night": "休息回血",
-	}
+		return LanguageSystem.localize("ui.char_select.no_traits")
 	var parts: Array[String] = []
 	for k in traits.keys():
 		var v: float = float(traits[k])
 		var sign: String = "+" if v >= 0 else ""
 		var suffix: String = "%" if not (k == "projectile_bonus" or k == "max_health" or k == "regen_per_night") else ""
-		parts.append("%s %s%d%s" % [label_map.get(k, k), sign, int(v), suffix])
+		var trait_key: String = "ui.trait.%s" % String(k)
+		var label: String = LanguageSystem.localize(trait_key)
+		if label == trait_key:
+			label = String(k)
+		parts.append("%s %s%d%s" % [label, sign, int(v), suffix])
 	return " · ".join(parts)
 
 
 func _refresh_stardust() -> void:
-	_stardust_label.text = "星尘：%d" % MetaSystem.get_stardust()
+	_stardust_label.text = LanguageSystem.localizef("ui.char_select.stardust", [MetaSystem.get_stardust()])
 
 
 func _on_start_default_pressed() -> void:

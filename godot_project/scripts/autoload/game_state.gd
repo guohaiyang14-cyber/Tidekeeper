@@ -562,7 +562,12 @@ func get_death_analysis() -> Dictionary:
 	}
 
 
-## 推进挫败感计时器（免死窗口 / 复活无敌）。_process 自动调用；机检可手动驱动
+## 机检：推进挫败感计时器（公开包装，避免测试直接调私有 _advance_timers）
+func advance_timers_for_test(delta: float) -> void:
+	_advance_timers(delta)
+
+
+## 推进挫败感计时器（免死窗口 / 复活无敌）。_process 自动调用；机检走 advance_timers_for_test
 func _advance_timers(delta: float) -> void:
 	if _invuln_remaining > 0.0:
 		_invuln_remaining = maxf(0.0, _invuln_remaining - delta)

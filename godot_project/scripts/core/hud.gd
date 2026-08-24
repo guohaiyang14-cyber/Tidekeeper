@@ -127,17 +127,17 @@ func refresh() -> void:
 	var maxhp: int = GameState.player_max_health
 	_hp_bar.max_value = maxi(1, maxhp)
 	_hp_bar.value = clampi(hp, 0, maxhp)
-	_hp_label.text = "HP %d / %d" % [hp, maxhp]
+	_hp_label.text = LanguageSystem.localizef("ui.hud.hp", [hp, maxhp])
 
 	var lvl: int = GameState.player_level
 	var need: int = ExpTable.get_exp(lvl)
 	_exp_bar.max_value = maxi(1, need)
 	_exp_bar.value = clampi(GameState.player_exp, 0, need)
-	_exp_label.text = "Lv %d  经验 %d / %d" % [lvl, GameState.player_exp, need]
+	_exp_label.text = LanguageSystem.localizef("ui.hud.exp", [lvl, GameState.player_exp, need])
 
 	var night: int = GameState.current_night
 	var teach: String = LanguageSystem.localize("ui.teaching") if DifficultySystem.is_teaching_night(night) else ""
-	_night_label.text = "第 %d / 20 夜 %s" % [night, teach]
+	_night_label.text = LanguageSystem.localizef("ui.hud.night", [night, teach])
 
 	_diff_label.text = LanguageSystem.localize("ui.difficulty") + DifficultySystem.get_tier_label()
 
@@ -154,6 +154,7 @@ func _on_loadout_changed() -> void:
 
 func _on_language_changed(_lang: String) -> void:
 	refresh()
+	_on_loadout_changed()
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +175,9 @@ func _weapon_list() -> Array[String]:
 	if _weapon_mgr != null:
 		for w in _weapon_mgr.get_weapons():
 			var d: Dictionary = ConfigLoader.get_weapon(w.weapon_id)
-			out.append("%s Lv%d" % [String(d.get("name", w.weapon_id)), w.level])
+			var wname: String = LanguageSystem.localize_config_name(
+				"weapon", w.weapon_id, String(d.get("name", w.weapon_id)))
+			out.append("%s Lv%d" % [wname, w.level])
 	return out
 
 
@@ -184,7 +187,9 @@ func _passive_list() -> Array[String]:
 		var lv: int = GameState.get_passive_level(pid)
 		if lv > 0:
 			var d: Dictionary = ConfigLoader.get_passive(pid)
-			out.append("%s Lv%d" % [String(d.get("name", pid)), lv])
+			var pname: String = LanguageSystem.localize_config_name(
+				"passive", pid, String(d.get("name", pid)))
+			out.append("%s Lv%d" % [pname, lv])
 	return out
 
 
