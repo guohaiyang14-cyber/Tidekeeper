@@ -59,6 +59,8 @@ var _tint: Color = Color(0.85, 0.25, 0.25)
 var is_boss: bool = false
 ## 命名精英（巨钳王等；进化道具掉落用）
 var is_elite: bool = false
+## 预算耗尽后的密度 floor 补刷（维持压力，不掉经验/潮币/进化道具）
+var is_floor_refill: bool = false
 var _boss_brain: BossBrain
 var _boss_data: Dictionary = {}
 ## 灯塔位置（潮汐波安全区圆心；由 Spawner 注入）
@@ -115,6 +117,7 @@ func _on_acquire() -> void:
 	prototype_id = ""
 	is_boss = false
 	is_elite = false
+	is_floor_refill = false
 	_boss_brain = null
 	_boss_data = {}
 	affix_ids.clear()
@@ -173,6 +176,7 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	night = night_value
 	is_boss = false
 	is_elite = false
+	is_floor_refill = false
 	_boss_brain = null
 	_boss_data = {}
 	affix_ids.clear()
@@ -245,6 +249,7 @@ func configure_boss(boss_data: Dictionary) -> void:
 	update_group = int(boss_data.get("update_group", 1))
 	is_boss = true
 	is_elite = false
+	is_floor_refill = false
 	_boss_data = boss_data
 	night = GameState.current_night
 	var bexp: int = int(boss_data.get("base_exp", 50))
@@ -619,8 +624,9 @@ func _die(trigger_split: bool = true) -> void:
 	if trigger_split:
 		AffixSystem.on_death(self)
 	enemy_died.emit(self)
-	# W17 挣扎模式：每次击杀累计（仅挣扎窗口内生效，否则为廉价 no-op）
-	GameState.register_enemy_kill()
+	# W17 挣扎模式：每次击杀累计（floor 补刷怪不计入，避免无掉落压力怪刷复活进度）
+	if not is_floor_refill:
+		GameState.register_enemy_kill()
 	var pool: ObjectPool = get_parent() as ObjectPool
 	if pool != null:
 		pool.release(self)

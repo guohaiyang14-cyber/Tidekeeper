@@ -47,6 +47,8 @@ var _spawn_timer: float = 0.0
 var _remaining: int = 0
 var _elapsed: float = 0.0
 var _night_duration: float = NIGHT_DURATION_NORMAL
+## 本夜已刷出的 floor 补刷数（预算耗尽后的密度维护，受 max_floor_refill 封顶）
+var _floor_refills_used: int = 0
 ## start_night 缓存的 metadata.spawn（避免每帧/每次刷怪反复查表）
 var _spawn_meta: Dictionary = {}
 
@@ -97,6 +99,7 @@ func start_night(night: int) -> void:
 	_spawn_meta = ConfigLoader.get_enemy_spawn()
 	_elapsed = 0.0
 	_spawn_timer = 0.0
+	_floor_refills_used = 0
 	_remaining = _compute_count(night)
 	_eligible = _build_eligible(night)
 	_night_bonus_affixes = _pick_night_bonus_affixes(night)
@@ -141,20 +144,25 @@ func _process(delta: float) -> void:
 	if not _spawning or enemy_pool == null or target == null:
 		return
 	_elapsed += delta
-	if _remaining <= 0:
+	if _elapsed >= _night_duration:
 		_spawning = false
 		return
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0:
-		if _spawn_one():
-			_remaining -= 1
-			if _remaining <= 0:
-				_spawning = false
-			else:
-				_spawn_timer = _current_interval(_elapsed)
-		else:
-			# 达上限 / 池耗尽 / 无候选：不扣配额，短退避后重试（避免每帧空转）
+		# 维持最低在屏密度：清场后只要有空位且低于 floor，就持续补刷直到夜晚结束，
+		# 消除「预算耗尽即停刷」导致的长空窗（教学夜尤为明显：本夜总预算仅 10~19 只，
+		# 清光后剩余 28~40s 全空 → 玩家体感「一半时间没怪」）。
+		if not _can_spawn_more():
 			_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
+		elif _remaining > 0 or _needs_floor_refill():
+			if _spawn_one():
+				if _remaining > 0:
+					_remaining -= 1
+				_spawn_timer = _current_interval(_elapsed)
+			else:
+				_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
+		else:
+			_spawn_timer = _current_interval(_elapsed)
 
 
 # ============================================================================
@@ -164,7 +172,15 @@ func _process(delta: float) -> void:
 ## 从池中刷一只敌人并施加词缀。
 ## skip_night_affix：召唤物/分裂体不吃天灾全场词缀。
 ## allow_over_cap：分裂时父体尚未 release，允许短暂超过 max_enemies。
-func spawn_enemy(def: Dictionary, pos: Vector2, extra_affixes: Array[String] = [], skip_night_affix: bool = false, allow_over_cap: bool = false) -> EnemyBase:
+## floor_refill：预算耗尽后的密度 floor 补刷（无掉落，仅维持压力）。
+func spawn_enemy(
+	def: Dictionary,
+	pos: Vector2,
+	extra_affixes: Array[String] = [],
+	skip_night_affix: bool = false,
+	allow_over_cap: bool = false,
+	floor_refill: bool = false,
+) -> EnemyBase:
 	if target == null or enemy_pool == null:
 		return null
 	if enemy_pool.available_count() <= 0:
@@ -175,6 +191,7 @@ func spawn_enemy(def: Dictionary, pos: Vector2, extra_affixes: Array[String] = [
 	if e == null:
 		return null
 	e.configure(def, _night)
+	e.is_floor_refill = floor_refill
 	e.lighthouse_position = lighthouse_position
 	e.spawn_at(pos, target)
 	_connect_died(e)
@@ -203,7 +220,11 @@ func _spawn_one() -> bool:
 		var angle: float = RNG.randf_range(0.0, TAU)
 		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
 		pos = target.global_position + Vector2(cos(angle), sin(angle)) * dist
-	return spawn_enemy(def, pos) != null
+	var floor_refill: bool = _needs_floor_refill()
+	var spawned: EnemyBase = spawn_enemy(def, pos, [], false, false, floor_refill)
+	if spawned != null and floor_refill:
+		_floor_refills_used += 1
+	return spawned != null
 
 
 func _pincer_spawn_pos() -> Vector2:
@@ -324,7 +345,7 @@ func _on_enemy_died(enemy: EnemyBase) -> void:
 		return
 	var pos: Vector2 = enemy.global_position
 	var was_final_boss: bool = enemy.is_boss and GameState.current_night >= 20
-	if pickup_system != null:
+	if pickup_system != null and not enemy.is_floor_refill:
 		pickup_system.spawn_exp_gem(pos, EventSystem.scale_drop_amount(enemy.base_exp))
 		pickup_system.spawn_coin(pos, EventSystem.scale_coin_amount(enemy.coin_drop))
 	if enemy.is_boss:
@@ -351,6 +372,31 @@ func is_pincer_mode() -> bool:
 # ============================================================================
 # 数据 / 公式
 # ============================================================================
+
+## 本夜最低在屏敌人密度（保底 floor；清场后持续补刷直到夜晚结束，消除长空窗）
+## 数据驱动自 metadata.spawn.min_active；教学夜同样适用（教学=数值减半，不降密度 floor）
+func _min_active_for_night() -> int:
+	return int(_spawn_meta.get("min_active", 0))
+
+
+## 本夜 floor 补刷总量上限（预算耗尽后的无掉落补刷；0=不补刷）
+func _max_floor_refill_for_night() -> int:
+	return int(_spawn_meta.get("max_floor_refill", 0))
+
+
+## 预算耗尽且同屏低于 floor、且未达补刷上限时，允许继续刷怪
+func _needs_floor_refill() -> bool:
+	if _remaining > 0 or enemy_pool == null:
+		return false
+	if enemy_pool.active_count() >= _min_active_for_night():
+		return false
+	return _floor_refills_used < _max_floor_refill_for_night()
+
+
+## 本夜 floor 补刷已用配额（测试 / 调试）
+func get_floor_refills_used() -> int:
+	return _floor_refills_used
+
 
 ## 本夜总刷怪数（来自 metadata.spawn 的 base_count / per_night，封顶 max_enemies）
 ## W18 难度档位：再乘档位数量倍率（守夜人 0.8× / 灯塔 1.0×）

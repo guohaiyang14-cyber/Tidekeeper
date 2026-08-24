@@ -45,6 +45,7 @@ func _ready() -> void:
 	await _test_boss_night10()          # 2.3.2 天灾夜 Boss 占位
 	await _test_coin_loop()             # 3.2 潮币闭环（掉落→拾取）
 	await _test_shop()                  # 3.1 商店刷新 + 3.2 购买
+	await _test_teaching_night_density()  # 教学夜密度回归（修复「一半时间没怪」空窗）
 
 	print("------------------------------------------------------------")
 	print("W2-W3 机检通过=%d 失败=%d" % [_passed, _failed])
@@ -292,3 +293,70 @@ func _test_shop() -> void:
 	_assert(ok_p and GameState.passive_slots.has(p_item.get("id", "")), "购买被动入库: %s" % p_item.get("id", ""))
 	_assert(GameState.tidecoins == before_p - int(p_item.get("cost", 0)), "购买被动扣币正确")
 	shop_manager.close_shop()
+
+
+# ---------------------------------------------------------------------------
+# 教学夜密度回归（修复「一半时间没怪」长空窗）
+# 根因：旧 _process 在 _remaining（本夜预算）耗尽即 _spawning=false 停刷；
+#       教学夜预算仅 10~19 只，被快速清光后剩余 28~40s 全空窗。
+# 修复：预算耗尽后，只要 active < min_active 就持续补刷直到夜晚结束。
+# 本机检：把教学夜跑到预算耗尽 → 模拟清场 → 断言仍回补至 min_active。
+# ---------------------------------------------------------------------------
+func _test_teaching_night_density() -> void:
+	print("[教学夜密度] 预算耗尽后清场仍维持最低在屏密度 (min_active)")
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+	spawner.start_night(1)  # 教学夜（夜1）：数值减半但不降密度 floor
+	# 1) 跑到本夜预算耗尽（_remaining 降到 0）
+	var safe: int = 0
+	while spawner.get_remaining() > 0 and safe < 2400:
+		await get_tree().process_frame
+		safe += 1
+	_assert(spawner.get_remaining() == 0, "教学夜预算已耗尽 remaining=0 (帧=%d)" % safe)
+	# 2) 模拟玩家在夜晚进行中持续清场：直接 release 当前活跃敌人（保持 _spawning=true）
+	var actives: Array[Node] = enemy_pool.get_active()
+	for a in actives:
+		enemy_pool.release(a)
+	await get_tree().process_frame
+	# 3) 清场后应在数秒内回补到 min_active（修复前 _remaining<=0 即停刷，永远回补不上）
+	var spawn_meta: Dictionary = ConfigLoader.get_enemy_spawn()
+	var min_active: int = int(spawn_meta.get("min_active", 0))
+	var max_floor_refill: int = int(spawn_meta.get("max_floor_refill", 0))
+	_assert(min_active > 0, "config metadata.spawn.min_active 应 > 0")
+	_assert(max_floor_refill >= min_active, "config metadata.spawn.max_floor_refill 应 ≥ min_active")
+	var refilled: bool = false
+	var reached: int = 0
+	for i in 600:  # 最多 10s
+		await get_tree().process_frame
+		reached = enemy_pool.active_count()
+		if reached >= min_active:
+			refilled = true
+			break
+	_assert(refilled, "清场后回补至 min_active（活跃数=%d ≥ %d）" % [reached, min_active])
+	# 4) 经济解耦验证：回补的敌是 is_floor_refill（预算耗尽后的密度补刷），
+	#    其死亡不应掉落经验珠/潮币（enemy_spawner._on_enemy_died 的 not enemy.is_floor_refill 守卫）。
+	#    这是「维持 min_active 密度修复」与「经济回到成长曲线」解耦的关键机制。
+	var floor_enemy: EnemyBase = null
+	for en in enemy_pool.get_active():
+		if en is EnemyBase and en.is_floor_refill:
+			floor_enemy = en
+			break
+	_assert(floor_enemy != null, "回补的敌人为 is_floor_refill（预算耗尽补刷，无掉落）")
+	if floor_enemy != null:
+		pickup_system.clear_all()
+		await get_tree().process_frame
+		var g0: int = pickup_system.active_gem_count()
+		var c0: int = pickup_system.active_coin_count()
+		floor_enemy.take_damage(99999)
+		await _run_frames(30)
+		var g1: int = pickup_system.active_gem_count()
+		var c1: int = pickup_system.active_coin_count()
+		_assert(g1 == g0 and c1 == c0,
+			"floor_refill 敌死亡不掉经验珠/潮币 (gem %d→%d, coin %d→%d)" % [g0, g1, c0, c1])
+		_assert(spawner.get_floor_refills_used() > 0,
+			"floor 补刷计数 > 0 (used=%d)" % spawner.get_floor_refills_used())
+		_assert(spawner.get_floor_refills_used() <= max_floor_refill,
+			"floor 补刷未超 max_floor_refill (used=%d cap=%d)" % [
+				spawner.get_floor_refills_used(), max_floor_refill])
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
