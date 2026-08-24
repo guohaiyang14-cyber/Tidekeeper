@@ -58,6 +58,8 @@ func _ready() -> void:
 	spatial_hash_holder.add_to_group("spatial_hash")
 	# 武器管理器接线（玩家位置 / 哈希 / 弹道池）
 	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
+	# HUD 接线（注入武器管理器引用，启动每帧刷新）
+	hud.init(weapon_manager)
 	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）；灯塔光晕圆心显式注入（执政官潮汐波）
 	enemy_spawner.setup(enemy_pool, player, pickup_system)
 	enemy_spawner.lighthouse_position = player.global_position
@@ -94,6 +96,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_debug_label()
+	hud.refresh()
 
 
 ## 刷新调试 HUD（玩家血量/等级/经验等）。游戏结束/通关时树被暂停、_process 停跑，
@@ -190,6 +193,7 @@ func _on_game_over(reason: String) -> void:
 	result_ui.show_game_over(reason, day_night.get_current_night(), GameState.player_level, GameState.tidecoins, earned)
 	get_tree().paused = true
 	_update_debug_label()  # 树已暂停、_process 停跑，强制刷新 HUD 以显示真实 HP（致死时 player_health 已置 0）
+	hud.refresh()
 
 
 func _on_game_win() -> void:
@@ -207,6 +211,7 @@ func _on_game_win() -> void:
 	result_ui.show_victory(day_night.get_current_night(), GameState.player_level, GameState.tidecoins, earned)
 	get_tree().paused = true
 	_update_debug_label()
+	hud.refresh()
 
 
 ## 玩家在商店点「继续下一夜」→ 关店并进下一夜（与 Q 键等效）

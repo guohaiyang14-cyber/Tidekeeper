@@ -148,15 +148,16 @@ func _test_self_destruct() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 2.2.3 潮汐刷怪（稀疏→密集→加压）/ 2.2.4 同屏上限 100
+# 2.2.3 潮汐刷怪（稀疏→密集→加压）/ 2.2.4 同屏上限（difficulty.json max_enemies）
 # ---------------------------------------------------------------------------
 func _test_spawn_loop_and_cap() -> void:
 	print("[2.2.3/2.2.4 潮汐刷怪 + 同屏上限]")
 	spawner.start_night(1)
 	await _run_frames(180)  # 3s（稀疏段）
 	var active: int = enemy_pool.active_count()
-	var within_cap: bool = active <= EnemySpawner.MAX_ENEMIES
-	_assert(active >= 1 and within_cap, "第1夜刷怪活跃数=%d（≤%d）" % [active, EnemySpawner.MAX_ENEMIES])
+	var cap: int = spawner.max_enemies
+	var within_cap: bool = active <= cap
+	_assert(active >= 1 and within_cap, "第1夜刷怪活跃数=%d（≤%d）" % [active, cap])
 	spawner.clear_all()
 
 

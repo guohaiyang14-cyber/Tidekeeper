@@ -23,7 +23,7 @@ position = Vector2(0, 0)
 [node name="EnemyPool" type="Node" parent="."]
 script = ExtResource("4_epool")
 scene = ExtResource("7_enemy")
-pool_size = 250
+pool_size = 350
 
 [node name="PickupPool" type="Node" parent="."]
 script = ExtResource("5_ppool")

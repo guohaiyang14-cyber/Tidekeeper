@@ -11,10 +11,15 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const LIGHTHOUSE_SCENE := "res://scenes/lighthouse_tree.tscn"
 
 var _stardust_label: Label
+var _difficulty_label: Label
+var _tier_buttons: Dictionary = {}  # tier_id -> Button
+var _tier_group: ButtonGroup
 
 
 func _ready() -> void:
 	_build()
+	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
+		LanguageSystem.language_changed.connect(_on_language_changed)
 	print("[CharacterSelect] 就绪")
 
 
@@ -45,13 +50,15 @@ func _build() -> void:
 	_stardust_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
 	add_child(_stardust_label)
 
+	_build_difficulty_row()
+
 	var ids: Array[String] = ConfigLoader.get_all_character_ids()
 	var card_w := 360.0
 	var card_h := 300.0
 	var gap := 30.0
 	var total_w := card_w * float(ids.size()) + gap * float(maxi(ids.size() - 1, 0))
 	var start_x := (VIEW_W - total_w) / 2.0
-	var card_y := 150.0
+	var card_y := 190.0
 	for i in ids.size():
 		var panel := _make_card(String(ids[i]))
 		panel.position = Vector2(start_x + float(i) * (card_w + gap), card_y)
@@ -76,6 +83,55 @@ func _build() -> void:
 	add_child(start_btn)
 
 	_refresh_stardust()
+	_refresh_tier_buttons()
+
+
+func _build_difficulty_row() -> void:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	row.offset_top = 118.0
+	row.offset_bottom = 158.0
+	row.add_theme_constant_override("separation", 12)
+	add_child(row)
+
+	_tier_group = ButtonGroup.new()
+
+	_difficulty_label = Label.new()
+	_difficulty_label.text = LanguageSystem.localize("ui.difficulty_select")
+	_difficulty_label.add_theme_font_size_override("font_size", 18)
+	row.add_child(_difficulty_label)
+
+	var tiers: Dictionary = ConfigLoader.get_difficulty_config().get("tiers", {})
+	for tier_id in tiers.keys():
+		var btn := Button.new()
+		btn.text = LanguageSystem.localize("difficulty.tier.%s" % tier_id)
+		btn.custom_minimum_size = Vector2(160.0, 36.0)
+		btn.toggle_mode = true
+		btn.button_group = _tier_group
+		btn.button_pressed = tier_id == DifficultySystem.get_tier()
+		btn.pressed.connect(_on_tier_pressed.bind(String(tier_id)))
+		row.add_child(btn)
+		_tier_buttons[String(tier_id)] = btn
+
+
+func _refresh_tier_buttons() -> void:
+	var active: String = DifficultySystem.get_tier()
+	for tier_id in _tier_buttons.keys():
+		var btn: Button = _tier_buttons[tier_id] as Button
+		btn.button_pressed = tier_id == active
+		btn.text = LanguageSystem.localize("difficulty.tier.%s" % tier_id)
+
+
+func _on_tier_pressed(tier_id: String) -> void:
+	DifficultySystem.set_tier(tier_id, true)
+	_refresh_tier_buttons()
+
+
+func _on_language_changed(_lang: String) -> void:
+	if _difficulty_label != null:
+		_difficulty_label.text = LanguageSystem.localize("ui.difficulty_select")
+	_refresh_tier_buttons()
 
 
 func _make_card(id: String) -> Panel:

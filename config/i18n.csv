@@ -1,0 +1,12 @@
+﻿key,zh,en
+ui.difficulty,难度：,Difficulty: 
+ui.teaching,（教学夜）,(Tutorial)
+ui.boss_warn,⚠ 本夜有 Boss 出没,⚠ Boss appears this night
+ui.game_over,游戏结束,Game Over
+ui.victory,通关,Victory
+ui.restart,再来一局 (Enter),Play Again (Enter)
+ui.meta,角色 / 灯塔,Character / Lighthouse
+ui.hint,按 Enter 或点击按钮重开 · 可进入角色选择 / 灯塔升级,Press Enter or click to restart · Character / Lighthouse upgrades
+difficulty.tier.lighthouse,灯塔守望,Lighthouse Watch
+difficulty.tier.watcher,守夜人,Night Watcher
+ui.difficulty_select,难度档位,Difficulty

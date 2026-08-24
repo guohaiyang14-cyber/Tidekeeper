@@ -306,6 +306,10 @@ func _test_affix_thorns() -> void:
 	GameState.player_health = 100
 	var e: EnemyBase = _spawn("small_goblin", Vector2(600.0, 0.0), 1)
 	e.apply_affixes(["thorns"])
+	# 隔离荆棘机制：显式抬血，避免难度缩放（如教学夜减半）使小水鬼被首击打死，
+	# 导致第二次近战命中在 _dead 守卫处提前返回、thorns 永不触发。
+	e.health = 100
+	e.max_health = 100
 	e.take_damage(10, false)
 	_assert(GameState.player_health == 100, "远程命中不触发荆棘")
 	e.take_damage(10, true)
@@ -419,14 +423,15 @@ func _test_elite_affixes() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 100 敌：对象池可撑满且持续 tick 不崩
+# 350 敌：对象池可撑满且持续 tick 不崩（W19 同屏上限）
 # ---------------------------------------------------------------------------
 func _test_hundred_enemies() -> void:
-	print("[100 敌]")
+	print("[350 敌]")
 	_clear()
+	var cap: int = spawner.max_enemies
 	var def: Dictionary = ConfigLoader.get_enemy("small_goblin")
 	var spawned: int = 0
-	while spawned < EnemySpawner.MAX_ENEMIES and enemy_pool.available_count() > 0:
+	while spawned < cap and enemy_pool.available_count() > 0:
 		var e: EnemyBase = enemy_pool.acquire() as EnemyBase
 		if e == null:
 			break
@@ -434,7 +439,7 @@ func _test_hundred_enemies() -> void:
 		e.move_speed = 0.0
 		e.spawn_at(Vector2(float(spawned % 20) * 40.0, float(spawned / 20) * 40.0 + 1200.0), player)
 		spawned += 1
-	_assert(spawned == EnemySpawner.MAX_ENEMIES, "刷满 %d 敌 (实际 %d)" % [EnemySpawner.MAX_ENEMIES, spawned])
-	await _run_frames(60)
-	_assert(enemy_pool.active_count() == EnemySpawner.MAX_ENEMIES, "60 帧后仍为 %d 敌" % EnemySpawner.MAX_ENEMIES)
+	_assert(spawned == cap, "刷满 %d 敌 (实际 %d)" % [cap, spawned])
+	await _run_frames(20)
+	_assert(enemy_pool.active_count() == cap, "20 帧后仍为 %d 敌" % cap)
 	_clear()

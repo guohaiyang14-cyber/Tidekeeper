@@ -25,12 +25,15 @@ var _meta_btn: Button
 var _hint: Label
 ## W17 死因可视化：最后一击 + 伤害来源 Top3
 var _death_cause: Label
+var _showing_victory: bool = false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_frame()
+	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
+		LanguageSystem.language_changed.connect(_on_language_changed)
 	visible = false
 	print("[ResultUI] 就绪")
 
@@ -89,7 +92,7 @@ func _build_frame() -> void:
 	add_child(_death_cause)
 
 	_restart_btn = Button.new()
-	_restart_btn.text = "再来一局 (Enter)"
+	_restart_btn.text = LanguageSystem.localize("ui.restart")
 	_restart_btn.size = Vector2(280.0, 56.0)
 	_restart_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 502.0)
 	_restart_btn.add_theme_font_size_override("font_size", 22)
@@ -97,7 +100,7 @@ func _build_frame() -> void:
 	add_child(_restart_btn)
 
 	_meta_btn = Button.new()
-	_meta_btn.text = "角色 / 灯塔"
+	_meta_btn.text = LanguageSystem.localize("ui.meta")
 	_meta_btn.size = Vector2(280.0, 48.0)
 	_meta_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 564.0)
 	_meta_btn.add_theme_font_size_override("font_size", 20)
@@ -105,7 +108,7 @@ func _build_frame() -> void:
 	add_child(_meta_btn)
 
 	_hint = Label.new()
-	_hint.text = "按 Enter 或点击按钮重开 · 可进入角色选择 / 灯塔升级（W15-W16）"
+	_hint.text = LanguageSystem.localize("ui.hint")
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_hint.offset_top = -50.0
@@ -113,6 +116,22 @@ func _build_frame() -> void:
 	_hint.add_theme_font_size_override("font_size", 16)
 	_hint.add_theme_color_override("font_color", Color(0.7, 0.78, 0.88))
 	add_child(_hint)
+	_refresh_localized_static()
+
+
+func _refresh_localized_static() -> void:
+	if _restart_btn == null:
+		return
+	_restart_btn.text = LanguageSystem.localize("ui.restart")
+	_meta_btn.text = LanguageSystem.localize("ui.meta")
+	_hint.text = LanguageSystem.localize("ui.hint")
+
+
+func _on_language_changed(_lang: String) -> void:
+	_refresh_localized_static()
+	if not visible or _title == null:
+		return
+	_title.text = LanguageSystem.localize("ui.victory" if _showing_victory else "ui.game_over")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -125,11 +144,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## 显示游戏结束（§挫败感控制：死亡原因可视化）
 func show_game_over(reason: String, night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
-	_title.text = "游戏结束"
+	_showing_victory = false
+	_title.text = LanguageSystem.localize("ui.game_over")
 	_title.remove_theme_color_override("font_color")
 	_title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
 	_reason.text = _reason_label(reason)
-	_stats.text = "存活至第 %d 夜 · 等级 %d · 潮币 %d" % [night, level, tidecoins]
+	_stats.text = "存活至第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s" % [night, level, tidecoins, DifficultySystem.get_tier_label()]
 	_stardust.text = "本局星尘 +%d（累计 %d）" % [stardust_earned, MetaSystem.get_stardust()]
 	_death_cause.text = _death_cause_text()
 	_show()
@@ -137,11 +157,12 @@ func show_game_over(reason: String, night: int, level: int, tidecoins: int, star
 
 ## 显示通关
 func show_victory(night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
-	_title.text = "通关"
+	_showing_victory = true
+	_title.text = LanguageSystem.localize("ui.victory")
 	_title.remove_theme_color_override("font_color")
 	_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.65))
 	_reason.text = "击败吞噬之星，第 20 夜结束"
-	_stats.text = "通关 · 第 %d 夜 · 等级 %d · 潮币 %d" % [night, level, tidecoins]
+	_stats.text = "通关 · 第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s" % [night, level, tidecoins, DifficultySystem.get_tier_label()]
 	_stardust.text = "本局星尘 +%d（累计 %d）" % [stardust_earned, MetaSystem.get_stardust()]
 	_death_cause.text = ""
 	_show()

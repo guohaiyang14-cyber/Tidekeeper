@@ -190,11 +190,15 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	var hp_per_5: float = float(diff.get("health_per_5nights", 0.15))
 	var dmg_per_night: float = float(diff.get("damage_per_night", 0.04))
 
+	# W18 难度档位 + 教学宽容（守夜人 0.7× / 灯塔 1.0×；教学夜 1~4 敌人数值减半）
+	var tier_hp: float = DifficultySystem.enemy_hp_multiplier(night_value)
+	var tier_dmg: float = DifficultySystem.enemy_damage_multiplier(night_value)
+
 	var hp_scale: float = 1.0
 	var dmg_scale: float = 1.0
 	if scale:
-		hp_scale = region_coeff * (1.0 + hp_per_night * float(night)) * (1.0 + hp_per_5 * floor(float(night) / 5.0))
-		dmg_scale = 1.0 + dmg_per_night * float(night)
+		hp_scale = region_coeff * tier_hp * (1.0 + hp_per_night * float(night)) * (1.0 + hp_per_5 * floor(float(night) / 5.0))
+		dmg_scale = tier_dmg * (1.0 + dmg_per_night * float(night))
 
 	max_health = int(roundi(float(data.get("base_health", 30)) * hp_scale))
 	contact_damage = int(roundi(float(data.get("base_contact_damage", 8)) * dmg_scale))

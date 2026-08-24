@@ -25,6 +25,7 @@
 [ext_resource type="Script" path="res://scripts/core/day_phase_ui.gd" id="23_dayphase"]
 [ext_resource type="Script" path="res://scripts/core/result_ui.gd" id="24_resultui"]
 [ext_resource type="Script" path="res://scripts/ui/evolution_effect_ui.gd" id="25_evo"]
+[ext_resource type="Script" path="res://scripts/core/hud.gd" id="26_hud"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -41,7 +42,7 @@ script = ExtResource("16_spawner")
 [node name="EnemyPool" type="Node" parent="."]
 script = ExtResource("4_enemy_pool")
 scene = ExtResource("13_enemy")
-pool_size = 250
+pool_size = 350
 
 [node name="ProjectilePool" type="Node" parent="."]
 script = ExtResource("5_proj_pool")
@@ -92,13 +93,14 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+script = ExtResource("26_hud")
 
 [node name="DebugLabel" type="Label" parent="UI/HUD"]
 layout_mode = 0
 offset_left = 10.0
-offset_top = 10.0
+offset_top = 88.0
 offset_right = 800.0
-offset_bottom = 40.0
+offset_bottom = 118.0
 text = "Tidekeeper W1 — 启动中..."
 horizontal_alignment = 0
 vertical_alignment = 0

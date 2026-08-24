@@ -10,7 +10,7 @@ config_version=5
 
 config/name="Tidekeeper"
 config/description="灯塔守护主题肉鸽生存游戏 — MVP 20 周开发版"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/character_select.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 boot_splash/show_image=false
@@ -30,6 +30,8 @@ RestSystem="*res://scripts/autoload/rest_system.gd"
 EventSystem="*res://scripts/autoload/event_system.gd"
 SaveSystem="*res://scripts/autoload/save_system.gd"
 MetaSystem="*res://scripts/autoload/meta_system.gd"
+DifficultySystem="*res://scripts/autoload/difficulty_system.gd"
+LanguageSystem="*res://scripts/autoload/language_system.gd"
 
 [display]
 

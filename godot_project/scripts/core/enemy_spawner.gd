@@ -10,8 +10,8 @@
 class_name EnemySpawner
 extends Node2D
 
-## 同屏敌人上限（原型验收 2.2.4：峰值 100）
-const MAX_ENEMIES: int = 100
+## 同屏敌人上限（W19 提升至 350；数据驱动自 difficulty.json 的 max_enemies）
+var max_enemies: int = 100
 
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
 const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
@@ -82,6 +82,7 @@ func setup(pool: ObjectPool, player: Node2D, pickups: PickupSystem) -> void:
 	enemy_pool = pool
 	target = player
 	pickup_system = pickups
+	max_enemies = int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
 	if player != null:
 		lighthouse_position = player.global_position
 
@@ -108,7 +109,7 @@ func start_night(night: int) -> void:
 	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s)" % [
 		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
 	])
-	# 精英 / Boss（开局立即登场；同样受 MAX_ENEMIES 约束）
+	# 精英 / Boss（开局立即登场；同样受 max_enemies 约束）
 	if night == 5:
 		_spawn_elite(night)
 	elif night in [10, 15, 20]:
@@ -162,13 +163,13 @@ func _process(delta: float) -> void:
 
 ## 从池中刷一只敌人并施加词缀。
 ## skip_night_affix：召唤物/分裂体不吃天灾全场词缀。
-## allow_over_cap：分裂时父体尚未 release，允许短暂超过 MAX_ENEMIES。
+## allow_over_cap：分裂时父体尚未 release，允许短暂超过 max_enemies。
 func spawn_enemy(def: Dictionary, pos: Vector2, extra_affixes: Array[String] = [], skip_night_affix: bool = false, allow_over_cap: bool = false) -> EnemyBase:
 	if target == null or enemy_pool == null:
 		return null
 	if enemy_pool.available_count() <= 0:
 		return null
-	if not allow_over_cap and enemy_pool.active_count() >= MAX_ENEMIES:
+	if not allow_over_cap and enemy_pool.active_count() >= max_enemies:
 		return null
 	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
 	if e == null:
@@ -228,7 +229,7 @@ func _is_pincer_night(night: int) -> bool:
 func _can_spawn_more() -> bool:
 	if enemy_pool == null:
 		return false
-	if enemy_pool.active_count() >= MAX_ENEMIES:
+	if enemy_pool.active_count() >= max_enemies:
 		return false
 	return enemy_pool.available_count() > 0
 
@@ -268,7 +269,7 @@ func _spawn_elite(night: int) -> void:
 	print("[EnemySpawner] 精英登场：%s 词缀=%s" % [edata.get("name", "精英"), ",".join(e.affix_ids)])
 
 
-## 鱼群回游事件：本夜开局额外刷一波精英（§5.6；受 MAX_ENEMIES 约束）
+## 鱼群回游事件：本夜开局额外刷一波精英（§5.6；受 max_enemies 约束）
 func _spawn_elite_wave() -> void:
 	var rules: Dictionary = ConfigLoader.get_affix_rules()
 	var amin: int = int(rules.get("elite_affix_min", 2))
@@ -351,12 +352,14 @@ func is_pincer_mode() -> bool:
 # 数据 / 公式
 # ============================================================================
 
-## 本夜总刷怪数（来自 metadata.spawn 的 base_count / per_night，封顶 MAX_ENEMIES）
+## 本夜总刷怪数（来自 metadata.spawn 的 base_count / per_night，封顶 max_enemies）
+## W18 难度档位：再乘档位数量倍率（守夜人 0.8× / 灯塔 1.0×）
 func _compute_count(night: int) -> int:
 	var base_count: int = int(_spawn_meta.get("base_count", 10))
 	var per_night: int = int(_spawn_meta.get("per_night", 3))
 	var count: int = base_count + per_night * (night - 1)
-	return mini(count, MAX_ENEMIES)
+	count = int(roundi(float(count) * DifficultySystem.enemy_count_multiplier()))
+	return mini(count, max_enemies)
 
 
 ## 当前夜密度曲线间隔（秒）：前 sparse 秒稀疏 → 0.6×时长密集 → 末段加压

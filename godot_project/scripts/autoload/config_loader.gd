@@ -31,6 +31,8 @@ var meta_cfg: Dictionary = {}
 var _lighthouse_nodes: Dictionary = {}
 # W17 挫败感控制配置
 var frustration: Dictionary = {}
+# W18 难度系统配置（档位 / 教学宽容）
+var difficulty: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -70,6 +72,8 @@ func _load_all() -> void:
 	_flatten_lighthouse_nodes()
 	# W17 挫败感控制配置（首夜保护 / 挣扎模式 / 失败保底 / 死因可视化）
 	frustration = _load_json("frustration.json", true)
+	# W18 难度系统配置（档位 守夜人0.7× / 灯塔1.0× + 教学宽容 1~4 夜减半）
+	difficulty = _load_json("difficulty.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -288,6 +292,10 @@ func get_affix_rules() -> Dictionary:
 ## 获取难度公式元数据（§8.2）
 func get_difficulty_formula() -> Dictionary:
 	return enemies.get("metadata", {}).get("difficulty_formula", {})
+
+## 获取 W18 难度系统配置（档位 / 教学宽容）
+func get_difficulty_config() -> Dictionary:
+	return difficulty
 
 ## 获取经验珠拾取参数（W2）
 func get_exp_gem_config() -> Dictionary:
