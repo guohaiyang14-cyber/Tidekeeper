@@ -35,6 +35,8 @@ Tidekeeper/
 │   ├── generate_exp_table.py    # 经验表生成器
 │   ├── refine_dps_simulation.py # 精炼 DPS 倍率验证（≤3.5×）
 │   └── refine_risk_analysis.py  # 精炼路径秒杀风险检查
+├── debug.bat                # Windows 双击 Debug 启动（路径见 debug.local.bat.example）
+├── debug.local.bat.example  # 本机 Godot 路径模板（复制为 debug.local.bat）
 ├── godot_project/           # Godot 4.7.1 工程（W1 创建）
 │   ├── project.godot            # 工程配置（autoload + 输入映射 + 渲染）
 │   ├── icon.svg                 # 工程图标占位
@@ -434,8 +436,9 @@ python tools/refine_risk_analysis.py
    python tools/refine_risk_analysis.py
    ```
 3. **安装 Godot 4.7.1**：确认技术选型（见本 README 第一章）
-4. **认领任务**：按本 README 第二章 W1 周任务开始
-5. **当天写代码**：不要花两天「读代码库」——直接开始
+4. **运行游戏（Debug）**：Windows 双击 `debug.bat`；若 Godot 不在默认路径，复制 `debug.local.bat.example` 为 `debug.local.bat` 并修改
+5. **认领任务**：按本 README 第二章 W1 周任务开始
+6. **当天写代码**：不要花两天「读代码库」——直接开始
 
 **W1 当天入口**：
 - 开发者：`git init` → Godot 4.7.1 工程创建 → 对象池基类 → 空间哈希 → RNG 单例 → 昼夜状态机

@@ -1,0 +1,8 @@
+@echo off
+rem 复制本文件为 debug.local.bat（不入库），用于覆盖本机 Godot 路径。
+rem 使用带控制台的可执行文件，便于查看 print / 报错输出。
+
+set "GODOT_BIN=E:\Godot\Godot_v4.7.1-stable_win64_console.exe"
+
+rem 设为 1 时，游戏正常退出后也会暂停控制台（便于查看输出）
+rem set "PAUSE_ON_EXIT=1"

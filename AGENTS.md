@@ -39,6 +39,7 @@
 ## 环境配置
 
 - **Godot 引擎**（本机示例，可按安装路径替换）: `E:\Godot\Godot_v4.7.1-stable_win64_console.exe`
+- **Debug 启动**（Windows）：双击根目录 `debug.bat`；本机路径不同则复制 `debug.local.bat.example` → `debug.local.bat` 并修改 `GODOT_BIN`
 
 ## 单测
 
