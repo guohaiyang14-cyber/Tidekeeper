@@ -6,6 +6,7 @@
     "slot_limit": 4,
     "starting_weapon": "harpoon",
     "damage_per_level": 0.15,
+    "area_effect_lifetime": 0.28,
     "shop": {
       "cost": 30,
       "discount": 0.2,
@@ -54,7 +55,8 @@
       "notes": "范围灼烧",
       "behavior": {
         "base_radius": 80.0,
-        "radius_per_level": 0.15
+        "radius_per_level": 0.15,
+        "effect_color": "ff7a1a"
       },
       "evolution": {
         "name": "永昼圣火",
@@ -80,7 +82,8 @@
       "behavior": {
         "base_radius": 70.0,
         "l1_radius_mult": 1.6,
-        "radius_per_level": 0.15
+        "radius_per_level": 0.15,
+        "effect_color": "cfd8e0"
       },
       "evolution": {
         "name": "风暴之锚",
@@ -131,7 +134,8 @@
       "notes": "约 3 秒一击，满级改落雷节奏",
       "behavior": {
         "base_radius": 90.0,
-        "radius_per_level": 0.12
+        "radius_per_level": 0.12,
+        "effect_color": "5ec8ff"
       },
       "evolution": {
         "name": "湮灭雷暴",

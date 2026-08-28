@@ -22,12 +22,14 @@ var _weapons: Array[WeaponBase] = []
 var _player: Node2D
 var _hash: SpatialHash
 var _projectile_pool: ProjectilePool
+var _particle_pool: ObjectPool = null
 
 
-func setup(player: Node2D, hash: SpatialHash, projectile_pool: ProjectilePool) -> void:
+func setup(player: Node2D, hash: SpatialHash, projectile_pool: ProjectilePool, particle_pool: ObjectPool = null) -> void:
 	_player = player
 	_hash = hash
 	_projectile_pool = projectile_pool
+	_particle_pool = particle_pool
 
 
 func _process(delta: float) -> void:
@@ -46,6 +48,21 @@ func get_projectile_pool() -> ProjectilePool:
 
 func get_hash() -> SpatialHash:
 	return _hash
+
+
+## 在 pos 处播放一次打击特效（半径 radius、颜色 color），从 ParticlePool 取节点并自动归还。
+## 纯视觉：不参与伤害/索敌。范围/近战类武器（圣火/雷暴云/锚锤）无可见弹道，靠此让玩家看到在开火。
+func spawn_area_effect(pos: Vector2, radius: float, color: Color) -> void:
+	if _particle_pool == null:
+		push_warning("[WeaponManager] ParticlePool 未注入，跳过打击特效")
+		return
+	var fx: Node = _particle_pool.acquire()
+	if fx == null:
+		push_warning("[WeaponManager] ParticlePool 耗尽，跳过打击特效")
+		return
+	fx.global_position = pos
+	if fx.has_method("play"):
+		fx.play(radius, color, ConfigLoader.get_area_effect_lifetime(), _particle_pool)
 
 
 ## 同步 GameState.weapon_slots → 武器实例（升级获得武器后由 World 调用）

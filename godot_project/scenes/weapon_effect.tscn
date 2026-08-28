@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/weapon_effect.gd" id="1_fx"]
+
+[node name="WeaponEffect" type="Node2D"]
+script = ExtResource("1_fx")
+
+[node name="Disc" type="Polygon2D" parent="."]
+
+[node name="Ring" type="Line2D" parent="."]
+width = 3.0

@@ -95,6 +95,26 @@ func get_behavior_int(key: String, default_value: int) -> int:
 	return default_value
 
 
+## 读取 behavior 子表颜色（十六进制串如 "ff7a1a" 或 "#ff7a1a"），解析失败回退 default_hex
+func get_behavior_color(key: String, default_hex: String) -> Color:
+	var beh: Variant = weapon_data.get("behavior", {})
+	var hex: String = default_hex
+	if beh is Dictionary:
+		hex = str((beh as Dictionary).get(key, default_hex))
+	return _parse_hex_color(hex, default_hex)
+
+
+func _parse_hex_color(hex: String, default_hex: String) -> Color:
+	var normalized: String = hex.strip_edges()
+	if not normalized.begins_with("#"):
+		normalized = "#" + normalized
+	var fallback_raw: String = default_hex.strip_edges()
+	if not fallback_raw.begins_with("#"):
+		fallback_raw = "#" + fallback_raw
+	var fallback: Color = Color.from_string(fallback_raw, Color.WHITE)
+	return Color.from_string(normalized, fallback)
+
+
 ## 从 SpatialHash 取距 origin 最近的至多 count 个敌人（O(n·k)，k=count，避免全量 sort）
 func query_nearest_enemies(hash: SpatialHash, origin: Vector2, radius: float, count: int) -> Array[EnemyBase]:
 	var result: Array[EnemyBase] = []

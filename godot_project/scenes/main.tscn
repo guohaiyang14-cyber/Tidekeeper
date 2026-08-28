@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -26,6 +26,7 @@
 [ext_resource type="Script" path="res://scripts/core/result_ui.gd" id="24_resultui"]
 [ext_resource type="Script" path="res://scripts/ui/evolution_effect_ui.gd" id="25_evo"]
 [ext_resource type="Script" path="res://scripts/core/hud.gd" id="26_hud"]
+[ext_resource type="PackedScene" path="res://scenes/weapon_effect.tscn" id="27_fx"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -57,8 +58,8 @@ groups = ["enemy_projectile_pool"]
 
 [node name="ParticlePool" type="Node" parent="."]
 script = ExtResource("6_part_pool")
-scene = ExtResource("9_stub")
-pool_size = 32
+scene = ExtResource("27_fx")
+pool_size = 200
 
 [node name="PickupPool" type="Node" parent="."]
 script = ExtResource("7_pickup_pool")

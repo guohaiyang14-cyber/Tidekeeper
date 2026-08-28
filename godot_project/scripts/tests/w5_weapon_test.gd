@@ -18,11 +18,13 @@ extends Node2D
 const _WEAPON_MANAGER = preload("res://scripts/combat/weapon_manager.gd")
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 const _SPATIAL_HASH_HOLDER = preload("res://scripts/core/spatial_hash_holder.gd")
+const _OBJECT_POOL = preload("res://scripts/core/object_pool.gd")
 
 @onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
 @onready var player: Node2D = $Player
 @onready var weapon_manager: WeaponManager = $WeaponManager
 @onready var projectile_pool: ProjectilePool = $ProjectilePool
+@onready var particle_pool: ObjectPool = $ParticlePool
 @onready var enemy_pool: EnemyPool = $EnemyPool
 
 var _pass_count: int = 0
@@ -37,7 +39,7 @@ func _ready() -> void:
 		return
 	# 注册空间哈希 group（敌人/投射物通过 group 查找）
 	spatial_hash_holder.add_to_group("spatial_hash")
-	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
+	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool, particle_pool)
 	await _run_all()
 	_finish()
 
@@ -56,6 +58,7 @@ func _assert(cond: bool, label: String) -> void:
 func _reset_arena() -> void:
 	enemy_pool.release_all()
 	projectile_pool.release_all()
+	particle_pool.release_all()
 	spatial_hash_holder.get_hash().clear()
 	weapon_manager.sync_from_game_state()
 
@@ -91,6 +94,10 @@ func _run_all() -> void:
 	await _test_w6_albatross()
 	await _test_all_behavior_types_creatable()
 	await _test_projectile_bonus_hammer_chain()
+	await _test_weapon_effect_lifecycle()
+	await _test_behavior_color_from_config()
+	await _test_area_weapons_visual_feedback()
+	await _test_multi_weapon_contribute()
 
 
 ## 在玩家附近刷一只敌人，等待武器造成掉血
@@ -346,6 +353,87 @@ func _test_projectile_bonus_hammer_chain() -> void:
 	MetaSystem.end_run()
 	MetaSystem.set_active_character("watcher")
 	MetaSystem.reset_progress()
+
+
+# ---- 打击特效：播放完整生命周期后归还 ParticlePool --------------------
+func _test_weapon_effect_lifecycle() -> void:
+	GameState.weapon_slots.clear()
+	GameState.weapon_levels.clear()
+	_reset_arena()
+	var before: int = particle_pool.active_count()
+	weapon_manager.spawn_area_effect(player.global_position, 80.0, Color(1.0, 0.48, 0.1))
+	_assert(particle_pool.active_count() == before + 1, "打击特效 acquire 后 active_count +1")
+	await get_tree().process_frame
+	var active_fx: Array[Node] = particle_pool.get_active()
+	_assert(not active_fx.is_empty(), "打击特效播放中仍在 active 列表")
+	if not active_fx.is_empty() and active_fx[0] is CanvasItem:
+		_assert((active_fx[0] as CanvasItem).visible, "打击特效播放中 visible=true")
+	var lifetime: float = ConfigLoader.get_area_effect_lifetime()
+	var wait_frames: int = int(ceil(lifetime * 60.0)) + 12
+	var released: bool = false
+	for _i in wait_frames:
+		await get_tree().process_frame
+		if particle_pool.active_count() == before:
+			released = true
+			break
+	_assert(released, "打击特效动画结束后归还对象池（非 t=0 立即 release）")
+
+
+# ---- effect_color 从 config 解析 -----------------------------------------
+func _test_behavior_color_from_config() -> void:
+	_setup_weapon("holy_fire")
+	var w: WeaponBase = _weapon_by_id("holy_fire")
+	_assert(w != null, "holy_fire 实例存在（颜色解析前置）")
+	var expected: Color = Color.from_string("#ff7a1a", Color.BLACK)
+	var actual: Color = w.get_behavior_color("effect_color", "000000")
+	_assert(actual.is_equal_approx(expected), "holy_fire effect_color 从 config 解析为 #ff7a1a")
+
+
+# ---- 范围/近战武器（无鱼叉干扰）须生成打击特效 ------------------------------
+func _test_area_weapons_visual_feedback() -> void:
+	var area_ids: Array[String] = ["holy_fire", "anchor_hammer"]
+	for wid in area_ids:
+		_setup_weapon(wid)
+		var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+		e.spawn_at(player.global_position + Vector2(100.0, 0.0), player)
+		e.max_health = 5000
+		e.health = 5000
+		var peak_fx: int = 0
+		for _i in 120:
+			await get_tree().process_frame
+			peak_fx = maxi(peak_fx, particle_pool.active_count())
+		_assert(peak_fx > 0, "%s 开火生成打击特效" % wid)
+		if enemy_pool.get_active().find(e) != -1:
+			enemy_pool.release(e)
+		particle_pool.release_all()
+
+
+# ---- 多武器共存：满槽 4 把（弹道+范围+近战）同场均开火 --------------------
+# 复现「买了 4 件武器只有鱼叉枪在打」：验证非鱼叉武器确实创建实例并造成伤害
+func _test_multi_weapon_contribute() -> void:
+	GameState.start_new_run("watcher")
+	GameState.weapon_slots.clear()
+	GameState.weapon_levels.clear()
+	_reset_arena()
+	var ids: Array[String] = ["harpoon", "holy_fire", "storm_cloud", "anchor_hammer"]
+	for id in ids:
+		GameState.add_weapon(id)
+	weapon_manager.sync_from_game_state()
+	_assert(weapon_manager.get_weapons().size() == 4, "满槽 4 把武器均创建实例（sync 覆盖全部 slot）")
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	e.spawn_at(player.global_position + Vector2(100.0, 0.0), player)
+	# 高血量：避免鱼叉先击杀导致索敌丢失、范围/近战武器来不及开火（peak_fx 采样失败）
+	e.max_health = 5000
+	e.health = 5000
+	var start_health: int = e.health
+	var peak_fx: int = 0
+	for _i in 150:
+		await get_tree().process_frame
+		peak_fx = maxi(peak_fx, particle_pool.active_count())
+	_assert(e.health < start_health, "满槽 4 武器同场能造成伤害")
+	_assert(peak_fx > 0, "满槽同场时范围/近战武器生成打击特效")
+	if enemy_pool.get_active().find(e) != -1:
+		enemy_pool.release(e)
 
 
 func _weapon_by_id(id: String) -> WeaponBase:

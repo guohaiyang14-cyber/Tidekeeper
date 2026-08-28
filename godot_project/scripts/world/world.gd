@@ -57,7 +57,7 @@ func _ready() -> void:
 	# 空间哈希加入 group，供敌人/武器/弹道通过 group 查找（避免硬编码路径）
 	spatial_hash_holder.add_to_group("spatial_hash")
 	# 武器管理器接线（玩家位置 / 哈希 / 弹道池）
-	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool)
+	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool, particle_pool)
 	# HUD 接线（注入武器管理器引用，启动每帧刷新）
 	hud.init(weapon_manager)
 	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）；灯塔光晕圆心显式注入（执政官潮汐波）

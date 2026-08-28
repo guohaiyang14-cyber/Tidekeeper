@@ -195,6 +195,11 @@ func get_damage_per_level() -> float:
 	return float(weapons.get("metadata", {}).get("damage_per_level", 0.15))
 
 
+## 范围/近战打击圈特效时长（秒，来自 weapons.json metadata.area_effect_lifetime）
+func get_area_effect_lifetime() -> float:
+	return float(weapons.get("metadata", {}).get("area_effect_lifetime", 0.28))
+
+
 ## 被动商店参数（来自 passives.json metadata.shop）
 func get_passive_shop_meta() -> Dictionary:
 	return passives.get("metadata", {}).get("shop", {})

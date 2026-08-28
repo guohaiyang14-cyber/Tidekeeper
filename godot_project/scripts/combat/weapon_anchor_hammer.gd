@@ -23,11 +23,18 @@ func fire(target: EnemyBase) -> void:
 	var swing_count: int = 1 + MetaSystem.get_extra_projectiles()
 	var ranked: Array[EnemyBase] = query_nearest_enemies(hash, origin, radius, swing_count)
 	var hit: Dictionary = {}
+	var swing_aims: Array[Vector2] = []
 	if ranked.is_empty():
 		_burst_toward(hash, origin, radius, target.global_position, hit)
-		return
-	for e in ranked:
-		_burst_toward(hash, origin, radius, e.global_position, hit)
+		swing_aims.append(target.global_position)
+	else:
+		for e in ranked:
+			_burst_toward(hash, origin, radius, e.global_position, hit)
+			swing_aims.append(e.global_position)
+	# 视觉反馈：每次挥击在瞄准点落一圈冲击波（弹道+1 时多圈）
+	var fx_color: Color = get_behavior_color("effect_color", "cfd8e0")
+	for aim in swing_aims:
+		mgr.spawn_area_effect(aim, radius, fx_color)
 
 
 ## 朝 aim_at 方向对前方半球内未命中敌人各造成一次伤害（暴击独立掷骰）
