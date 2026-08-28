@@ -215,12 +215,53 @@ func add_weapon(weapon_id: String) -> bool:
 		if lv >= max_weapon_level:
 			return false  # 已满级，无法再升级
 		weapon_levels[weapon_id] = lv + 1
+		loadout_changed.emit()
 		return true
 	if weapon_slots.size() >= MAX_WEAPON_SLOTS:
 		return false
 	weapon_slots.append(weapon_id)
 	weapon_levels[weapon_id] = 1
+	loadout_changed.emit()
 	return true
+
+
+## 教学夜武器展示：第 night 夜（教学期内）按 difficulty.json teaching.demo_weapons 顺序
+## 授予一把「尚未拥有」的武器，让玩家直观看到不同武器的效果。
+## 当夜顺位武器已持有（如铁匠开局锚锤）时，向后扫描 demo 列表，再回补更早顺位。
+## 非教学夜 / 无可授予 / 槽满 → 返回 ""（不授予，槽满时 push_warning）。
+## 仅真实对局 World 在进夜时调用；headless 单测直接调用本函数。
+func grant_teaching_demo_weapon(night: int) -> String:
+	if not DifficultySystem.is_teaching_night(night):
+		return ""
+	var demo: Array = ConfigLoader.get_teaching_demo_weapons()
+	if demo.is_empty():
+		return ""
+	var start_idx: int = night - 2  # 第2夜→[0]，第3夜→[1]，第4夜→[2]
+	if start_idx < 0:
+		return ""
+	var wid: String = _pick_teaching_demo_weapon(demo, start_idx)
+	if wid == "":
+		return ""
+	if weapon_slots.size() >= MAX_WEAPON_SLOTS:
+		push_warning("[GameState] 教学夜展示武器槽已满，无法授予 %s (夜%d)" % [wid, night])
+		return ""
+	if add_weapon(wid):
+		print("[GameState] 教学夜展示武器: %s (夜%d)" % [wid, night])
+		return wid
+	return ""
+
+
+## 从 demo 列表选取首个未持有武器：先 [start_idx..)，再 [0, start_idx)（跳过角色开局重复）
+func _pick_teaching_demo_weapon(demo: Array, start_idx: int) -> String:
+	for i in range(start_idx, demo.size()):
+		var wid: String = String(demo[i])
+		if wid != "" and wid not in weapon_slots:
+			return wid
+	for i in range(0, start_idx):
+		var wid: String = String(demo[i])
+		if wid != "" and wid not in weapon_slots:
+			return wid
+	return ""
 
 
 ## 获取武器当前等级（未持有返回 0；在槽但缺 levels 条目视为 1）
@@ -249,11 +290,13 @@ func add_passive(passive_id: String) -> bool:
 		if lv >= max_passive_level:
 			return false
 		passive_levels[passive_id] = lv + 1
+		loadout_changed.emit()
 		return true
 	if passive_slots.size() >= MAX_PASSIVE_SLOTS:
 		return false
 	passive_slots.append(passive_id)
 	passive_levels[passive_id] = 1
+	loadout_changed.emit()
 	return true
 
 

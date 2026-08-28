@@ -47,7 +47,7 @@ var _spawn_timer: float = 0.0
 var _remaining: int = 0
 var _elapsed: float = 0.0
 var _night_duration: float = NIGHT_DURATION_NORMAL
-## 本夜已刷出的 floor 补刷数（预算耗尽后的密度维护，受 max_floor_refill 封顶）
+## 本夜已刷出的 floor 补刷数（预算耗尽后的密度维护；max_floor_refill>0 封顶，<=0 不封顶）
 var _floor_refills_used: int = 0
 ## start_night 缓存的 metadata.spawn（避免每帧/每次刷怪反复查表）
 var _spawn_meta: Dictionary = {}
@@ -147,6 +147,10 @@ func _process(delta: float) -> void:
 	if _elapsed >= _night_duration:
 		_spawning = false
 		return
+	# 预算耗尽且同屏低于 floor：夹紧补刷计时，避免刚满刷一轮后等到 _current_interval 才回补
+	# （满清场会空 0.4~0.8s）。夹紧到 floor_refill_interval 后，缺怪时 0.15s 内即回补。
+	if _needs_floor_refill():
+		_spawn_timer = mini(_spawn_timer, _floor_refill_interval())
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0:
 		# 维持最低在屏密度：清场后只要有空位且低于 floor，就持续补刷直到夜晚结束，
@@ -154,11 +158,25 @@ func _process(delta: float) -> void:
 		# 清光后剩余 28~40s 全空 → 玩家体感「一半时间没怪」）。
 		if not _can_spawn_more():
 			_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
-		elif _remaining > 0 or _needs_floor_refill():
-			if _spawn_one():
+		elif _remaining > 0:
+			if _spawn_one(false):
 				if _remaining > 0:
 					_remaining -= 1
 				_spawn_timer = _current_interval(_elapsed)
+			else:
+				_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
+		elif _needs_floor_refill():
+			# 预算耗尽后维持 min_active：一次补刷一小批（burst），快速回补消除长空窗
+			var deficit: int = _min_active_for_night() - enemy_pool.active_count()
+			var burst: int = mini(int(_spawn_meta.get("floor_refill_burst", 3)), maxi(deficit, 0))
+			var ok: int = 0
+			for _i in burst:
+				if _spawn_one(true):
+					ok += 1
+				else:
+					break
+			if ok > 0:
+				_spawn_timer = _floor_refill_interval()
 			else:
 				_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
 		else:
@@ -207,7 +225,8 @@ func spawn_enemy(
 
 
 ## 成功刷出一只返回 true（失败不扣 _remaining）
-func _spawn_one() -> bool:
+## floor_refill_override：批量回补时强制标记为 floor 补刷（无掉落），避免回补临界帧被误判为普通掉落怪
+func _spawn_one(floor_refill_override: bool = false) -> bool:
 	var def: Dictionary = _pick_enemy_def()
 	if def.is_empty():
 		return false
@@ -220,7 +239,7 @@ func _spawn_one() -> bool:
 		var angle: float = RNG.randf_range(0.0, TAU)
 		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
 		pos = target.global_position + Vector2(cos(angle), sin(angle)) * dist
-	var floor_refill: bool = _needs_floor_refill()
+	var floor_refill: bool = floor_refill_override or _needs_floor_refill()
 	var spawned: EnemyBase = spawn_enemy(def, pos, [], false, false, floor_refill)
 	if spawned != null and floor_refill:
 		_floor_refills_used += 1
@@ -379,18 +398,26 @@ func _min_active_for_night() -> int:
 	return int(_spawn_meta.get("min_active", 0))
 
 
-## 本夜 floor 补刷总量上限（预算耗尽后的无掉落补刷；0=不补刷）
+## 本夜 floor 补刷总量上限（预算耗尽后的无掉落补刷；<=0 不封顶）
 func _max_floor_refill_for_night() -> int:
 	return int(_spawn_meta.get("max_floor_refill", 0))
 
 
+func _floor_refill_interval() -> float:
+	return float(_spawn_meta.get("floor_refill_interval", _spawn_meta.get("retry_delay", 0.1)))
+
+
 ## 预算耗尽且同屏低于 floor、且未达补刷上限时，允许继续刷怪
+## max_floor_refill <= 0 表示不封顶：仅维持 min_active 压力，补刷怪无掉落，不会爆级（经济已与成长曲线解耦）
 func _needs_floor_refill() -> bool:
 	if _remaining > 0 or enemy_pool == null:
 		return false
 	if enemy_pool.active_count() >= _min_active_for_night():
 		return false
-	return _floor_refills_used < _max_floor_refill_for_night()
+	var cap: int = _max_floor_refill_for_night()
+	if cap <= 0:
+		return true
+	return _floor_refills_used < cap
 
 
 ## 本夜 floor 补刷已用配额（测试 / 调试）

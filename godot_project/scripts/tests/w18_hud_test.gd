@@ -64,6 +64,13 @@ func _ready() -> void:
 	hud.refresh()
 	_assert(hud._boss_label.text.contains("Boss"), "Boss 提示 (夜10)")
 
+	print("[assert] 教学演示武器 loadout_changed → HUD 武器槽")
+	var chips_before: int = hud._weapon_box.get_child_count()
+	var granted: String = GameState.grant_teaching_demo_weapon(2)
+	_assert(granted == "holy_fire", "授予演示武器 holy_fire")
+	_assert(hud._weapon_box.get_child_count() > chips_before,
+		"HUD 武器槽随 loadout_changed 增加 (%d→%d)" % [chips_before, hud._weapon_box.get_child_count()])
+
 	DifficultySystem.reset_tier()
 	print("------------------------------------------------------------")
 	print("W18 HUD 机检通过=%d 失败=%d" % [_passed, _failed])

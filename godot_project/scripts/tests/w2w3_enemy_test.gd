@@ -323,7 +323,8 @@ func _test_teaching_night_density() -> void:
 	var min_active: int = int(spawn_meta.get("min_active", 0))
 	var max_floor_refill: int = int(spawn_meta.get("max_floor_refill", 0))
 	_assert(min_active > 0, "config metadata.spawn.min_active 应 > 0")
-	_assert(max_floor_refill >= min_active, "config metadata.spawn.max_floor_refill 应 ≥ min_active")
+	_assert(max_floor_refill == 0 or max_floor_refill >= min_active,
+		"config metadata.spawn.max_floor_refill 应 ≥ min_active（0=不封顶）")
 	var refilled: bool = false
 	var reached: int = 0
 	for i in 600:  # 最多 10s
@@ -333,6 +334,27 @@ func _test_teaching_night_density() -> void:
 			refilled = true
 			break
 	_assert(refilled, "清场后回补至 min_active（活跃数=%d ≥ %d）" % [reached, min_active])
+	# 3b) 反复清场鲁棒性（锁定空窗修复）：连续 5 次清空，断言全程不再出现长空窗
+	#     （旧实现 max_floor_refill=32 封顶，多次清场耗尽后剩余夜段全空 → 5~10s 无怪）
+	var no_long_gap: bool = true
+	for _w in 5:
+		var actives2: Array[Node] = enemy_pool.get_active()
+		for a in actives2:
+			enemy_pool.release(a)
+		await get_tree().process_frame
+		var zero_streak: int = 0
+		for _f in 240:  # 每轮采样 4s
+			await get_tree().process_frame
+			if enemy_pool.active_count() == 0:
+				zero_streak += 1
+				if zero_streak > 12:  # 单帧偶发为 0 可接受；>0.2s 视为异常长空窗
+					no_long_gap = false
+					break
+			else:
+				zero_streak = 0
+		if not no_long_gap:
+			break
+	_assert(no_long_gap, "反复清场后无长空窗（active 始终能快速回补到 min_active）")
 	# 4) 经济解耦验证：回补的敌是 is_floor_refill（预算耗尽后的密度补刷），
 	#    其死亡不应掉落经验珠/潮币（enemy_spawner._on_enemy_died 的 not enemy.is_floor_refill 守卫）。
 	#    这是「维持 min_active 密度修复」与「经济回到成长曲线」解耦的关键机制。
@@ -355,8 +377,12 @@ func _test_teaching_night_density() -> void:
 			"floor_refill 敌死亡不掉经验珠/潮币 (gem %d→%d, coin %d→%d)" % [g0, g1, c0, c1])
 		_assert(spawner.get_floor_refills_used() > 0,
 			"floor 补刷计数 > 0 (used=%d)" % spawner.get_floor_refills_used())
-		_assert(spawner.get_floor_refills_used() <= max_floor_refill,
-			"floor 补刷未超 max_floor_refill (used=%d cap=%d)" % [
-				spawner.get_floor_refills_used(), max_floor_refill])
+		if max_floor_refill > 0:
+			_assert(spawner.get_floor_refills_used() <= max_floor_refill,
+				"floor 补刷未超 max_floor_refill (used=%d cap=%d)" % [
+					spawner.get_floor_refills_used(), max_floor_refill])
+		else:
+			_assert(spawner.get_floor_refills_used() > 0,
+				"floor 补刷不封顶仍持续补刷 (used=%d)" % spawner.get_floor_refills_used())
 	spawner.clear_all()
 	GameState.player_health = GameState.player_max_health

@@ -84,8 +84,7 @@ func buy(item: Dictionary) -> bool:
 		purchase_failed.emit("slot_full")
 		return false
 	purchase_made.emit(item)
-	# 武器入槽/升级后通知 World 同步 WeaponManager（被动同步为幂等空操作）
-	GameState.loadout_changed.emit()
+	# add_weapon / add_passive 成功时已 emit loadout_changed
 	return true
 
 

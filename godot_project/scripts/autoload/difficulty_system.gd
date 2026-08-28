@@ -3,7 +3,7 @@
 # 职责：
 #   - 持有当前难度档位（守夜人 0.7× / 灯塔 1.0×），开局前可选，运行时只读
 #   - 暴露敌人 血量/伤害/数量 倍率 = 档位倍率 × 教学宽容倍率（按夜数）
-#   - 教学夜（默认 1~4 夜）敌人数值减半 + Boss 提示开关
+#   - 教学夜（默认 1~4 夜）敌人数值适度降低（非减半）+ Boss 提示开关 + 武器展示（demo_weapons）
 # 红线：数值全部来自 config/difficulty.json，运行时禁止硬编码（SKILL.md §4.2）
 # 架构：与 ConfigLoader/GameState 同为 autoload 单例；不引用 enemy_base（避免环依赖）
 # ============================================================================
@@ -61,7 +61,7 @@ func reset_tier() -> void:
 	_selected_tier = _default_tier
 
 
-## 敌人血量倍率 = 档位 × 教学（夜 ≤ teaching.nights 减半）
+## 敌人血量倍率 = 档位 × 教学宽容（夜 ≤ teaching.nights，倍率见 config teaching.enemy_hp_mult）
 func enemy_hp_multiplier(night: int) -> float:
 	var tier: Dictionary = _tiers.get(_selected_tier, {})
 	var m: float = float(tier.get("enemy_hp_mult", 1.0))

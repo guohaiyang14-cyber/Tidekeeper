@@ -297,6 +297,25 @@ func get_difficulty_formula() -> Dictionary:
 func get_difficulty_config() -> Dictionary:
 	return difficulty
 
+
+## 获取教学夜展示武器列表（按夜顺序授予，让玩家直观看到不同武器效果）
+## difficulty.json teaching.demo_weapons；空表 = 不展示；无效 id 过滤并告警。
+func get_teaching_demo_weapons() -> Array:
+	var teach: Dictionary = difficulty.get("teaching", {})
+	var arr: Variant = teach.get("demo_weapons", [])
+	if not arr is Array:
+		return []
+	var out: Array = []
+	for v in arr:
+		var wid: String = String(v)
+		if wid == "":
+			continue
+		if get_weapon(wid).is_empty():
+			push_warning("[ConfigLoader] teaching.demo_weapons 无效武器 id: %s" % wid)
+			continue
+		out.append(wid)
+	return out
+
 ## 获取经验珠拾取参数（W2）
 func get_exp_gem_config() -> Dictionary:
 	return pickups.get("exp_gem", {})

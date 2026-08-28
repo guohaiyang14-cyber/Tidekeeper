@@ -96,13 +96,13 @@ func _test_watcher_tier() -> void:
 func _test_teaching_night() -> void:
 	_assert(DifficultySystem.is_teaching_night(4), "夜4=教学夜")
 	_assert(not DifficultySystem.is_teaching_night(5), "夜5=非教学夜")
-	# 灯塔 + 教学夜 2 → 0.5
-	_assert(abs(DifficultySystem.enemy_hp_multiplier(2) - 0.5) < 1e-6, "灯塔 教学夜 血量倍率=0.5")
-	_assert(abs(DifficultySystem.enemy_damage_multiplier(2) - 0.5) < 1e-6, "灯塔 教学夜 伤害倍率=0.5")
-	# 守夜人 + 教学夜 2 → 0.7 × 0.5 = 0.35
+	# 灯塔 + 教学夜 2 → 0.6
+	_assert(abs(DifficultySystem.enemy_hp_multiplier(2) - 0.6) < 1e-6, "灯塔 教学夜 血量倍率=0.6")
+	_assert(abs(DifficultySystem.enemy_damage_multiplier(2) - 0.6) < 1e-6, "灯塔 教学夜 伤害倍率=0.6")
+	# 守夜人 + 教学夜 2 → 0.7 × 0.6 = 0.42
 	DifficultySystem.set_tier("watcher")
-	_assert(abs(DifficultySystem.enemy_hp_multiplier(2) - 0.35) < 1e-6, "守夜人 教学夜 血量倍率=0.35")
-	_assert(abs(DifficultySystem.enemy_damage_multiplier(2) - 0.35) < 1e-6, "守夜人 教学夜 伤害倍率=0.35")
+	_assert(abs(DifficultySystem.enemy_hp_multiplier(2) - 0.42) < 1e-6, "守夜人 教学夜 血量倍率=0.42")
+	_assert(abs(DifficultySystem.enemy_damage_multiplier(2) - 0.42) < 1e-6, "守夜人 教学夜 伤害倍率=0.42")
 	DifficultySystem.reset_tier()
 
 
@@ -133,10 +133,10 @@ func _test_configure_scaling() -> void:
 	_assert(e_w.max_health == expect_w, "守夜人 夜10 血量=%d (期望 %d)" % [e_w.max_health, expect_w])
 	e_w.free()
 
-	# 守夜人 教学夜2：× 0.7 × 0.5
+	# 守夜人 教学夜2：× 0.7 × 0.6
 	var e_t: EnemyBase = EnemyBase.new()
 	e_t.configure(def, 2)
-	var expect_t: int = int(roundi(base_hp * region_coeff * 0.7 * 0.5 * (1.0 + hp_per_night * 2.0) * (1.0 + hp_per_5 * floor(2.0 / 5.0))))
+	var expect_t: int = int(roundi(base_hp * region_coeff * 0.7 * 0.6 * (1.0 + hp_per_night * 2.0) * (1.0 + hp_per_5 * floor(2.0 / 5.0))))
 	_assert(e_t.max_health == expect_t, "守夜人 教学夜2 血量=%d (期望 %d)" % [e_t.max_health, expect_t])
 	e_t.free()
 	DifficultySystem.reset_tier()

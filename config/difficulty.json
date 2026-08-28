@@ -6,9 +6,10 @@
   },
   "teaching": {
     "nights": 4,
-    "enemy_hp_mult": 0.5,
-    "enemy_dmg_mult": 0.5,
-    "boss_prompt": true
+    "enemy_hp_mult": 0.6,
+    "enemy_dmg_mult": 0.6,
+    "boss_prompt": true,
+    "demo_weapons": ["holy_fire", "storm_cloud", "anchor_hammer"]
   },
   "max_enemies": 350
 }

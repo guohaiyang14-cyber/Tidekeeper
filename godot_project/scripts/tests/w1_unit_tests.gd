@@ -23,6 +23,7 @@ func _ready() -> void:
 	_test_exp_table()
 	_test_game_state_leveling()
 	await _test_starting_weapon_and_game_over()
+	_test_teaching_demo_weapons()
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	print("============================================================")
@@ -37,6 +38,51 @@ func _assert(cond: bool, label: String) -> void:
 	else:
 		_failed += 1
 		print("  [FAIL] %s" % label)
+
+
+## 教学夜武器展示：按 difficulty.json teaching.demo_weapons 顺序在夜2/3/4 授予尚未拥有的武器；
+## 夜1（非展示）/ 夜5（非教学）/ 已拥有 → 不授予（幂等）。
+func _test_teaching_demo_weapons() -> void:
+	print("[教学夜武器展示]")
+	var demo: Array = ConfigLoader.get_teaching_demo_weapons()
+	if demo.is_empty():
+		print("  [SKIP] teaching.demo_weapons 为空")
+		return
+	GameState.start_new_run("watcher", 20260824)
+	_assert(GameState.weapon_slots.size() == 1, "开局仅 1 把武器")
+	_assert(GameState.grant_teaching_demo_weapon(1) == "", "夜1 不授予展示武器")
+	for n in range(2, 5):
+		var idx: int = n - 2
+		var expect: String = String(demo[idx]) if idx < demo.size() else ""
+		var wid: String = GameState.grant_teaching_demo_weapon(n)
+		_assert(wid == expect, "夜%d 授予展示武器 %s (期望 %s)" % [n, wid, expect])
+		if wid != "":
+			_assert(not ConfigLoader.get_weapon(wid).is_empty(), "授予的 %s 是有效武器" % wid)
+			_assert(GameState.weapon_slots.has(wid), "授予后入槽: %s" % wid)
+	_assert(GameState.grant_teaching_demo_weapon(5) == "", "夜5(非教学) 不授予")
+	var before: int = GameState.weapon_slots.size()
+	_assert(GameState.grant_teaching_demo_weapon(2) == "", "已拥有的夜2 不再授予（幂等）")
+	_assert(GameState.weapon_slots.size() == before, "幂等：槽数不变")
+	# 铁匠开局锚锤：夜4 顺位为 anchor_hammer 已持有 → 不重复授予
+	GameState.start_new_run("blacksmith", 20260825)
+	_assert(GameState.weapon_slots.has("anchor_hammer"), "铁匠开局锚锤")
+	_assert(GameState.grant_teaching_demo_weapon(2) == "holy_fire", "铁匠夜2 圣火")
+	_assert(GameState.grant_teaching_demo_weapon(3) == "storm_cloud", "铁匠夜3 雷暴云")
+	_assert(GameState.grant_teaching_demo_weapon(4) == "", "铁匠夜4 顺位锚锤已持有且无新武器")
+	# 星象师开局雷暴云：夜3 顺位已持有 → 向前扫描授予 anchor_hammer
+	GameState.start_new_run("stargazer", 20260826)
+	_assert(GameState.weapon_slots.has("storm_cloud"), "星象师开局雷暴云")
+	_assert(GameState.grant_teaching_demo_weapon(2) == "holy_fire", "星象师夜2 圣火")
+	_assert(GameState.grant_teaching_demo_weapon(3) == "anchor_hammer", "星象师夜3 回补锚锤")
+	_assert(GameState.grant_teaching_demo_weapon(4) == "", "星象师夜4 演示武器已齐")
+	# 武器槽满时不再授予
+	GameState.start_new_run("watcher", 20260827)
+	GameState.add_weapon("holy_fire")
+	GameState.add_weapon("storm_cloud")
+	GameState.add_weapon("anchor_hammer")
+	_assert(GameState.weapon_slots.size() == GameState.MAX_WEAPON_SLOTS, "武器槽满")
+	_assert(GameState.grant_teaching_demo_weapon(2) == "", "槽满时不授予演示武器")
+	GameState.start_new_run("watcher", 20260824)  # 还原
 
 
 func _test_spatial_hash() -> void:

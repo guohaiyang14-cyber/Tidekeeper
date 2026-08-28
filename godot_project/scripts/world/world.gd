@@ -148,6 +148,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			# 昼阶段 pick 只 arm 即时效果；进夜再加载战斗倍率（避免商店阶段吃到移速/攻速等）
 			EventSystem.begin_night()
 			enemy_spawner.start_night(day_night.get_current_night())
+			# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
+			GameState.grant_teaching_demo_weapon(day_night.get_current_night())
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全

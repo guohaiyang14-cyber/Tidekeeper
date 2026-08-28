@@ -34,8 +34,10 @@
       "boss_offset_y": -220.0,
       "retry_delay": 0.1,
       "min_active": 8,
-      "max_floor_refill": 32,
-      "note_floor": "预算耗尽后 active<min_active 时补刷至 floor（本夜最多 max_floor_refill 只）；补刷怪无经验/潮币/进化/挣扎击杀，仅维持战斗压力"
+      "max_floor_refill": 0,
+      "floor_refill_burst": 3,
+      "floor_refill_interval": 0.15,
+      "note_floor": "预算耗尽后 active<min_active 时补刷至 floor，消除清场后的长空窗；max_floor_refill=0 表示不封顶（仅维持 min_active 压力，补刷怪无经验/潮币/进化/挣扎击杀，经济已与成长曲线解耦，故无爆级风险）；floor_refill_burst/interval 控制批量回补节奏（快速回补但不一次性挤满）"
     },
     "elite": {
       "base_enemy_id": "iron_crab",

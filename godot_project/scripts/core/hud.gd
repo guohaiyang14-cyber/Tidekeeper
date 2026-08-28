@@ -148,6 +148,9 @@ func refresh() -> void:
 
 
 func _on_loadout_changed() -> void:
+	# 先于重建同步实例，避免 signal 连接顺序导致 HUD 读到 stale WeaponManager
+	if _weapon_mgr != null:
+		_weapon_mgr.sync_from_game_state()
 	_rebuild_slots(_weapon_box, _weapon_list())
 	_rebuild_slots(_passive_box, _passive_list())
 

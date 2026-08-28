@@ -167,7 +167,6 @@ func _grant_random_weapon(lock_nights: int) -> void:
 	var added: bool = GameState.add_weapon(id)
 	if not added:
 		return
-	GameState.loadout_changed.emit()
 	if lock_nights > 0:
 		GameState.lock_weapon(id, lock_nights)
 
