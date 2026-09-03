@@ -152,6 +152,14 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			enemy_spawner.start_night(day_night.get_current_night())
 			# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
 			GameState.grant_teaching_demo_weapon(day_night.get_current_night())
+			# 夜场宝箱：灯塔外环 0~2（× 事件宝箱倍率）；主动触碰开启
+			if pickup_system != null:
+				# 保证灯塔圆心已写入 spawner（避免 ZERO 哨兵误判合法原点）
+				if enemy_spawner.lighthouse_position == Vector2.ZERO and player != null:
+					enemy_spawner.lighthouse_position = player.global_position
+				pickup_system.spawn_night_chests(enemy_spawner.lighthouse_position)
+				if not pickup_system.chest_opened.is_connected(_on_chest_opened):
+					pickup_system.chest_opened.connect(_on_chest_opened)
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			# 进昼清场（敌人 + 敌方弹道 + 掉落），保证商店阶段安全
@@ -216,6 +224,12 @@ func _on_game_win() -> void:
 	get_tree().paused = true
 	_update_debug_label()
 	hud.refresh()
+
+
+## 宝箱开启 → HUD 轻提示（消费 chest_opened）
+func _on_chest_opened(kind: String, amount: int, rarity_name: String) -> void:
+	if hud != null and hud.has_method("notify_chest"):
+		hud.notify_chest(kind, amount, rarity_name)
 
 
 ## 玩家在商店点「继续下一夜」→ 关店并进下一夜（与 Q 键等效）

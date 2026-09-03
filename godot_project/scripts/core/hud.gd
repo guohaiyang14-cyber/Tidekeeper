@@ -27,6 +27,8 @@ var _passive_box: HBoxContainer
 var _struggle_banner: Panel
 var _struggle_title: Label
 var _struggle_body: Label
+var _toast_label: Label
+var _toast_left: float = 0.0
 
 
 func _ready() -> void:
@@ -43,6 +45,26 @@ func init(wm: WeaponManager) -> void:
 	_weapon_mgr = wm
 	refresh()
 	_on_loadout_changed()  # 初始构建武器/被动槽（loadout_changed 可能已在 HUD 创建前触发）
+
+
+## 宝箱开启提示（World 连接 PickupSystem.chest_opened）
+func notify_chest(kind: String, amount: int, rarity_name: String) -> void:
+	if _toast_label == null:
+		return
+	if kind == "none" or amount <= 0:
+		_toast_label.text = "宝箱（%s）· 挣扎中未发奖" % rarity_name
+	else:
+		_toast_label.text = "宝箱（%s）· %s ×%d" % [rarity_name, kind, amount]
+	_toast_label.visible = true
+	_toast_left = 2.2
+
+
+func _process(delta: float) -> void:
+	if _toast_left <= 0.0:
+		return
+	_toast_left -= delta
+	if _toast_left <= 0.0 and _toast_label != null:
+		_toast_label.visible = false
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +175,18 @@ func _build() -> void:
 	_struggle_banner = sb
 	_struggle_title = sb_title
 	_struggle_body = sb_body
+
+	# 宝箱拾取轻提示（屏幕上方居中）
+	var toast := Label.new()
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.position = Vector2(340.0, 96.0)
+	toast.size = Vector2(600.0, 28.0)
+	toast.add_theme_font_size_override("font_size", 16)
+	toast.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.visible = false
+	add_child(toast)
+	_toast_label = toast
 
 
 # ---------------------------------------------------------------------------

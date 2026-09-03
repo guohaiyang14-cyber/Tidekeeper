@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3]
+[gd_scene load_steps=29 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -27,6 +27,8 @@
 [ext_resource type="Script" path="res://scripts/ui/evolution_effect_ui.gd" id="25_evo"]
 [ext_resource type="Script" path="res://scripts/core/hud.gd" id="26_hud"]
 [ext_resource type="PackedScene" path="res://scenes/weapon_effect.tscn" id="27_fx"]
+[ext_resource type="Script" path="res://scripts/core/chest_pool.gd" id="28_chest_pool"]
+[ext_resource type="PackedScene" path="res://scripts/pickup/chest.tscn" id="29_chest"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
@@ -70,6 +72,11 @@ pool_size = 150
 script = ExtResource("17_coin_pool")
 scene = ExtResource("18_coin")
 pool_size = 200
+
+[node name="ChestPool" type="Node" parent="."]
+script = ExtResource("28_chest_pool")
+scene = ExtResource("29_chest")
+pool_size = 8
 
 [node name="PickupSystem" type="Node2D" parent="."]
 script = ExtResource("11_pickup_sys")

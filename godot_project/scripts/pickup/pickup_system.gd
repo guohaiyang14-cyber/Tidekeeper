@@ -1,22 +1,31 @@
 # ============================================================================
-# PickupSystem — 拾取系统（W2）
-# 职责：管理经验珠的生成、吸附检测、飞行、收集
+# PickupSystem — 拾取系统（W2 + 潮币 W4 + 宝箱 MVP）
+# 职责：管理经验珠的生成、吸附检测、飞行、收集；潮币吸附；夜场宝箱触碰开启
 # 数据源：config/pickups.json + Player.get_pickup_radius()
-# 红线：走对象池（PickupPool）；不用 Physics2D，纯距离判定
-# 架构：World 子节点，持有 PickupPool 引用 + Player 引用
-# W2 范围：经验珠；潮币（靠近拾取）为 W4 商店系统
+# 红线：走对象池（PickupPool / CoinPool / ChestPool）；不用 Physics2D，纯距离判定
+# 架构：World 子节点，持有各池引用 + Player 引用
 # ============================================================================
 class_name PickupSystem
 extends Node2D
 
+# headless / 首次加载时保证 class_name 已注册
+const _CHEST_SCRIPT = preload("res://scripts/pickup/chest.gd")
+const _CHEST_POOL_SCRIPT = preload("res://scripts/core/chest_pool.gd")
+
 ## 经验珠收集信号（UI 可连接显示经验变化）
 signal exp_collected(amount: int)
+
+## 宝箱开启信号（kind / amount / rarity_name）
+signal chest_opened(kind: String, amount: int, rarity_name: String)
 
 ## 对象池引用（主场景 @onready；测试可用 bind()）
 @onready var _pool: ObjectPool = get_node_or_null("../PickupPool") as ObjectPool
 
 ## 潮币池引用（W4 商店闭环）
 @onready var _coin_pool: ObjectPool = get_node_or_null("../CoinPool") as ObjectPool
+
+## 宝箱池引用（夜场宝箱 MVP）
+@onready var _chest_pool: ObjectPool = get_node_or_null("../ChestPool") as ObjectPool
 
 ## 玩家引用（主场景 @onready；测试可用 bind()）
 @onready var _player: Player = get_node_or_null("../Player") as Player
@@ -27,6 +36,9 @@ var _active_gems: Array[ExpGem] = []
 ## 活跃潮币列表（用于每帧更新）
 var _active_coins: Array[Coin] = []
 
+## 活跃宝箱列表（主动触碰，不吸附）
+var _active_chests: Array[Chest] = []
+
 ## 自 config/pickups.json 加载的运行时参数
 var _collect_radius: float = 10.0
 var _attract_speed: float = 120.0
@@ -34,12 +46,25 @@ var _scatter_range: float = 12.0
 var _quality_weights: Array[float] = [65.0, 25.0, 8.0, 2.0]
 var _quality_exp_mult: Array[float] = [1.0, 2.0, 5.0, 10.0]
 
+## 宝箱参数（pickups.json.chest）
+var _chest_touch_radius: float = 28.0
+var _chest_ring_min: float = 180.0
+var _chest_ring_max: float = 220.0
+var _chest_per_night_min: int = 0
+var _chest_per_night_max: int = 2
+var _chest_rarity_weights: Array[float] = [50.0, 30.0, 15.0, 5.0]
+var _chest_rarity_names: Array[String] = ["普通", "精良", "稀有", "史诗"]
+var _chest_rewards: Array = []
+
 
 func _ready() -> void:
 	_load_config()
-	print("[PickupSystem] 就绪 (pool=%s player=%s)" % [
+	# 触达 preload，确保 headless 首次加载已注册 class_name
+	assert(_CHEST_SCRIPT != null and _CHEST_POOL_SCRIPT != null)
+	print("[PickupSystem] 就绪 (pool=%s player=%s chest_pool=%s)" % [
 		_pool.name if _pool else "null",
 		_player.name if _player else "null",
+		_chest_pool.name if _chest_pool else "null",
 	])
 
 
@@ -54,6 +79,11 @@ func bind_coin_pool(pool: ObjectPool) -> void:
 	_coin_pool = pool
 
 
+## 注入宝箱池（测试用）
+func bind_chest_pool(pool: ObjectPool) -> void:
+	_chest_pool = pool
+
+
 func _process(delta: float) -> void:
 	if _player == null:
 		return
@@ -64,6 +94,8 @@ func _process(delta: float) -> void:
 		_process_gems(delta, player_pos, pickup_radius)
 	if not _active_coins.is_empty():
 		_process_coins(delta, player_pos, pickup_radius)
+	if not _active_chests.is_empty():
+		_process_chests(player_pos)
 
 
 func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> void:
@@ -162,7 +194,7 @@ func active_coin_count() -> int:
 	return _active_coins.size()
 
 
-## 清除所有活跃经验珠 / 潮币（场景重置 / 新局）
+## 清除所有活跃经验珠 / 潮币 / 宝箱（场景重置 / 新局 / 进昼）
 func clear_all() -> void:
 	if _pool != null:
 		for gem in _active_gems:
@@ -174,6 +206,155 @@ func clear_all() -> void:
 			if is_instance_valid(coin):
 				_coin_pool.release(coin)
 	_active_coins.clear()
+	_clear_chests()
+
+
+## 当前活跃宝箱数（调试 / TestBot）
+func active_chest_count() -> int:
+	return _active_chests.size()
+
+
+## 查找最近宝箱；找到时写入 out_pos[0] 并返回 true
+func try_nearest_chest_position(from: Vector2, out_pos: Array[Vector2], max_range: float = 2400.0) -> bool:
+	var best_dist: float = max_range
+	var best_pos: Vector2 = Vector2.ZERO
+	var found: bool = false
+	for chest in _active_chests:
+		if not is_instance_valid(chest):
+			continue
+		var dist: float = from.distance_to(chest.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best_pos = chest.global_position
+			found = true
+	if not found:
+		return false
+	if out_pos.is_empty():
+		out_pos.append(best_pos)
+	else:
+		out_pos[0] = best_pos
+	return true
+
+
+## 本夜在灯塔外环刷宝箱（数量 = [min,max] × EventSystem.get_chest_mult，至少 0）
+## 每次调用先清掉场上残留箱，避免同夜重复刷叠箱。
+func spawn_night_chests(lighthouse_pos: Vector2) -> int:
+	if _chest_pool == null:
+		push_warning("[PickupSystem] ChestPool 未就绪，跳过宝箱刷新")
+		return 0
+	_clear_chests()
+	var base_count: int = RNG.randi_range(_chest_per_night_min, _chest_per_night_max)
+	var count: int = int(round(float(base_count) * EventSystem.get_chest_mult()))
+	count = maxi(0, count)
+	var spawned: int = 0
+	for _i in count:
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var radius: float = RNG.randf_range(_chest_ring_min, _chest_ring_max)
+		var pos: Vector2 = lighthouse_pos + Vector2(cos(angle), sin(angle)) * radius
+		var chest: Chest = _spawn_chest(pos)
+		if chest != null:
+			spawned += 1
+			print("[PickupSystem] 刷新宝箱 rarity=%s @ (%.0f, %.0f)" % [
+				_chest_rarity_names[clampi(int(chest.rarity), 0, _chest_rarity_names.size() - 1)],
+				pos.x, pos.y,
+			])
+	if spawned > 0:
+		print("[PickupSystem] 本夜宝箱 ×%d（基数=%d ×倍率=%.1f）" % [
+			spawned, base_count, EventSystem.get_chest_mult(),
+		])
+	return spawned
+
+
+## 测试 / 调试：在指定位置刷一只固定稀有度宝箱（不清场、不滚数量）
+func spawn_chest_at(pos: Vector2, rarity: Chest.Rarity) -> Chest:
+	var chest: Chest = _spawn_chest(pos)
+	if chest == null:
+		return null
+	chest.set_rarity(rarity)
+	return chest
+
+
+func _clear_chests() -> void:
+	if _chest_pool != null:
+		for chest in _active_chests:
+			if is_instance_valid(chest):
+				_chest_pool.release(chest)
+	_active_chests.clear()
+
+
+func _spawn_chest(pos: Vector2) -> Chest:
+	if _chest_pool == null:
+		return null
+	var chest: Chest = _chest_pool.acquire() as Chest
+	if chest == null:
+		return null
+	var rarity: Chest.Rarity = _roll_chest_rarity()
+	chest.global_position = pos
+	chest.set_rarity(rarity)
+	_active_chests.append(chest)
+	return chest
+
+
+func _process_chests(player_pos: Vector2) -> void:
+	var i: int = _active_chests.size() - 1
+	while i >= 0:
+		var chest: Chest = _active_chests[i]
+		if not is_instance_valid(chest):
+			_active_chests.remove_at(i)
+			i -= 1
+			continue
+		if player_pos.distance_to(chest.global_position) <= _chest_touch_radius:
+			_open_chest(chest, i)
+		i -= 1
+
+
+func _open_chest(chest: Chest, index: int) -> void:
+	var rarity: int = clampi(int(chest.rarity), 0, maxi(0, _chest_rarity_names.size() - 1))
+	var rarity_name: String = _chest_rarity_names[rarity]
+	var reward: Dictionary = {}
+	if rarity < _chest_rewards.size() and _chest_rewards[rarity] is Dictionary:
+		reward = _chest_rewards[rarity]
+	var kind: String = str(reward.get("kind", "tidecoins"))
+	var amount: int = int(reward.get("amount", 10))
+	var granted_kind: String = kind
+	var granted_amount: int = amount
+	# 挣扎倒地窗口：开箱不发奖（避免 heal 失败转潮币刷经济）；箱子仍回收
+	if GameState.is_struggling():
+		granted_kind = "none"
+		granted_amount = 0
+		print("[PickupSystem] 拾取宝箱 → 挣扎中跳过奖励（%s）" % rarity_name)
+		chest_opened.emit(granted_kind, granted_amount, rarity_name)
+		_active_chests.remove_at(index)
+		if _chest_pool != null:
+			_chest_pool.release(chest)
+		return
+	match kind:
+		"heal":
+			granted_amount = GameState.heal_player(amount)
+			if granted_amount <= 0:
+				# 仅满血等「治疗无效」回退潮币；挣扎已在上方拦截
+				granted_kind = "tidecoins"
+				granted_amount = maxi(8, amount >> 1)
+				GameState.add_tidecoins(granted_amount)
+		"evolution":
+			var got: int = EvolutionSystem.grant_items(amount, true, true)
+			if got > 0:
+				granted_amount = got
+			else:
+				granted_kind = "tidecoins"
+				granted_amount = int(reward.get("fallback_tidecoins", 40))
+				GameState.add_tidecoins(granted_amount)
+		_:
+			granted_kind = "tidecoins"
+			GameState.add_tidecoins(amount)
+			granted_amount = amount
+	print("[PickupSystem] 拾取宝箱 → %s ×%d（%s）" % [granted_kind, granted_amount, rarity_name])
+	chest_opened.emit(granted_kind, granted_amount, rarity_name)
+	_active_chests.remove_at(index)
+	if _chest_pool != null:
+		_chest_pool.release(chest)
+	else:
+		push_warning("[PickupSystem] 开箱后 ChestPool 缺失，无法回收实例")
 
 
 ## 当前活跃经验珠数（调试 / 性能监控用）
@@ -229,17 +410,77 @@ func _load_config() -> void:
 	var cfg: Dictionary = ConfigLoader.get_exp_gem_config()
 	if cfg.is_empty():
 		push_warning("[PickupSystem] pickups.json.exp_gem 缺失，使用内置回退值")
+	else:
+		_collect_radius = float(cfg.get("collect_radius", _collect_radius))
+		_attract_speed = float(cfg.get("attract_speed", _attract_speed))
+		_scatter_range = float(cfg.get("scatter_range", _scatter_range))
+		_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
+		_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
+		# 品质数组长度必须与 Quality 枚举（4）一致，否则 _roll_quality 索引越界
+		if _quality_weights.size() != 4 or _quality_exp_mult.size() != 4:
+			push_warning("[PickupSystem] quality_weights/exp_mult 长度应为 4，回退默认值")
+			_quality_weights = [65.0, 25.0, 8.0, 2.0]
+			_quality_exp_mult = [1.0, 2.0, 5.0, 10.0]
+	_load_chest_config()
+
+
+func _load_chest_config() -> void:
+	var cfg: Dictionary = ConfigLoader.get_chest_config()
+	if cfg.is_empty():
+		push_warning("[PickupSystem] pickups.json.chest 缺失，使用内置回退值")
+		_chest_rewards = [
+			{"kind": "tidecoins", "amount": 12},
+			{"kind": "tidecoins", "amount": 28},
+			{"kind": "heal", "amount": 25},
+			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 40},
+		]
 		return
-	_collect_radius = float(cfg.get("collect_radius", _collect_radius))
-	_attract_speed = float(cfg.get("attract_speed", _attract_speed))
-	_scatter_range = float(cfg.get("scatter_range", _scatter_range))
-	_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
-	_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
-	# 品质数组长度必须与 Quality 枚举（4）一致，否则 _roll_quality 索引越界
-	if _quality_weights.size() != 4 or _quality_exp_mult.size() != 4:
-		push_warning("[PickupSystem] quality_weights/exp_mult 长度应为 4，回退默认值")
-		_quality_weights = [65.0, 25.0, 8.0, 2.0]
-		_quality_exp_mult = [1.0, 2.0, 5.0, 10.0]
+	_chest_touch_radius = float(cfg.get("touch_radius", _chest_touch_radius))
+	_chest_ring_min = float(cfg.get("ring_radius_min", _chest_ring_min))
+	_chest_ring_max = float(cfg.get("ring_radius_max", _chest_ring_max))
+	_chest_per_night_min = int(cfg.get("per_night_min", _chest_per_night_min))
+	_chest_per_night_max = int(cfg.get("per_night_max", _chest_per_night_max))
+	_chest_rarity_weights = _to_float_array(cfg.get("rarity_weights", _chest_rarity_weights), _chest_rarity_weights)
+	_chest_rewards = cfg.get("rewards", _chest_rewards)
+	if not (_chest_rewards is Array):
+		_chest_rewards = []
+	if _chest_rewards.size() != 4:
+		push_warning("[PickupSystem] chest.rewards 长度应为 4，回退默认奖励表")
+		_chest_rewards = [
+			{"kind": "tidecoins", "amount": 12},
+			{"kind": "tidecoins", "amount": 28},
+			{"kind": "heal", "amount": 25},
+			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 40},
+		]
+	var names_raw: Variant = cfg.get("rarity_names", _chest_rarity_names)
+	if names_raw is Array:
+		_chest_rarity_names.clear()
+		for n in names_raw as Array:
+			_chest_rarity_names.append(str(n))
+	if _chest_rarity_names.size() != 4:
+		_chest_rarity_names = ["普通", "精良", "稀有", "史诗"]
+	if _chest_rarity_weights.size() != 4:
+		push_warning("[PickupSystem] chest.rarity_weights 长度应为 4，回退默认值")
+		_chest_rarity_weights = [50.0, 30.0, 15.0, 5.0]
+	if _chest_ring_max < _chest_ring_min:
+		_chest_ring_max = _chest_ring_min
+	if _chest_per_night_max < _chest_per_night_min:
+		_chest_per_night_max = _chest_per_night_min
+
+
+func _roll_chest_rarity() -> Chest.Rarity:
+	var total: float = 0.0
+	for w in _chest_rarity_weights:
+		total += w
+	if total <= 0.0:
+		return Chest.Rarity.COMMON
+	var roll: float = RNG.randf_range(0.0, total)
+	var cumulative: float = 0.0
+	for i in _chest_rarity_weights.size():
+		cumulative += _chest_rarity_weights[i]
+		if roll <= cumulative:
+			return i as Chest.Rarity
+	return Chest.Rarity.COMMON
 
 
 func _to_float_array(raw: Variant, fallback: Array[float]) -> Array[float]:

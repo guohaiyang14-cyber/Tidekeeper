@@ -91,7 +91,7 @@ func _load_all() -> void:
 		get_all_affix_ids().size(),
 		passives.get("passives", {}).size(),
 		evolutions.get("paths", {}).size(),
-		"ok" if pickups.has("exp_gem") else "missing",
+		_pickups_status(),
 		"ok" if upgrade.has("reroll_cost") else "missing",
 	])
 
@@ -325,6 +325,18 @@ func get_teaching_demo_weapons() -> Array:
 func get_exp_gem_config() -> Dictionary:
 	return pickups.get("exp_gem", {})
 
+
+## 获取夜场宝箱参数（§5.2 / §9.3）
+func get_chest_config() -> Dictionary:
+	return pickups.get("chest", {})
+
+
+func _pickups_status() -> String:
+	if not pickups.has("exp_gem"):
+		return "missing"
+	if not pickups.has("chest"):
+		return "partial"
+	return "ok"
 ## 获取被动数据（按 id）
 func get_passive(passive_id: String) -> Dictionary:
 	return passives.get("passives", {}).get(passive_id, {})

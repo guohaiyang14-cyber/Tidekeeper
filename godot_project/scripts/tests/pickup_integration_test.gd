@@ -124,6 +124,114 @@ func _test_spawn_and_collect() -> void:
 	)
 	_assert(valid_mult, "批量总经验=%d 为 base×品质倍率" % batch_total)
 
+	print("[Test] === 阶段6：夜场宝箱触碰开启 ===")
+	_pickup_system.clear_all()
+	var chest_pool: ChestPool = ChestPool.new()
+	chest_pool.name = "TestChestPool"
+	chest_pool.scene = load("res://scripts/pickup/chest.tscn") as PackedScene
+	chest_pool.pool_size = 8
+	add_child(chest_pool)
+	await get_tree().process_frame
+	_pickup_system.bind_chest_pool(chest_pool)
+	EventSystem.reset()
+	RNG.set_seed(20260903)
+	var spawned: int = _pickup_system.spawn_night_chests(_player.global_position)
+	_assert(spawned >= 0 and spawned <= 2, "本夜宝箱数量在 0~2（实际=%d）" % spawned)
+	# 固定种子下多次刷箱，确保至少开到 1 箱以覆盖触碰路径
+	for _attempt in 8:
+		_pickup_system.clear_all()
+		if _pickup_system.spawn_night_chests(_player.global_position) > 0:
+			break
+	_assert(_pickup_system.active_chest_count() >= 1, "固定种子多次尝试后至少有 1 箱")
+	GameState.damage_player(30, "test")
+	var coins_before: int = GameState.tidecoins
+	var hp_before: int = GameState.player_health
+	var evo_before: int = GameState.evolution_items
+	var chest_pos: Array[Vector2] = [Vector2.ZERO]
+	_assert(_pickup_system.try_nearest_chest_position(_player.global_position, chest_pos, 2000.0), "能查到宝箱坐标")
+	_player.global_position = chest_pos[0]
+	for _i in 3:
+		await get_tree().process_frame
+	_assert(_pickup_system.active_chest_count() == 0, "触碰后宝箱已开启回收")
+	var gained: bool = (
+		GameState.tidecoins > coins_before
+		or GameState.player_health > hp_before
+		or GameState.evolution_items > evo_before
+	)
+	_assert(gained, "开箱发放了潮币/回血/进化道具之一")
+
+	# 潮汐反转：get_chest_mult 消费端可刷出 > per_night_max 的箱数
+	_pickup_system.clear_all()
+	EventSystem.reset()
+	EventSystem.apply_event("tidal_reversal")
+	_assert(EventSystem.get_chest_mult() == 2.0, "潮汐反转宝箱倍率 =2")
+	var saw_over_cap: bool = false
+	for seed_i in 24:
+		RNG.set_seed(20260904 + seed_i)
+		_pickup_system.clear_all()
+		if _pickup_system.spawn_night_chests(_player.global_position) > 2:
+			saw_over_cap = true
+			break
+	_assert(saw_over_cap, "倍率×2 时可刷出超过 per_night_max(2) 的箱")
+	EventSystem.reset()
+
+	print("[Test] === 阶段7：刷箱先清场 + 灯塔圆心 + 软上限回退 ===")
+	_pickup_system.clear_all()
+	var lighthouse: Vector2 = Vector2(1000, 1000)
+	RNG.set_seed(42)
+	var n_a: int = _pickup_system.spawn_night_chests(lighthouse)
+	var count_a: int = _pickup_system.active_chest_count()
+	RNG.set_seed(42)
+	var n_b: int = _pickup_system.spawn_night_chests(lighthouse)
+	_assert(n_a == n_b, "同种子重复刷箱数量一致")
+	_assert(_pickup_system.active_chest_count() == count_a, "重复刷箱先清场不叠箱（%d→%d）" % [
+		count_a, _pickup_system.active_chest_count(),
+	])
+	if _pickup_system.active_chest_count() > 0:
+		var cpos: Array[Vector2] = [Vector2.ZERO]
+		_assert(_pickup_system.try_nearest_chest_position(lighthouse, cpos, 500.0), "箱在灯塔附近可查")
+		var ring_dist: float = lighthouse.distance_to(cpos[0])
+		_assert(ring_dist >= 180.0 - 0.5 and ring_dist <= 220.0 + 0.5, "箱距灯塔在外环 180~220（实际=%.1f）" % ring_dist)
+
+	# 史诗箱 + 软上限 → 潮币回退
+	_pickup_system.clear_all()
+	# 开局已有鱼叉；升至满级以满足 has_evolvable_owned
+	while GameState.get_weapon_level("harpoon") < GameState.max_weapon_level:
+		if not GameState.add_weapon("harpoon"):
+			break
+	_assert(EvolutionSystem.has_evolvable_owned(), "满级鱼叉视为可进化持有")
+	var soft: int = int(ConfigLoader.get_evolution_rules().get("soft_cap_unused_items", 2))
+	GameState.evolution_items = soft
+	var coins0: int = GameState.tidecoins
+	var evo0: int = GameState.evolution_items
+	var epic: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
+	_assert(epic != null, "可生成史诗箱")
+	_player.global_position = epic.global_position
+	for _i2 in 3:
+		await get_tree().process_frame
+	_assert(_pickup_system.active_chest_count() == 0, "史诗箱已开启")
+	_assert(GameState.evolution_items == evo0, "软上限下进化道具未增加")
+	_assert(GameState.tidecoins > coins0, "软上限下史诗箱回退潮币")
+
+	# 挣扎中开箱：不发奖、不转潮币（第5夜，避开首夜保护）
+	_pickup_system.clear_all()
+	MetaSystem.begin_run()
+	GameState.current_night = 5
+	GameState.player_health = 1
+	GameState.damage_player(999, "test")
+	_assert(GameState.is_struggling(), "已进入挣扎")
+	var coins_s: int = GameState.tidecoins
+	var evo_s: int = GameState.evolution_items
+	var rare: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.RARE)
+	_assert(rare != null, "挣扎测试可刷稀有箱")
+	_player.global_position = rare.global_position
+	for _i3 in 3:
+		await get_tree().process_frame
+	_assert(_pickup_system.active_chest_count() == 0, "挣扎中开箱仍回收")
+	_assert(GameState.tidecoins == coins_s, "挣扎中开箱不发潮币")
+	_assert(GameState.evolution_items == evo_s, "挣扎中开箱不发进化道具")
+	MetaSystem.end_run()
+
 	_print_result()
 	await get_tree().process_frame
 	get_tree().quit(0 if _failed == 0 else 1)

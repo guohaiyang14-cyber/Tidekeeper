@@ -2,7 +2,7 @@
   "metadata": {
     "schema_version": 1,
     "doc_source": "主设计文档 v0.3.4 §5.2 拾取 + W2 经验珠品质调参",
-    "note": "运行时只读；品质权重/倍率与吸附参数改表不改脚本"
+    "note": "运行时只读；品质权重/倍率与吸附参数改表不改脚本；chest 为夜场宝箱 MVP（触碰开箱，奖励表占位）"
   },
   "exp_gem": {
     "default_pickup_radius": 60.0,
@@ -11,5 +11,21 @@
     "scatter_range": 12.0,
     "quality_weights": [65.0, 25.0, 8.0, 2.0],
     "quality_exp_mult": [1.0, 2.0, 5.0, 10.0]
+  },
+  "chest": {
+    "doc_source": "主设计文档 v0.3.4 §5.2 / §9.3：每夜 0~2，灯塔外环，主动触碰；事件宝箱翻倍走 EventSystem.get_chest_mult",
+    "per_night_min": 0,
+    "per_night_max": 2,
+    "ring_radius_min": 180.0,
+    "ring_radius_max": 220.0,
+    "touch_radius": 28.0,
+    "rarity_weights": [50.0, 30.0, 15.0, 5.0],
+    "rarity_names": ["普通", "精良", "稀有", "史诗"],
+    "rewards": [
+      {"kind": "tidecoins", "amount": 12},
+      {"kind": "tidecoins", "amount": 28},
+      {"kind": "heal", "amount": 25},
+      {"kind": "evolution", "amount": 1, "fallback_tidecoins": 40}
+    ]
   }
 }
