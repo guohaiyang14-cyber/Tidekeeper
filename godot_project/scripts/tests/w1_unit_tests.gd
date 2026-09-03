@@ -133,6 +133,8 @@ func _test_object_pool() -> void:
 	pool.release(n1)
 	_assert(pool.active_count() == 1 and pool.available_count() == 3, "release returns to pool")
 	_assert(not (n1 as CanvasItem).visible, "released hidden")
+	pool.release(n1)  # 幂等：二次 release 不炸
+	_assert(pool.active_count() == 1 and pool.available_count() == 3, "idempotent release")
 	pool.release_all()
 	_assert(pool.active_count() == 0 and pool.available_count() == 4, "release_all")
 	# 耗尽

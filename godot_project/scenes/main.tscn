@@ -48,7 +48,7 @@ pool_size = 100
 [node name="ProjectilePool" type="Node" parent="."]
 script = ExtResource("5_proj_pool")
 scene = ExtResource("14_proj")
-pool_size = 48
+pool_size = 128
 
 [node name="EnemyProjectilePool" type="Node" parent="."]
 script = ExtResource("19_eproj_pool")

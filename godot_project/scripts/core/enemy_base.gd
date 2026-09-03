@@ -128,8 +128,9 @@ func _on_acquire() -> void:
 	_ensure_enemy_projectile_pool()
 
 
-## release 时调用：从哈希移除
+## release 时调用：从哈希移除；标记死亡，避免 clear_all 后武器仍结算触发二次 _die
 func _on_release() -> void:
+	_dead = true
 	if _hash != null:
 		_hash.remove(self, global_position)
 

@@ -10,14 +10,20 @@ extends Node2D
 @export var speed: float = 260.0
 @export var hit_radius: float = 14.0
 
+## 最大存活时间（秒）：未命中也强制回收。否则远程群在 260 速飞到 5000 边界约 19s，
+## 同屏数十只水母浮游即可把 200 池打满（机器人日志：EnemyProjectilePool 池耗尽×数十）。
+const MAX_LIFE: float = 3.5
+
 var _direction: Vector2 = Vector2.RIGHT
 var _damage: int = 0
 var _active: bool = false
 var _player: Node2D
+var _life: float = 0.0
 
 
 func _on_acquire() -> void:
 	_active = true
+	_life = 0.0
 	visible = true
 
 
@@ -31,10 +37,15 @@ func launch(pos: Vector2, dir: Vector2, damage: int) -> void:
 	global_position = pos
 	_direction = dir.normalized()
 	_damage = damage
+	_life = MAX_LIFE
 
 
 func _process(delta: float) -> void:
 	if not _active:
+		return
+	_life -= delta
+	if _life <= 0.0:
+		_recycle()
 		return
 	global_position += _direction * speed * delta
 	if _player == null:

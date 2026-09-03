@@ -36,6 +36,7 @@ func _ready() -> void:
 
 	await _test_five_enemy_types()      # 2.2.1 至少 5 种敌人 + 2.2.2 行为可辨
 	await _test_ranged_fires_projectile()  # 2.2.2 远程行为
+	await _test_enemy_projectile_max_life()  # 敌方弹道 MAX_LIFE 回收（防池耗尽）
 	await _test_burrow_ambush()         # 2.2.2 潜地行为
 	await _test_self_destruct()         # 2.2.2 自爆行为
 	await _test_spawn_loop_and_cap()    # 2.2.3 潮汐刷怪 + 2.2.4 同屏上限
@@ -110,6 +111,26 @@ func _test_ranged_fires_projectile() -> void:
 	_assert(fired, "水母浮游开火 → 敌方弹道活跃数=%d" % eproj_pool.active_count())
 	enemy_pool.release(e)
 	eproj_pool.release_all()
+
+
+# ---------------------------------------------------------------------------
+# 敌方弹道 MAX_LIFE：未命中也须在时限内回收（对齐玩家弹道；修机器人日志池耗尽）
+# ---------------------------------------------------------------------------
+func _test_enemy_projectile_max_life() -> void:
+	print("[敌方弹道 MAX_LIFE 回收]")
+	eproj_pool.release_all()
+	var p: EnemyProjectile = eproj_pool.acquire() as EnemyProjectile
+	_assert(p != null, "取得敌方弹道")
+	# 朝远离玩家方向发射，确保靠寿命回收而非命中
+	p.launch(Vector2(-2000.0, -2000.0), Vector2.LEFT, 1)
+	var before: int = eproj_pool.active_count()
+	_assert(before == 1, "发射后 active=1")
+	# ≈4.0s @60fps > MAX_LIFE(3.5s)
+	for _i in 260:
+		await get_tree().process_frame
+		if eproj_pool.active_count() == 0:
+			break
+	_assert(eproj_pool.active_count() == 0, "未命中弹道在 MAX_LIFE(3.5s) 内被回收")
 
 
 # ---------------------------------------------------------------------------

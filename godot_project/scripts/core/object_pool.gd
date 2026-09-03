@@ -60,10 +60,13 @@ func acquire() -> Node:
 	return node
 
 
-## 将节点归还池中（失活）
+## 将节点归还池中（失活）；幂等——已归还 / 从未取出时直接返回（debug 仍告警便于抓泄漏）
 func release(node: Node) -> void:
+	if node == null:
+		return
 	if not _active.has(node):
-		push_warning("[%s] 释放了不在 active 列表中的节点" % name)
+		if OS.is_debug_build():
+			push_warning("[%s] 释放了不在 active 列表中的节点" % name)
 		return
 	_active.erase(node)
 	_pool.append(node)

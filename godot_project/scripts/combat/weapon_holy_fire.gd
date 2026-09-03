@@ -33,7 +33,10 @@ func _burn_at(hash: SpatialHash, mgr: WeaponManager, at: Vector2, radius: float)
 	var pts: Array = hash.query_radius(at, radius)
 	for p in pts:
 		if p is EnemyBase:
-			(p as EnemyBase).take_damage(roll_hit_damage())
+			var enemy: EnemyBase = p as EnemyBase
+			if enemy.is_dead():
+				continue
+			enemy.take_damage(roll_hit_damage())
 	_spawn_fx(mgr, at, radius)
 
 
