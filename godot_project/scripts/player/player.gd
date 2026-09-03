@@ -26,7 +26,9 @@ const UNIT_TO_PIXEL: float = 60.0
 var _move_speed_mult: float = 1.0
 var _pickup_radius_mult: float = 1.0
 var _hurt_flash: float = 0.0
+## 锁链等：剩余束缚时间；>0 时乘 _bind_move_mult（0=完全定身，(0,1]=减速）
 var _bind_timer: float = 0.0
+var _bind_move_mult: float = 0.5
 
 
 func _ready() -> void:
@@ -75,12 +77,8 @@ func _on_player_damaged(_amount: int) -> void:
 	queue_redraw()
 
 
-## 处理移动输入（WASD，§5.2）；锁链词缀绑定时无法移动
+## 处理移动输入（WASD，§5.2）；锁链等束缚期间按 bind_move_mult 减速（0 则定身）
 func _handle_movement() -> void:
-	if _bind_timer > 0.0:
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
 	var input_vector: Vector2 = Vector2.ZERO
 	if Input.is_action_pressed("move_up"):
 		input_vector.y -= 1.0
@@ -94,6 +92,12 @@ func _handle_movement() -> void:
 	input_vector = input_vector.normalized()
 	# 移速 = 基础 × 加成（受软上限约束）× 事件移速（W14 灯塔共鸣），单位→像素换算
 	var speed: float = base_move_speed * _effective_move_mult()
+	if _bind_timer > 0.0:
+		if _bind_move_mult <= 0.0:
+			velocity = Vector2.ZERO
+			move_and_slide()
+			return
+		speed *= _bind_move_mult
 	velocity = input_vector * speed * UNIT_TO_PIXEL
 	move_and_slide()
 
@@ -124,15 +128,29 @@ func set_pickup_radius_mult(mult: float) -> void:
 	queue_redraw()
 
 
-## 锁链词缀：短时禁止移动（取较长剩余）
-func apply_bind(duration: float) -> void:
+## 锁链等束缚：短时减速或定身（duration 取较长剩余；move_mult 取更严=更小）
+## move_mult < 0 时从 config/enemies.json affixes.chain.bind_move_mult 读取（默认 0.5）
+func apply_bind(duration: float, move_mult: float = -1.0) -> void:
 	if duration <= 0.0:
 		return
+	var mult: float = move_mult
+	if mult < 0.0:
+		var ch: Dictionary = ConfigLoader.get_affix("chain")
+		mult = float(ch.get("bind_move_mult", 0.5))
+	if _bind_timer > 0.0:
+		_bind_move_mult = minf(_bind_move_mult, mult)
+	else:
+		_bind_move_mult = mult
 	_bind_timer = maxf(_bind_timer, duration)
 
 
 func is_bound() -> bool:
 	return _bind_timer > 0.0
+
+
+## 当前束缚移速倍率（未束缚返回 1.0；0=定身）
+func get_bind_move_mult() -> float:
+	return _bind_move_mult if _bind_timer > 0.0 else 1.0
 
 
 func _draw() -> void:

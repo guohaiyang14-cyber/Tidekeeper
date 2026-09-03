@@ -17,7 +17,7 @@
     "difficulty_formula": {
       "health": "base_health × region_coeff × (1 + health_per_night × night) × (1 + health_per_5nights × floor(night/5))",
       "damage": "base_damage × (1 + damage_per_night × night)",
-      "count": "base_count × (1 + 0.06 × night) × (1 + 0.20 × floor(night/5))",
+      "count": "实现：spawn.base_count + spawn.per_night×(night-1)，再 × DifficultySystem 档位倍率 × budget_exp_redundancy（旧 0.06/0.20 公式未用于刷怪数）",
       "note": "系数见本块 difficulty；调参改表不改脚本"
     },
     "density_budget": "同屏 350~450（PC 60fps）；前 5 夜峰值 60，第 10 夜 200，第 15 夜 320，第 20 夜 450 + Boss",
@@ -28,6 +28,10 @@
       "interval_dense": 0.8,
       "interval_pressure": 0.4,
       "sparse_seconds": 12.0,
+      "budget_pace": "even",
+      "budget_slack_sec": 5.0,
+      "budget_exp_redundancy": 1.15,
+      "note_budget_pace": "even=有经验预算按（夜长−slack）均匀进度释放；落后时 pressure/burst 追赶；进度超前用无掉落 floor 顶压；slack=夜末捡珠空窗；进昼未拾珠自动入账；redundancy=预算数量成长冗余",
       "ring_min": 180.0,
       "ring_extra": 220.0,
       "elite_offset_y": -200.0,
@@ -37,7 +41,7 @@
       "max_floor_refill": 0,
       "floor_refill_burst": 3,
       "floor_refill_interval": 0.15,
-      "note_floor": "预算耗尽后 active<min_active 时补刷至 floor，消除清场后的长空窗；max_floor_refill=0 表示不封顶（仅维持 min_active 压力，补刷怪无经验/潮币/进化/挣扎击杀，经济已与成长曲线解耦，故无爆级风险）；floor_refill_burst/interval 控制批量回补节奏（快速回补但不一次性挤满）"
+      "note_floor": "active<min_active 时补刷：预算已尽或 even 进度超前均可；max_floor_refill=0 不封顶；补刷怪无经验/潮币/进化/挣扎击杀；floor_refill_burst/interval 控制批量回补节奏"
     },
     "elite": {
       "base_enemy_id": "iron_crab",
@@ -293,10 +297,12 @@
     },
     "chain": {
       "name": "锁链",
-      "effect": "被攻击时绑定玩家 0.5 秒",
+      "effect": "被攻击时短时减速玩家（移速×50%，持续 0.3 秒）；非完全定身",
       "counter": "保持距离",
-      "bind_duration": 0.5,
-      "cooldown": 2.0
+      "bind_duration": 0.3,
+      "bind_move_mult": 0.5,
+      "cooldown": 2.0,
+      "note": "原 0.5s 完全定身对走位惩罚过重（尤其叠迅捷/精英夜）；改为减速以保留「被打受阻」反馈"
     }
   }
 }

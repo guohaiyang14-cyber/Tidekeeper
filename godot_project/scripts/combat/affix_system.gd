@@ -162,7 +162,8 @@ static func _try_chain_bind(enemy: EnemyBase) -> void:
 		return
 	var ch: Dictionary = ConfigLoader.get_affix("chain")
 	enemy.affix_state["chain_cd"] = float(ch.get("cooldown", 2.0))
-	var dur: float = float(ch.get("bind_duration", 0.5))
+	var dur: float = float(ch.get("bind_duration", 0.3))
+	var move_mult: float = float(ch.get("bind_move_mult", 0.5))
 	if enemy.get_tree() == null:
 		return
 	var players: Array = enemy.get_tree().get_nodes_in_group("player")
@@ -170,7 +171,7 @@ static func _try_chain_bind(enemy: EnemyBase) -> void:
 		return
 	var p: Node = players[0]
 	if p.has_method("apply_bind"):
-		p.apply_bind(dur)
+		p.apply_bind(dur, move_mult)
 
 
 static func _do_split(enemy: EnemyBase) -> void:

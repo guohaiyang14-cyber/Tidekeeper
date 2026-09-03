@@ -1,7 +1,7 @@
 # ============================================================================
 # EnemySpawner — 潮汐刷怪（W2-W3 + W8 进阶敌人/词缀）
 # 职责：按 config/enemies.json 的 spawn_night 解锁 9 种行为敌人；
-#       依据 metadata.spawn 密度曲线（前 12s 稀疏 → 中段密集 → 末段加压）刷怪；
+#       有经验预算默认按夜长均匀释放（budget_pace=even + slack 捡珠空窗 + redundancy）；
 #       精英夜（第 5 夜=巨钳王 + 2~3 词缀）/ 天灾夜（第 10/15/20 夜= Boss 占位 + 全场 +1 词缀）；
 #       敌人死亡 → 经 PickupSystem 掉经验珠 + 潮币。
 # 红线：运行时禁止 instantiate（走 EnemyPool 对象池）；随机走 RNG；难度走 §8.2（Boss 除外）
@@ -47,8 +47,12 @@ var _spawn_timer: float = 0.0
 var _remaining: int = 0
 var _elapsed: float = 0.0
 var _night_duration: float = NIGHT_DURATION_NORMAL
-## 本夜已刷出的 floor 补刷数（预算耗尽后的密度维护；max_floor_refill>0 封顶，<=0 不封顶）
+## 本夜已刷出的 floor 补刷数（预算耗尽或 even 进度超前时的密度维护）
 var _floor_refills_used: int = 0
+## 本夜有经验预算总量（含 redundancy；与 _remaining 起点一致）
+var _night_budget_total: int = 0
+## 夜末捡珠空窗（秒）：预算应在此前释放完
+var _budget_slack_sec: float = 5.0
 ## start_night 缓存的 metadata.spawn（避免每帧/每次刷怪反复查表）
 var _spawn_meta: Dictionary = {}
 
@@ -101,6 +105,8 @@ func start_night(night: int) -> void:
 	_spawn_timer = 0.0
 	_floor_refills_used = 0
 	_remaining = _compute_count(night)
+	_night_budget_total = _remaining
+	_budget_slack_sec = maxf(0.0, float(_spawn_meta.get("budget_slack_sec", 5.0)))
 	_eligible = _build_eligible(night)
 	_night_bonus_affixes = _pick_night_bonus_affixes(night)
 	# 第 15 夜天灾「潮汐夹击」两侧刷怪；事件「潮汐反转」在非 15 夜也强制两侧夹击（两者 OR，不叠乘位置逻辑）
@@ -109,8 +115,9 @@ func start_night(night: int) -> void:
 	_spawning = true
 	EvolutionSystem.on_night_start(night)
 	RefineSystem.on_night_start(night)
-	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s)" % [
-		night, _remaining, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
+	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s, pace=%s slack=%.1fs)" % [
+		night, _night_budget_total, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
+		String(_spawn_meta.get("budget_pace", "even")), _budget_slack_sec,
 	])
 	# 精英 / Boss（开局立即登场；同样受 max_enemies 约束）
 	if night == 5:
@@ -153,20 +160,33 @@ func _process(delta: float) -> void:
 		_spawn_timer = mini(_spawn_timer, _floor_refill_interval())
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0:
-		# 维持最低在屏密度：清场后只要有空位且低于 floor，就持续补刷直到夜晚结束，
-		# 消除「预算耗尽即停刷」导致的长空窗（教学夜尤为明显：本夜总预算仅 10~19 只，
-		# 清光后剩余 28~40s 全空 → 玩家体感「一半时间没怪」）。
+		# 有经验预算按进度曲线释放；进度超前或缺压时用无掉落 floor，避免前半夜打光经验。
 		if not _can_spawn_more():
 			_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
-		elif _remaining > 0:
-			if _spawn_one(false):
-				if _remaining > 0:
-					_remaining -= 1
+		elif _should_release_budget(_elapsed):
+			# 落后于均匀曲线时突发追赶，避免夜末吞掉有经验预算
+			var behind: int = _expected_budget_spawned(_elapsed) - _budget_spawned()
+			var burst: int = 1
+			if behind > 1:
+				burst = mini(behind, int(_spawn_meta.get("floor_refill_burst", 3)))
+			var ok: int = 0
+			for _i in burst:
+				if not _can_spawn_more():
+					break
+				if not _should_release_budget(_elapsed):
+					break
+				if _spawn_one(false):
+					ok += 1
+					if _remaining > 0:
+						_remaining -= 1
+				else:
+					break
+			if ok > 0:
 				_spawn_timer = _current_interval(_elapsed)
 			else:
 				_spawn_timer = float(_spawn_meta.get("retry_delay", 0.1))
 		elif _needs_floor_refill():
-			# 预算耗尽后维持 min_active：一次补刷一小批（burst），快速回补消除长空窗
+			# 预算耗尽或进度超前：维持 min_active（无掉落）
 			var deficit: int = _min_active_for_night() - enemy_pool.active_count()
 			var burst: int = mini(int(_spawn_meta.get("floor_refill_burst", 3)), maxi(deficit, 0))
 			var ok: int = 0
@@ -190,7 +210,7 @@ func _process(delta: float) -> void:
 ## 从池中刷一只敌人并施加词缀。
 ## skip_night_affix：召唤物/分裂体不吃天灾全场词缀。
 ## allow_over_cap：分裂时父体尚未 release，允许短暂超过 max_enemies。
-## floor_refill：预算耗尽后的密度 floor 补刷（无掉落，仅维持压力）。
+## floor_refill：无掉落密度补刷（预算耗尽或 even 进度超前时由 _spawn_one(true) 标记）
 func spawn_enemy(
 	def: Dictionary,
 	pos: Vector2,
@@ -225,8 +245,8 @@ func spawn_enemy(
 
 
 ## 成功刷出一只返回 true（失败不扣 _remaining）
-## floor_refill_override：批量回补时强制标记为 floor 补刷（无掉落），避免回补临界帧被误判为普通掉落怪
-func _spawn_one(floor_refill_override: bool = false) -> bool:
+## floor_refill：仅当调用方显式传入 true 时标记无掉落补刷（勿与 _needs_floor_refill 隐式 OR，避免预算怪被误标）
+func _spawn_one(floor_refill: bool = false) -> bool:
 	var def: Dictionary = _pick_enemy_def()
 	if def.is_empty():
 		return false
@@ -239,7 +259,6 @@ func _spawn_one(floor_refill_override: bool = false) -> bool:
 		var angle: float = RNG.randf_range(0.0, TAU)
 		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
 		pos = target.global_position + Vector2(cos(angle), sin(angle)) * dist
-	var floor_refill: bool = floor_refill_override or _needs_floor_refill()
 	var spawned: EnemyBase = spawn_enemy(def, pos, [], false, false, floor_refill)
 	if spawned != null and floor_refill:
 		_floor_refills_used += 1
@@ -407,17 +426,22 @@ func _floor_refill_interval() -> float:
 	return float(_spawn_meta.get("floor_refill_interval", _spawn_meta.get("retry_delay", 0.1)))
 
 
-## 预算耗尽且同屏低于 floor、且未达补刷上限时，允许继续刷怪
-## max_floor_refill <= 0 表示不封顶：仅维持 min_active 压力，补刷怪无掉落，不会爆级（经济已与成长曲线解耦）
+## 预算耗尽、或 even 节奏下进度超前时：允许无掉落补刷维持 min_active
+## （把有经验预算留给后半夜，同时避免清场空窗）
 func _needs_floor_refill() -> bool:
-	if _remaining > 0 or enemy_pool == null:
+	if enemy_pool == null:
 		return false
 	if enemy_pool.active_count() >= _min_active_for_night():
 		return false
 	var cap: int = _max_floor_refill_for_night()
-	if cap <= 0:
+	if cap > 0 and _floor_refills_used >= cap:
+		return false
+	if _remaining <= 0:
 		return true
-	return _floor_refills_used < cap
+	# 仍有预算但已超前于均匀进度 → 用 floor 顶压，不预支经验
+	if String(_spawn_meta.get("budget_pace", "even")) == "even":
+		return _budget_spawned() >= _expected_budget_spawned(_elapsed)
+	return false
 
 
 ## 本夜 floor 补刷已用配额（测试 / 调试）
@@ -425,18 +449,84 @@ func get_floor_refills_used() -> int:
 	return _floor_refills_used
 
 
+func _budget_spawned() -> int:
+	return maxi(_night_budget_total - _remaining, 0)
+
+
+## 到 elapsed 时应已释放的有经验预算数（均匀曲线；开局即允许第 1 只）
+func _expected_budget_spawned(elapsed: float) -> int:
+	if _night_budget_total <= 0:
+		return 0
+	var usable: float = _budget_usable_duration()
+	if elapsed >= usable:
+		return _night_budget_total
+	# ceil 比例：t=0+ 即为 1，铺满 usable 时到 total
+	var ratio: float = clampf(elapsed / usable, 0.0, 1.0)
+	var due: int = int(ceil(float(_night_budget_total) * ratio - 1e-6))
+	return clampi(maxi(due, 1), 1, _night_budget_total)
+
+
+## 是否应按均匀曲线再释放一只有经验怪
+func _should_release_budget(elapsed: float) -> bool:
+	if _remaining <= 0:
+		return false
+	if String(_spawn_meta.get("budget_pace", "even")) != "even":
+		return true
+	return _budget_spawned() < _expected_budget_spawned(elapsed)
+
+
+## 测试钩子（仅机检）：延长本夜刷怪时钟。正式局勿调用。
+func debug_extend_night_duration(extra_sec: float) -> void:
+	# headless 单测 / 编辑器外调试才允许；正式 Debug 试玩也不应拉长夜长
+	if not OS.has_feature("editor") and DisplayServer.get_name() != "headless":
+		push_warning("[EnemySpawner] debug_extend_night_duration 已忽略（非 headless/editor）")
+		return
+	if extra_sec > 0.0:
+		_night_duration += extra_sec
+
+
 ## 本夜总刷怪数（来自 metadata.spawn 的 base_count / per_night，封顶 max_enemies）
 ## W18 难度档位：再乘档位数量倍率（守夜人 0.8× / 灯塔 1.0×）
+## budget_exp_redundancy：成长冗余（多刷有经验怪，降低漏捡/漏杀导致的升级缺口）
 func _compute_count(night: int) -> int:
 	var base_count: int = int(_spawn_meta.get("base_count", 10))
 	var per_night: int = int(_spawn_meta.get("per_night", 3))
 	var count: int = base_count + per_night * (night - 1)
 	count = int(roundi(float(count) * DifficultySystem.enemy_count_multiplier()))
-	return mini(count, max_enemies)
+	var redundancy: float = float(_spawn_meta.get("budget_exp_redundancy", 1.0))
+	if redundancy > 1.0:
+		count = int(roundi(float(count) * redundancy))
+	return mini(maxi(count, 1), max_enemies)
 
 
-## 当前夜密度曲线间隔（秒）：前 sparse 秒稀疏 → 0.6×时长密集 → 末段加压
+## 有经验预算的可用时长（夜长 − 夜末捡珠空窗）
+func _budget_usable_duration() -> float:
+	return maxf(_night_duration - _budget_slack_sec, 1.0)
+
+
+## 刷怪间隔：even=追赶均匀曲线时的节拍；落后时压到 pressure
 func _current_interval(elapsed: float) -> float:
+	var pace: String = String(_spawn_meta.get("budget_pace", "even"))
+	if pace != "even":
+		return _legacy_density_interval(elapsed)
+	var usable: float = _budget_usable_duration()
+	var pressure: float = float(_spawn_meta.get("interval_pressure", 0.4))
+	# 可用时段结束仍有预算：快速刷完，把空窗留给捡珠
+	if elapsed >= usable and _remaining > 0:
+		return pressure
+	if _remaining <= 0:
+		return float(_spawn_meta.get("interval_dense", 0.8))
+	# 落后于应刷进度：强制加压追赶（勿用 left/remaining 越落越慢）
+	if _budget_spawned() < _expected_budget_spawned(elapsed):
+		return pressure
+	var left_time: float = maxf(usable - elapsed, 0.05)
+	var paced: float = left_time / float(maxi(_remaining, 1))
+	var max_i: float = float(_spawn_meta.get("interval_start", 2.0)) * 2.5
+	return clampf(paced, pressure * 0.5, max_i)
+
+
+## 旧三段密度曲线（budget_pace != even 时回退）
+func _legacy_density_interval(elapsed: float) -> float:
 	var sparse: float = float(_spawn_meta.get("sparse_seconds", 12.0))
 	var interval_start: float = float(_spawn_meta.get("interval_start", 2.0))
 	var interval_dense: float = float(_spawn_meta.get("interval_dense", 0.8))

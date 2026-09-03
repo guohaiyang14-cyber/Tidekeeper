@@ -525,3 +525,20 @@ func _collect(gem: ExpGem, index: int) -> void:
 	exp_collected.emit(value)
 	_active_gems.remove_at(index)
 	_pool.release(gem)
+
+
+## 夜末结算：场上未拾经验珠全部入账并回收（避免进昼 clear 丢成长）
+## 返回入账总经验；潮币/宝箱不在此处理。
+func collect_all_gems_now() -> int:
+	var total: int = 0
+	var i: int = _active_gems.size() - 1
+	while i >= 0:
+		var gem: ExpGem = _active_gems[i]
+		if is_instance_valid(gem):
+			total += gem.exp_value
+			GameState.add_exp(gem.exp_value)
+			exp_collected.emit(gem.exp_value)
+			_pool.release(gem)
+		_active_gems.remove_at(i)
+		i -= 1
+	return total

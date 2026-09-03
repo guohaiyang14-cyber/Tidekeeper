@@ -47,6 +47,8 @@ func _ready() -> void:
 	await _test_coin_loop()             # 3.2 潮币闭环（掉落→拾取）
 	await _test_shop()                  # 3.1 商店刷新 + 3.2 购买
 	await _test_teaching_night_density()  # 教学夜密度回归（修复「一半时间没怪」空窗）
+	await _test_even_budget_pace()  # even：前段不打光有经验预算
+	await _test_salvage_gems_at_day()  # 夜末未拾珠自动入账
 
 	print("------------------------------------------------------------")
 	print("W2-W3 机检通过=%d 失败=%d" % [_passed, _failed])
@@ -329,11 +331,15 @@ func _test_teaching_night_density() -> void:
 	GameState.player_health = GameState.player_max_health
 	spawner.start_night(1)  # 教学夜（夜1）：数值减半但不降密度 floor
 	# 1) 跑到本夜预算耗尽（_remaining 降到 0）
+	# even 节奏：预算铺满（夜长−slack）≈40s；5400 帧≈90s 足够
 	var safe: int = 0
-	while spawner.get_remaining() > 0 and safe < 2400:
+	while spawner.get_remaining() > 0 and safe < 5400:
 		await get_tree().process_frame
 		safe += 1
 	_assert(spawner.get_remaining() == 0, "教学夜预算已耗尽 remaining=0 (帧=%d)" % safe)
+	# 预算耗尽后延长刷怪时钟，以便测 floor 反复回补（否则 _elapsed 触顶会停刷）
+	if spawner.has_method("debug_extend_night_duration"):
+		spawner.debug_extend_night_duration(90.0)
 	# 2) 模拟玩家在夜晚进行中持续清场：直接 release 当前活跃敌人（保持 _spawning=true）
 	var actives: Array[Node] = enemy_pool.get_active()
 	for a in actives:
@@ -406,4 +412,53 @@ func _test_teaching_night_density() -> void:
 			_assert(spawner.get_floor_refills_used() > 0,
 				"floor 补刷不封顶仍持续补刷 (used=%d)" % spawner.get_floor_refills_used())
 	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# even 预算节奏：前 ~12s 不应打光有经验配额（回归「前半夜经验掉完」）
+# ---------------------------------------------------------------------------
+func _test_even_budget_pace() -> void:
+	print("[even 预算] 前段保留有经验配额")
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+	spawner.start_night(1)
+	var rem0: int = spawner.get_remaining()
+	_assert(rem0 > 0, "开局有经验预算 remaining=%d" % rem0)
+	# ~12s @60fps；even 下此时应仍剩约 2/3 预算（允许 floor 顶压但不预支光）
+	for _i in 720:
+		await get_tree().process_frame
+	var rem1: int = spawner.get_remaining()
+	_assert(rem1 > 0, "约 12s 后仍有有经验预算 remaining=%d" % rem1)
+	_assert(rem1 >= int(ceil(float(rem0) * 0.4)),
+		"约 12s 后剩余预算不过低 (%d→%d，期望 ≥40%%)" % [rem0, rem1])
+	# 跑到 usable（夜长−slack）末：有经验预算应刷完（含落后追赶）
+	var safe: int = 0
+	while spawner.get_remaining() > 0 and safe < 3600:
+		await get_tree().process_frame
+		safe += 1
+	_assert(spawner.get_remaining() == 0,
+		"usable 时段结束前有经验预算刷完 remaining=0 (帧=%d)" % safe)
+	spawner.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 夜末经验珠回收：collect_all_gems_now 入账并清空活跃珠
+# ---------------------------------------------------------------------------
+func _test_salvage_gems_at_day() -> void:
+	print("[夜末回收] collect_all_gems_now 入账")
+	spawner.clear_all()
+	pickup_system.clear_all()
+	GameState.player_health = GameState.player_max_health
+	var exp0: int = GameState.player_exp
+	var g1 = pickup_system.spawn_exp_gem(player.global_position + Vector2(400.0, 0.0), 7)
+	var g2 = pickup_system.spawn_exp_gem(player.global_position + Vector2(-400.0, 0.0), 5)
+	_assert(g1 != null and g2 != null, "生成 2 颗远距经验珠")
+	_assert(pickup_system.active_gem_count() == 2, "场上 2 珠")
+	var salvaged: int = pickup_system.collect_all_gems_now()
+	_assert(salvaged > 0, "回收经验 > 0 (got=%d)" % salvaged)
+	_assert(pickup_system.active_gem_count() == 0, "回收后场上无珠")
+	_assert(GameState.player_exp > exp0, "经验已入账 (%d→%d)" % [exp0, GameState.player_exp])
+	pickup_system.clear_all()
 	GameState.player_health = GameState.player_max_health

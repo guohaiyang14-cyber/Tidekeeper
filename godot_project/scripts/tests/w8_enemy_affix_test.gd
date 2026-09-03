@@ -360,9 +360,13 @@ func _test_affix_chain() -> void:
 	_clear()
 	var e: EnemyBase = _spawn("small_goblin", Vector2(900.0, 0.0), 1)
 	e.apply_affixes(["chain"])
-	_assert(not player.is_bound(), "攻击前玩家未绑定")
+	_assert(not player.is_bound(), "攻击前玩家未束缚")
 	e.take_damage(5)
-	_assert(player.is_bound(), "锁链词缀绑定玩家")
+	_assert(player.is_bound(), "锁链词缀束缚玩家")
+	var ch: Dictionary = ConfigLoader.get_affix("chain")
+	var expect_mult: float = float(ch.get("bind_move_mult", 0.5))
+	_assert(abs(player.get_bind_move_mult() - expect_mult) < 0.001, "锁链为减速非定身（bind_move_mult）")
+	_assert(expect_mult > 0.0, "锁链 bind_move_mult>0（可走位）")
 	_clear()
 
 

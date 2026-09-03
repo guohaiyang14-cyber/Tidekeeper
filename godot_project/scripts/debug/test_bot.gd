@@ -15,24 +15,31 @@ const RESULT_RESTART_DELAY: float = 1.1
 const SHOP_DWELL: float = 1.8
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
+# N5 巨钳王 + swift/thorns/chain 时，旧参数易贴脸；挣扎期若无脑追怪会白给。
 const ORBIT_SPEED: float = 1.85
-const STRUGGLE_HUNT_RADIUS: float = 640.0
-const STRUGGLE_PACK_RADIUS: float = 520.0
-const ELITE_SCAN_RADIUS: float = 900.0
-const ELITE_MIN_DIST_N5: float = 360.0
-const ELITE_MIN_DIST: float = 280.0
-const FLEE_RADIUS_N5: float = 320.0
-const FLEE_RADIUS: float = 240.0
-const DANGER_HP_RATIO: float = 0.72
+const STRUGGLE_HUNT_RADIUS: float = 520.0
+const STRUGGLE_SAFE_ELITE: float = 420.0
+const STRUGGLE_SAFE_THORNS: float = 140.0
+const ELITE_SCAN_RADIUS: float = 1000.0
+const ELITE_MIN_DIST_N5: float = 520.0
+const ELITE_MIN_DIST: float = 300.0
+## 锁链精英：被打会绑 0.5s，需拉得更开（夜结束靠计时，不强制击杀精英）
+const ELITE_MIN_DIST_CHAIN: float = 620.0
+const FLEE_RADIUS_N5: float = 440.0
+const FLEE_RADIUS: float = 260.0
+const DANGER_HP_RATIO: float = 0.78
 const CHEST_SEEK_RANGE: float = 420.0
-const CHEST_SAFE_ENEMY: float = 100.0
-const CHEST_SAFE_ELITE: float = 320.0
-const GEM_SEEK_RANGE: float = 380.0
-const GEM_SAFE_ENEMY: float = 72.0
-const GEM_SAFE_ELITE: float = 280.0
-const ELITE_FLEE_WEIGHT: float = 4.2
-const THORNS_FLEE_WEIGHT: float = 2.2
-const SWIFT_FLEE_WEIGHT: float = 1.5
+const CHEST_SAFE_ENEMY: float = 110.0
+const CHEST_SAFE_ELITE: float = 420.0
+const GEM_SEEK_RANGE: float = 360.0
+const GEM_SAFE_ENEMY: float = 80.0
+const GEM_SAFE_ELITE: float = 360.0
+const ELITE_FLEE_WEIGHT: float = 5.5
+const THORNS_FLEE_WEIGHT: float = 3.2
+const SWIFT_FLEE_WEIGHT: float = 2.4
+const CHAIN_FLEE_WEIGHT: float = 2.8
+## 第 4 夜起商店/三选一额外偏向减伤（进 N5 精英前囤生存）
+const SURVIVAL_BIAS_FROM_NIGHT: int = 4
 
 var _enabled: bool = false
 var _action_timer: float = 0.0
@@ -198,9 +205,10 @@ func _pick_upgrade_index(offers: Array) -> int:
 func _offer_score(offer: Dictionary) -> int:
 	var id: String = str(offer.get("id", ""))
 	if offer.get("type") == "weapon":
+		# 临近精英夜：已有武器升级仍优先，但新武器低于高分减伤被动
 		if id in GameState.weapon_slots:
 			return 88
-		return 36
+		return 28 if _want_survival_bias() else 36
 	return _survival_item_score(id)
 
 
@@ -320,23 +328,39 @@ func _should_buy_shop_item(item: Dictionary) -> bool:
 
 func _shop_item_score(item: Dictionary) -> int:
 	var id: String = str(item.get("id", ""))
+	var kind: String = str(item.get("kind", ""))
 	var owned: bool = id in GameState.weapon_slots or id in GameState.passive_slots
 	var base: int = _survival_item_score(id)
-	if str(item.get("kind", "")) == "weapon" and owned:
-		return 86
+	# 消耗品回血：低血或临近精英夜时抬高
+	if kind == "consumable" or id in ["storm_flask", "pearl"]:
+		var hp_ratio: float = 1.0
+		if GameState.player_max_health > 0:
+			hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
+		if hp_ratio < 0.85 or _want_survival_bias():
+			base = maxi(base, 90)
+	if kind == "weapon" and owned:
+		return 86 if not _want_survival_bias() else 78
+	# 临近 N5：未拥有新武器略降，把钱留给减伤被动
+	if kind == "weapon" and not owned and _want_survival_bias():
+		base = mini(base, 42)
 	return base + (12 if owned else 0)
 
 
+func _want_survival_bias() -> bool:
+	return GameState.current_night >= SURVIVAL_BIAS_FROM_NIGHT
+
+
 func _survival_item_score(id: String) -> int:
+	var bias: int = 18 if _want_survival_bias() else 0
 	match id:
 		"amulet", "coral_barrier":
-			return 100
+			return 100 + bias
 		"lamp_core", "tide_bell", "storm_flask":
-			return 72
+			return 72 + bias
 		"lamp_oil", "iron_chain", "humus", "abyss_eye", "tide_compass":
-			return 64
+			return 64 + (bias / 2)
 		"pearl":
-			return 40
+			return 40 + bias
 		"exp_sac":
 			return 18
 		_:
@@ -345,7 +369,8 @@ func _survival_item_score(id: String) -> int:
 
 func _tick_night_movement(world: World, delta: float) -> void:
 	var player: Player = world.player as Player
-	if player == null or player.is_bound():
+	# 锁链改为减速后仍可走位；仅缺玩家时停手（完全定身 bind_move_mult=0 时由 Player 自清速度）
+	if player == null:
 		_release_move_actions()
 		return
 	var pos: Vector2 = player.global_position
@@ -354,21 +379,12 @@ func _tick_night_movement(world: World, delta: float) -> void:
 
 
 func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
-	# 挣扎窗口：优先打附近「非 floor 补刷、非精英」的小怪凑 5 杀（floor 补刷不计入挣扎进度）
-	if GameState.is_struggling():
-		var soft: Vector2 = _nearest_struggle_target(world, pos, STRUGGLE_HUNT_RADIUS)
-		if soft != Vector2.INF:
-			return (soft - pos).normalized()
-		var pack: Vector2 = _enemy_pack_centroid(world, pos, STRUGGLE_PACK_RADIUS)
-		if pack != Vector2.INF:
-			return (pack - pos).normalized()
-		var hunt: Vector2 = _nearest_enemy_position(world, pos, STRUGGLE_HUNT_RADIUS)
-		if hunt != Vector2.INF:
-			return (hunt - pos).normalized()
-		return Vector2.ZERO
-
 	_orbit_angle += delta * ORBIT_SPEED
 	var kite: Vector2 = Vector2(cos(_orbit_angle), sin(_orbit_angle))
+	# 挣扎窗口：无敌期内全力凑杀（见 _struggle_move_direction）
+	if GameState.is_struggling():
+		return _struggle_move_direction(world, pos, kite)
+
 	var flee: Vector2 = _enemy_flee_vector(world, pos) + _projectile_flee_vector(world, pos)
 	var hp_ratio: float = 1.0
 	if GameState.player_max_health > 0:
@@ -377,19 +393,14 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	var elite_pos: Vector2 = _nearest_elite_position(world, pos, ELITE_SCAN_RADIUS)
 	var elite_near: bool = elite_pos != Vector2.INF
 	var elite_dist: float = pos.distance_to(elite_pos) if elite_near else 9999.0
-	# 精英夜：强制拉开；荆棘+迅捷贴脸几乎必死
-	var elite_min_dist: float = ELITE_MIN_DIST_N5 if GameState.current_night >= 5 else ELITE_MIN_DIST
+	var elite_min_dist: float = _elite_keep_distance(world, elite_pos)
+	# N5 开场精英刷在玩家上方约 200：立刻南向拉开，勿捡箱/珠
 	if elite_near and elite_dist < elite_min_dist:
-		# 低血仍可去「远离精英」的安全宝箱（回血箱）
 		if hp_ratio < DANGER_HP_RATIO:
 			var rescue_chest: Vector2 = _safe_chest_direction(world, pos)
-			if rescue_chest != Vector2.ZERO:
+			if rescue_chest != Vector2.ZERO and _chest_away_from_elite(rescue_chest, pos, elite_pos):
 				return rescue_chest
-		var away_e: Vector2 = (pos - elite_pos).normalized()
-		var tangent_e: Vector2 = Vector2(-away_e.y, away_e.x)
-		if kite.dot(tangent_e) < 0.0:
-			tangent_e = -tangent_e
-		return (away_e * 4.6 + tangent_e * 2.2 + flee * 1.0).normalized()
+		return _kite_away_from(elite_pos, pos, flee, kite, 6.0, 2.6)
 
 	# 低血：优先安全宝箱（可能回血），再风筝
 	if hp_ratio < DANGER_HP_RATIO:
@@ -402,14 +413,16 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if danger:
 		var away: Vector2 = flee.normalized() if flee.length_squared() > 0.0001 else kite
 		if elite_near:
-			away = (away + (pos - elite_pos).normalized() * 1.8).normalized()
+			away = (away + (pos - elite_pos).normalized() * 2.4).normalized()
 		var tangent: Vector2 = Vector2(-away.y, away.x)
 		if kite.dot(tangent) < 0.0:
 			tangent = -tangent
-		var away_w: float = 4.0 if hp_ratio > DANGER_HP_RATIO else 5.4
+		var away_w: float = 4.4 if hp_ratio > DANGER_HP_RATIO else 5.8
 		if elite_near:
-			away_w += 1.6
-		var combined: Vector2 = away * away_w + tangent * 2.4 + kite * 0.2
+			away_w += 2.2
+		if GameState.current_night >= 5:
+			away_w += 1.2
+		var combined: Vector2 = away * away_w + tangent * 2.6 + kite * 0.15
 		if combined.length_squared() < 0.01:
 			return kite
 		return combined.normalized()
@@ -422,6 +435,58 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if gem_dir != Vector2.ZERO:
 		return gem_dir
 	return kite
+
+
+## 挣扎：无敌窗内全力凑杀；优先安全软怪，没有则追最近可计杀目标（含靠近精英）
+func _struggle_move_direction(world: World, pos: Vector2, kite: Vector2) -> Vector2:
+	var soft: Vector2 = _nearest_struggle_target(world, pos, STRUGGLE_HUNT_RADIUS)
+	if soft != Vector2.INF:
+		return (soft - pos).normalized()
+	# 放宽：任意非 floor / 非 boss 目标（含精英）—— 3s 内需 5 杀，保命靠无敌
+	var any_kill: Vector2 = _nearest_struggle_any(world, pos, STRUGGLE_HUNT_RADIUS + 200.0)
+	if any_kill != Vector2.INF:
+		return (any_kill - pos).normalized()
+	var flee: Vector2 = _enemy_flee_vector(world, pos)
+	if flee.length_squared() > 0.0001:
+		# 反向靠近怪群（flee 指向远离，挣扎时取反）
+		return (-flee).normalized()
+	return kite
+
+
+func _elite_keep_distance(world: World, elite_pos: Vector2) -> float:
+	var base: float = ELITE_MIN_DIST_N5 if GameState.current_night >= 5 else ELITE_MIN_DIST
+	if elite_pos == Vector2.INF:
+		return base
+	for enemy in _query_enemies(world, elite_pos, 40.0):
+		if not (enemy.is_elite or enemy.is_boss):
+			continue
+		if enemy.has_affix("chain"):
+			return maxf(base, ELITE_MIN_DIST_CHAIN)
+		if enemy.has_affix("thorns") and enemy.has_affix("swift"):
+			return maxf(base, ELITE_MIN_DIST_N5 + 80.0)
+	return base
+
+
+func _chest_away_from_elite(chest_dir: Vector2, pos: Vector2, elite_pos: Vector2) -> bool:
+	if elite_pos == Vector2.INF or chest_dir == Vector2.ZERO:
+		return true
+	var away: Vector2 = (pos - elite_pos).normalized()
+	return chest_dir.dot(away) >= -0.15
+
+
+func _kite_away_from(
+	threat_pos: Vector2, pos: Vector2, flee: Vector2, kite: Vector2, away_w: float, tangent_w: float
+) -> Vector2:
+	var away: Vector2 = (pos - threat_pos).normalized()
+	if flee.length_squared() > 0.0001:
+		away = (away * 1.6 + flee.normalized()).normalized()
+	var tangent: Vector2 = Vector2(-away.y, away.x)
+	if kite.dot(tangent) < 0.0:
+		tangent = -tangent
+	var combined: Vector2 = away * away_w + tangent * tangent_w + flee * 0.8 + kite * 0.15
+	if combined.length_squared() < 0.01:
+		return away
+	return combined.normalized()
 
 
 func _safe_chest_direction(world: World, pos: Vector2) -> Vector2:
@@ -471,12 +536,34 @@ func _nearest_elite_position(world: World, pos: Vector2, radius: float) -> Vecto
 	return best_pos
 
 
-## 挣扎击杀目标：排除 floor 补刷（不计进度）与精英（贴脸易白给）
+## 挣扎击杀目标：排除 floor 补刷 / 荆棘怪；优先远离精英的软怪
 func _nearest_struggle_target(world: World, pos: Vector2, radius: float) -> Vector2:
 	var best_dist: float = radius
 	var best_pos: Vector2 = Vector2.INF
+	var elite_ref: Vector2 = _nearest_elite_position(world, pos, ELITE_SCAN_RADIUS)
 	for enemy in _query_enemies(world, pos, radius):
 		if enemy.is_floor_refill or enemy.is_elite or enemy.is_boss:
+			continue
+		if enemy.has_affix("thorns"):
+			continue
+		var epos: Vector2 = enemy.global_position
+		if elite_ref != Vector2.INF and epos.distance_to(elite_ref) < STRUGGLE_SAFE_ELITE * 0.7:
+			continue
+		if _nearest_thorns_distance(world, epos, STRUGGLE_SAFE_THORNS + 20.0) <= STRUGGLE_SAFE_THORNS:
+			continue
+		var dist: float = pos.distance_to(epos)
+		if dist < best_dist:
+			best_dist = dist
+			best_pos = epos
+	return best_pos
+
+
+## 挣扎兜底目标：任意可计杀（非 floor）；含精英
+func _nearest_struggle_any(world: World, pos: Vector2, radius: float) -> Vector2:
+	var best_dist: float = radius
+	var best_pos: Vector2 = Vector2.INF
+	for enemy in _query_enemies(world, pos, radius):
+		if enemy.is_floor_refill:
 			continue
 		var dist: float = pos.distance_to(enemy.global_position)
 		if dist < best_dist:
@@ -485,15 +572,15 @@ func _nearest_struggle_target(world: World, pos: Vector2, radius: float) -> Vect
 	return best_pos
 
 
-func _nearest_enemy_position(world: World, pos: Vector2, radius: float) -> Vector2:
-	var best_dist: float = radius
-	var best_pos: Vector2 = Vector2.INF
+func _nearest_thorns_distance(world: World, pos: Vector2, radius: float) -> float:
+	var best: float = radius + 1.0
 	for enemy in _query_enemies(world, pos, radius):
+		if not enemy.has_affix("thorns"):
+			continue
 		var dist: float = pos.distance_to(enemy.global_position)
-		if dist < best_dist:
-			best_dist = dist
-			best_pos = enemy.global_position
-	return best_pos
+		if dist < best:
+			best = dist
+	return best
 
 
 func _nearest_enemy_distance(world: World, pos: Vector2, radius: float) -> float:
@@ -503,17 +590,6 @@ func _nearest_enemy_distance(world: World, pos: Vector2, radius: float) -> float
 		if dist < best:
 			best = dist
 	return best
-
-
-func _enemy_pack_centroid(world: World, pos: Vector2, radius: float) -> Vector2:
-	var acc: Vector2 = Vector2.ZERO
-	var n: int = 0
-	for enemy in _query_enemies(world, pos, radius):
-		acc += enemy.global_position
-		n += 1
-	if n <= 0:
-		return Vector2.INF
-	return acc / float(n)
 
 
 func _query_enemies(world: World, pos: Vector2, radius: float) -> Array[EnemyBase]:
@@ -549,6 +625,8 @@ func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 			weight *= THORNS_FLEE_WEIGHT
 		if enemy.has_affix("swift"):
 			weight *= SWIFT_FLEE_WEIGHT
+		if enemy.has_affix("chain"):
+			weight *= CHAIN_FLEE_WEIGHT
 		if enemy.behavior_type == "self_destruct":
 			weight *= 2.1
 		if enemy.behavior_type == "burrow_ambush":
