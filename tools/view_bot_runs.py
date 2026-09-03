@@ -13,6 +13,11 @@
 #   python tools/view_bot_runs.py --json
 #   python tools/view_bot_runs.py --self-test
 #   view_bot_runs.bat --latest 5 --detail
+#
+# 伤害组成依赖 GameState.trigger_game_over 打印的：
+#   [GameState] 伤害组成: total=… last=… amt=… | src=dmg …
+# 按夜战斗统计依赖 TestBot 打印的：
+#   [TestBot] STAT night=N phase=start|end ...
 # ============================================================================
 from __future__ import annotations
 
@@ -24,7 +29,7 @@ import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 APP_NAME = "Tidekeeper"
@@ -43,9 +48,50 @@ RE_BOT_BUY = re.compile(r"\[TestBot\]\s*购买\s+(.+)$")
 RE_BOT_FUSE = re.compile(r"\[TestBot\]\s*融合武器\s+(\S+)")
 RE_BOT_REFINE = re.compile(r"\[TestBot\]\s*精炼武器\s+(\S+)")
 RE_BOT_SKIP = re.compile(r"\[TestBot\]\s*跳过抉择之昼")
+RE_BOT_STAT = re.compile(r"\[TestBot\]\s+STAT\s+(.+)$")
 RE_SCRIPT_ERR = re.compile(r"SCRIPT ERROR|Error at:", re.I)
+# [GameState] 伤害组成: total=120 last=contact:claw_crab amt=18 | affix_thorns=50 contact:claw_crab=40
+RE_DAMAGE_COMP = re.compile(
+    r"\[GameState\]\s*伤害组成:\s*total=(\d+)\s+last=(\S+)\s+amt=(\d+)\s*\|\s*(.*)$"
+)
+RE_DAMAGE_PAIR = re.compile(r"([^\s=]+)=(\d+)")
+RE_KV = re.compile(r"(\w+)=([^\s]+)")
 
 _OUTCOME_RANK = {"win": 3, "death": 3, "aborted": 2, "in_progress": 1}
+
+
+def _parse_kv_body(body: str) -> Dict[str, str]:
+    return {m.group(1): m.group(2) for m in RE_KV.finditer(body)}
+
+
+def _as_int(raw: Optional[str], default: int = 0) -> int:
+    if raw is None:
+        return default
+    try:
+        return int(float(raw))
+    except ValueError:
+        return default
+
+
+def _as_float(raw: Optional[str], default: float = 0.0) -> float:
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+@dataclass
+class NightStat:
+    night: int
+    player: Dict[str, str] = field(default_factory=dict)
+    bonuses: Dict[str, str] = field(default_factory=dict)
+    weapons_start: List[Dict[str, str]] = field(default_factory=list)
+    weapons_end: List[Dict[str, str]] = field(default_factory=list)
+    passives_start: List[Dict[str, str]] = field(default_factory=list)
+    enemies: List[Dict[str, str]] = field(default_factory=list)
+    summary: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -63,6 +109,11 @@ class BotRun:
     day_skips: int = 0
     script_errors: int = 0
     bot_touched: bool = False  # 本局出现过 [TestBot] 行，或启用后开启
+    total_damage: int = 0
+    last_hit_source: str = ""
+    last_hit_amount: int = 0
+    damage_sources: dict = field(default_factory=dict)  # source_id -> applied damage
+    night_stats: Dict[int, NightStat] = field(default_factory=dict)
 
     @property
     def label(self) -> str:
@@ -73,6 +124,11 @@ class BotRun:
         if self.outcome == "aborted":
             return "中断"
         return "进行中"
+
+    def ensure_night(self, night: int) -> NightStat:
+        if night not in self.night_stats:
+            self.night_stats[night] = NightStat(night=night)
+        return self.night_stats[night]
 
 
 def default_log_dirs() -> List[Path]:
@@ -178,6 +234,39 @@ def _close_run(run: Optional[BotRun], outcome: str, reason: str = "", night: Opt
         run.reason = reason
 
 
+def _ingest_bot_stat(run: BotRun, body: str) -> None:
+    kv = _parse_kv_body(body)
+    night = _as_int(kv.get("night"), 0)
+    if night <= 0:
+        return
+    if night > run.max_night:
+        run.max_night = night
+    ns = run.ensure_night(night)
+    phase = kv.get("phase", "")
+    kind = kv.get("kind", "")
+    if phase == "start" and kind == "":
+        ns.player = kv
+        return
+    if phase == "start" and kind == "bonus":
+        ns.bonuses = kv
+        return
+    if phase == "start" and kind == "weapon":
+        ns.weapons_start.append(kv)
+        return
+    if phase == "start" and kind == "passive":
+        ns.passives_start.append(kv)
+        return
+    if phase == "end" and kind == "weapon":
+        ns.weapons_end.append(kv)
+        return
+    if phase == "end" and kind == "enemy":
+        ns.enemies.append(kv)
+        return
+    if phase == "end" and kind == "summary":
+        ns.summary = kv
+        return
+
+
 def parse_bot_session(text: str, source: str) -> List[BotRun]:
     """解析一个 Godot 进程会话。单测与 Bot 可能同文件；只保留 bot_touched 局。"""
     if "[TestBot]" not in text:
@@ -257,6 +346,25 @@ def parse_bot_session(text: str, source: str) -> List[BotRun]:
             current.day_skips += 1
             continue
 
+        m = RE_BOT_STAT.search(line)
+        if m:
+            current.bot_touched = True
+            _ingest_bot_stat(current, m.group(1))
+            continue
+
+        m = RE_DAMAGE_COMP.search(line)
+        if m:
+            current.total_damage = int(m.group(1))
+            current.last_hit_source = m.group(2)
+            current.last_hit_amount = int(m.group(3))
+            body = m.group(4).strip()
+            sources: dict = {}
+            if body and body != "(none)":
+                for pm in RE_DAMAGE_PAIR.finditer(body):
+                    sources[pm.group(1)] = int(pm.group(2))
+            current.damage_sources = sources
+            continue
+
     return [r for r in runs if r.bot_touched]
 
 
@@ -305,6 +413,20 @@ def dedupe_runs(runs: List[BotRun]) -> List[BotRun]:
     return [r for i, r in enumerate(runs) if i not in drop]
 
 
+def _damage_category(source: str) -> str:
+    if source.startswith("contact:"):
+        return "contact"
+    if source.startswith("explode:"):
+        return "explode"
+    if source == "affix_thorns":
+        return "thorns"
+    if source == "enemy_projectile":
+        return "projectile"
+    if source.startswith("boss_"):
+        return "boss"
+    return "other"
+
+
 def summarize(runs: List[BotRun]) -> dict:
     finished = [r for r in runs if r.outcome in ("death", "win")]
     deaths = [r for r in finished if r.outcome == "death"]
@@ -312,6 +434,21 @@ def summarize(runs: List[BotRun]) -> dict:
     night_hist = Counter(r.max_night for r in finished)
     death_nights = Counter(r.max_night for r in deaths)
     reasons = Counter(r.reason for r in deaths)
+    src_total: Counter = Counter()
+    cat_total: Counter = Counter()
+    last_hits: Counter = Counter()
+    dmg_runs = 0
+    dmg_sum = 0
+    for r in deaths:
+        if not r.damage_sources and r.total_damage <= 0:
+            continue
+        dmg_runs += 1
+        dmg_sum += r.total_damage
+        for src, amt in r.damage_sources.items():
+            src_total[src] += amt
+            cat_total[_damage_category(src)] += amt
+        if r.last_hit_source:
+            last_hits[r.last_hit_source] += 1
     return {
         "total_runs": len(runs),
         "finished": len(finished),
@@ -327,7 +464,75 @@ def summarize(runs: List[BotRun]) -> dict:
         "death_night_histogram": dict(sorted(death_nights.items())),
         "death_reasons": dict(reasons.most_common()),
         "unique_seeds": len({r.seed for r in runs}),
+        "damage_runs": dmg_runs,
+        "damage_total_sum": dmg_sum,
+        "damage_by_source": dict(src_total.most_common()),
+        "damage_by_category": dict(cat_total.most_common()),
+        "last_hit_sources": dict(last_hits.most_common()),
     }
+
+
+def _print_night_stats(run: BotRun) -> None:
+    if not run.night_stats:
+        return
+    for night in sorted(run.night_stats):
+        ns = run.night_stats[night]
+        p = ns.player
+        if p:
+            print(
+                f"       N{night} 玩家: hp={p.get('hp', '?')} lv={p.get('lv', '?')} "
+                f"coins={p.get('coins', '?')} move={p.get('move', '?')} "
+                f"dmg_m={p.get('dmg_m', '?')} atk_m={p.get('atk_m', '?')} "
+                f"dr={p.get('dr', '?')} crit={p.get('crit', '?')}"
+            )
+        b = ns.bonuses
+        if b:
+            print(
+                f"       N{night} 加成: dmg_pass={b.get('dmg_pass', '?')} "
+                f"dmg_meta={b.get('dmg_meta', '?')} atk_pass={b.get('atk_pass', '?')} "
+                f"area_pass={b.get('area_pass', '?')} dr={b.get('dr', '?')}"
+            )
+        if ns.weapons_start:
+            parts = []
+            for w in ns.weapons_start:
+                parts.append(
+                    f"{w.get('id', '?')} L{w.get('lv', '?')} dmg={w.get('dmg', '?')} "
+                    f"rate={w.get('rate', '?')}"
+                )
+            print(f"       N{night} 武器开局: {'; '.join(parts)}")
+        if ns.passives_start:
+            parts = [f"{p.get('id', '?')} L{p.get('lv', '?')}" for p in ns.passives_start]
+            print(f"       N{night} 被动: {'; '.join(parts)}")
+        if ns.weapons_end:
+            parts = []
+            for w in sorted(ns.weapons_end, key=lambda x: -_as_int(x.get("dealt"))):
+                parts.append(f"{w.get('id', '?')} dealt={w.get('dealt', '0')} hits={w.get('hits', '0')}")
+            print(f"       N{night} 武器伤害: {'; '.join(parts)}")
+        if ns.enemies:
+            # 优先展示击杀多 / 未击杀多的条目
+            ranked = sorted(
+                ns.enemies,
+                key=lambda e: (
+                    -(_as_int(e.get("killed")) + _as_int(e.get("unkilled"))),
+                    e.get("id", ""),
+                ),
+            )
+            for e in ranked[:8]:
+                print(
+                    f"       N{night} 敌 {e.get('id', '?')}[{e.get('tier', '?')}"
+                    f"|{e.get('affix', '-')}] "
+                    f"k={e.get('killed', '0')} u={e.get('unkilled', '0')} "
+                    f"alive_k={e.get('avg_alive_k', '0')} alive_u={e.get('avg_alive_u', '0')} "
+                    f"hp={e.get('avg_maxhp', '?')} spd={e.get('avg_spd', '?')} "
+                    f"cdmg={e.get('avg_cdmg', '?')}"
+                )
+        s = ns.summary
+        if s:
+            print(
+                f"       N{night} 汇总: dealt={s.get('dealt_total', '0')} "
+                f"hits={s.get('hits_total', '0')} kills={s.get('kills', '0')} "
+                f"unkilled={s.get('unkilled', '0')}"
+            )
 
 
 def print_table(runs: List[BotRun], detail: bool) -> None:
@@ -356,6 +561,14 @@ def print_table(runs: List[BotRun], detail: bool) -> None:
                 print(f"       跳过昼: {r.day_skips}")
             if r.script_errors:
                 print(f"       SCRIPT ERROR 行: {r.script_errors}")
+            if r.damage_sources or r.total_damage > 0:
+                ranked = sorted(r.damage_sources.items(), key=lambda kv: (-kv[1], kv[0]))
+                top = ", ".join(f"{s}={d}" for s, d in ranked[:5])
+                print(
+                    f"       伤害: total={r.total_damage} last={r.last_hit_source}"
+                    f"({r.last_hit_amount}) | {top}"
+                )
+            _print_night_stats(r)
 
 
 def print_summary(stats: dict) -> None:
@@ -376,6 +589,39 @@ def print_summary(stats: dict) -> None:
     if stats["death_reasons"]:
         parts = [f"{k}×{v}" for k, v in stats["death_reasons"].items()]
         print("死因: " + "  ".join(parts))
+    if stats.get("damage_runs", 0) > 0:
+        tot = stats["damage_total_sum"]
+        print(
+            f"伤害组成局次 {stats['damage_runs']}  |  累计受伤 {tot}"
+            + (f"  |  局均 {round(tot / stats['damage_runs'], 1)}" if stats["damage_runs"] else "")
+        )
+        cats = stats.get("damage_by_category") or {}
+        if cats:
+            cat_parts = []
+            for k, v in cats.items():
+                pct = (100.0 * v / tot) if tot else 0.0
+                cat_parts.append(f"{k}={v}({pct:.0f}%)")
+            print("伤害大类: " + "  ".join(cat_parts))
+        srcs = stats.get("damage_by_source") or {}
+        if srcs:
+            top = list(srcs.items())[:8]
+            src_parts = []
+            for k, v in top:
+                pct = (100.0 * v / tot) if tot else 0.0
+                src_parts.append(f"{k}={v}({pct:.0f}%)")
+            print("伤害来源 Top: " + "  ".join(src_parts))
+        lasts = stats.get("last_hit_sources") or {}
+        if lasts:
+            print("最后一击: " + "  ".join(f"{k}×{v}" for k, v in lasts.items()))
+    elif stats.get("deaths", 0) > 0:
+        print("伤害组成: （日志无 [GameState] 伤害组成 行；需新版 GameState 落盘）")
+
+
+def _run_to_jsonable(run: BotRun) -> dict:
+    data = asdict(run)
+    # JSON object keys must be strings
+    data["night_stats"] = {str(k): v for k, v in data.get("night_stats", {}).items()}
+    return data
 
 
 def configure_stdio() -> None:
@@ -409,11 +655,47 @@ def run_self_test() -> int:
         "[TestBot] 跳过抉择之昼 → 下一夜\n"
         "[World] 游戏结束: hp_zero\n"
         "[GameState] 游戏结束: hp_zero (已存活 5 夜)\n"
+        "[GameState] 伤害组成: total=120 last=affix_thorns amt=12 | affix_thorns=70 contact:claw_crab=50\n"
     )
     d_runs = parse_bot_session(death, "d")
     check("death_count", len(d_runs) == 1)
     check("death_night", d_runs[0].max_night == 5 and d_runs[0].outcome == "death")
     check("death_buy", d_runs[0].buys == ["铁链"] and d_runs[0].day_skips == 1)
+    check("death_dmg_total", d_runs[0].total_damage == 120)
+    check("death_dmg_last", d_runs[0].last_hit_source == "affix_thorns" and d_runs[0].last_hit_amount == 12)
+    check("death_dmg_src", d_runs[0].damage_sources.get("affix_thorns") == 70)
+
+    stats_log = (
+        "[TestBot] 已启用\n"
+        "[GameState] 新局开始: character=watcher seed=9 max_hp=100\n"
+        "[TestBot] STAT night=2 phase=start hp=90/100 lv=3 coins=12 move=4.20 pickup=60.0 "
+        "dmg_m=1.24 atk_m=1.10 dr=0.15 crit=0.08 area_m=1.20 cd_r=0.00 exp_m=1.00\n"
+        "[TestBot] STAT night=2 phase=start kind=bonus dmg_pass=1.18 dmg_meta=1.05 "
+        "atk_pass=1.10 atk_meta=1.00 atk_evt=1.00 area_pass=1.20 area_meta=1.00 "
+        "dr=0.15 crit=0.08 cd_r=0.00\n"
+        "[TestBot] STAT night=2 phase=start kind=weapon id=harpoon lv=3 dmg=18 evo=0 refine=0 rate=1.50\n"
+        "[TestBot] STAT night=2 phase=start kind=passive id=amulet lv=2\n"
+        "[TestBot] STAT night=2 phase=end kind=weapon id=harpoon dealt=400 hits=20\n"
+        "[TestBot] STAT night=2 phase=end kind=enemy id=small_goblin tier=normal affix=- "
+        "killed=10 unkilled=2 avg_alive_k=8.5 avg_alive_u=20.0 avg_maxhp=30 avg_spd=60 avg_cdmg=8\n"
+        "[TestBot] STAT night=2 phase=end kind=enemy id=iron_crab tier=elite affix=swift+thorns "
+        "killed=0 unkilled=1 avg_alive_k=0.0 avg_alive_u=45.0 avg_maxhp=400 avg_spd=80 avg_cdmg=20\n"
+        "[TestBot] STAT night=2 phase=end kind=summary dealt_total=400 hits_total=20 kills=10 unkilled=3\n"
+        "[GameState] 游戏结束: hp_zero (已存活 2 夜)\n"
+    )
+    s_runs = parse_bot_session(stats_log, "s")
+    check("stat_count", len(s_runs) == 1)
+    ns = s_runs[0].night_stats.get(2)
+    check("stat_night", ns is not None and s_runs[0].max_night == 2)
+    check("stat_player", ns is not None and ns.player.get("dmg_m") == "1.24")
+    check("stat_passive", ns is not None and ns.passives_start and ns.passives_start[0].get("id") == "amulet")
+    check("stat_weapon_dmg", ns is not None and ns.weapons_end and ns.weapons_end[0].get("dealt") == "400")
+    check(
+        "stat_enemy_elite",
+        ns is not None
+        and any(e.get("tier") == "elite" and e.get("unkilled") == "1" for e in ns.enemies),
+    )
+    check("stat_summary", ns is not None and ns.summary.get("unkilled") == "3")
 
     win = "[TestBot] x\n[GameState] 新局开始: character=a seed=1 max_hp=1\n[World] 通关！\n"
     w = parse_bot_session(win, "w")[0]
@@ -445,7 +727,7 @@ def run_self_test() -> int:
     if failures:
         print("SELF-TEST FAIL:", ", ".join(failures))
         return 1
-    print("SELF-TEST OK (8 checks)")
+    print("SELF-TEST OK (18 checks)")
     return 0
 
 
@@ -465,7 +747,7 @@ def main() -> int:
         help="读取 userdata 下全部 godot*.log（默认只读当前 godot.log）并去重轮转截断局",
     )
     ap.add_argument("--latest", type=int, default=0, metavar="N", help="只显示最近 N 局（0=全部）")
-    ap.add_argument("--detail", action="store_true", help="展开购买/融合/精炼")
+    ap.add_argument("--detail", action="store_true", help="展开购买/融合/精炼/按夜战斗统计")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--self-test", action="store_true", help="跑内置解析回归后退出")
     args = ap.parse_args()
@@ -490,7 +772,11 @@ def main() -> int:
 
     stats = summarize(runs)
     if args.json:
-        payload = {"summary": stats, "runs": [asdict(r) for r in runs], "logs": [str(p) for p in paths]}
+        payload = {
+            "summary": stats,
+            "runs": [_run_to_jsonable(r) for r in runs],
+            "logs": [str(p) for p in paths],
+        }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 

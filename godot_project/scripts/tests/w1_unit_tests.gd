@@ -18,6 +18,8 @@ func _ready() -> void:
 	# 清空局外进度（防御性）：保证 max_health=100 断言不依赖被其他机检污染的存档
 	MetaSystem.reset_progress()
 	_assert(not TestBot.is_active(), "headless 下 TestBot 关闭")
+	_assert(EnemyBase.get_combat_telemetry() == null, "Bot 关闭时战斗遥测槽为空（命中热路径无 get_node）")
+	_test_combat_telemetry_sink()
 	_test_spatial_hash()
 	await _test_object_pool()
 	_test_rng_deterministic()
@@ -39,6 +41,40 @@ func _assert(cond: bool, label: String) -> void:
 	else:
 		_failed += 1
 		print("  [FAIL] %s" % label)
+
+
+## 战斗遥测：注册/清空静态槽；mock sink 能收到 note_damage / note_enemy_death
+func _test_combat_telemetry_sink() -> void:
+	print("[战斗遥测槽]")
+	var sink := _TelemetrySink.new()
+	EnemyBase.set_combat_telemetry(sink)
+	_assert(EnemyBase.get_combat_telemetry() == sink, "set_combat_telemetry 可读写")
+	var e := EnemyBase.new()
+	e.enemy_id = "telemetry_stub"
+	e.max_health = 50
+	e.health = 50
+	e.take_damage(10, false, false, "harpoon")
+	_assert(sink.damage_calls == 1 and sink.last_source == "harpoon" and sink.last_amount == 10, "note_damage 经静态槽送达")
+	e.take_damage(999, false, false, "holy_fire")
+	_assert(sink.death_calls == 1, "致死触发 note_enemy_death")
+	EnemyBase.set_combat_telemetry(null)
+	_assert(EnemyBase.get_combat_telemetry() == null, "遥测槽可清空")
+	e.free()
+
+
+class _TelemetrySink extends Object:
+	var damage_calls: int = 0
+	var death_calls: int = 0
+	var last_source: String = ""
+	var last_amount: int = 0
+
+	func note_damage(source_id: String, amount: int) -> void:
+		damage_calls += 1
+		last_source = source_id
+		last_amount = amount
+
+	func note_enemy_death(_enemy: EnemyBase) -> void:
+		death_calls += 1
 
 
 ## 教学夜武器展示：按 difficulty.json teaching.demo_weapons 顺序在夜2/3/4 授予尚未拥有的武器；

@@ -23,7 +23,7 @@ func fire(target: EnemyBase) -> void:
 	var dive_count: int = get_behavior_int("base_targets", 2) + get_behavior_int("targets_per_level", 1) * (level - 1) + MetaSystem.get_extra_projectiles()
 	var ranked: Array[EnemyBase] = query_nearest_enemies(hash, origin, radius, dive_count)
 	if ranked.is_empty():
-		target.take_damage(roll_hit_damage())
+		target.take_damage(roll_hit_damage(), false, false, weapon_id)
 		return
 	for e in ranked:
-		e.take_damage(roll_hit_damage())
+		e.take_damage(roll_hit_damage(), false, false, weapon_id)

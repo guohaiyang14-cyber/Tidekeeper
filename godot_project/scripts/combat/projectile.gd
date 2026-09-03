@@ -23,6 +23,7 @@ var _damage: int = 0
 var _pierce: int = 0
 var _slow_factor: float = 1.0
 var _slow_duration: float = 0.0
+var _source_id: String = ""
 var _hash: SpatialHash
 var _hit_set: Dictionary = {}  # 已命中敌人，去重
 var _active: bool = false
@@ -34,6 +35,7 @@ func _on_acquire() -> void:
 	_life = 0.0
 	_slow_factor = 1.0
 	_slow_duration = 0.0
+	_source_id = ""
 	_hit_set.clear()
 	_ensure_hash()
 
@@ -53,13 +55,23 @@ func _ensure_hash() -> void:
 
 
 ## 发射配置（由武器调用）；slow_factor<1 且 duration>0 时命中施加减速
-func launch(pos: Vector2, dir: Vector2, damage: int, pierce: int, slow_factor: float = 1.0, slow_duration: float = 0.0) -> void:
+## source_id：武器 id（TestBot 伤害归因）
+func launch(
+	pos: Vector2,
+	dir: Vector2,
+	damage: int,
+	pierce: int,
+	slow_factor: float = 1.0,
+	slow_duration: float = 0.0,
+	source_id: String = ""
+) -> void:
 	global_position = pos
 	_direction = dir.normalized()
 	_damage = damage
 	_pierce = pierce
 	_slow_factor = slow_factor
 	_slow_duration = slow_duration
+	_source_id = source_id
 	_life = MAX_LIFE
 	if is_inside_tree():
 		visible = true
@@ -81,7 +93,7 @@ func _process(delta: float) -> void:
 				_hit_set[node] = true
 				var enemy: EnemyBase = node as EnemyBase
 				# 每次命中独立掷暴击（穿透多段各自判定，W12）
-				enemy.take_damage(PassiveSystem.apply_crit_to_damage(_damage))
+				enemy.take_damage(PassiveSystem.apply_crit_to_damage(_damage), false, false, _source_id)
 				if _slow_duration > 0.0 and _slow_factor < 1.0:
 					enemy.apply_slow(_slow_factor, _slow_duration)
 				_pierce -= 1

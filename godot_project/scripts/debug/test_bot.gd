@@ -41,25 +41,79 @@ const CHAIN_FLEE_WEIGHT: float = 2.8
 ## 第 4 夜起商店/三选一额外偏向减伤（进 N5 精英前囤生存）
 const SURVIVAL_BIAS_FROM_NIGHT: int = 4
 
+const _BotCombatStats = preload("res://scripts/debug/bot_combat_stats.gd")
+
 var _enabled: bool = false
 var _action_timer: float = 0.0
 var _char_select_started: bool = false
 var _orbit_angle: float = 0.0
+## BotCombatStats（preload.new）；不写 class_name 注解以免 autoload 启动时类型未注册
+var _combat_stats: Variant = null
 
 
 func _ready() -> void:
 	_enabled = _compute_enabled()
 	if _enabled:
 		process_mode = Node.PROCESS_MODE_ALWAYS
+		_combat_stats = _BotCombatStats.new()
+		# 注册后 EnemyBase 命中路径只判静态引用，避免每击 get_node
+		EnemyBase.set_combat_telemetry(self)
 		print("[TestBot] 已启用 — 自动模拟玩家（关闭：环境变量 TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）")
 		get_tree().scene_changed.connect(_on_scene_changed)
+		GameState.night_started.connect(_on_night_started)
+		GameState.night_ended.connect(_on_night_ended)
+		GameState.game_over.connect(_on_game_over_stats)
+		GameState.game_win.connect(_on_game_win_stats)
 		_reset_scene_timers()
 	else:
+		EnemyBase.set_combat_telemetry(null)
 		process_mode = Node.PROCESS_MODE_DISABLED
 
 
 func is_active() -> bool:
 	return _enabled
+
+
+## 武器命中记账（EnemyBase 静态遥测调用；非 Bot 时不应被注册）
+func note_damage(source_id: String, amount: int) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.record_damage(source_id, amount)
+
+
+## 敌人死亡记账
+func note_enemy_death(enemy: EnemyBase) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.record_enemy_death(enemy)
+
+
+func _on_night_started(night: int) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.begin_night(night, _current_world())
+
+
+func _on_night_ended(night: int) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.end_night(night, _current_world())
+
+
+func _on_game_over_stats(_reason: String) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.flush_open_night(_current_world())
+
+
+func _on_game_win_stats() -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.flush_open_night(_current_world())
+
+
+func _current_world() -> World:
+	return get_tree().current_scene as World
 
 
 func _compute_enabled() -> bool:
@@ -85,6 +139,9 @@ func _on_scene_changed() -> void:
 	_char_select_started = false
 	_reset_scene_timers()
 	_release_move_actions()
+	# World 首帧 scene_changed 可能晚于 night_started：不可在此 reset，否则夜 1 开局统计被清掉
+	if _combat_stats != null and _is_char_select_scene():
+		_combat_stats.reset_run()
 
 
 func _reset_scene_timers() -> void:

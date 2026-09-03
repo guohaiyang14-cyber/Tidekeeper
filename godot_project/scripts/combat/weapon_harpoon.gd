@@ -27,4 +27,4 @@ func fire(target: EnemyBase) -> void:
 			break
 		var angle_offset: float = deg_to_rad(float(i - (count - 1) / 2.0) * spread_deg)
 		var d: Vector2 = dir.rotated(angle_offset)
-		p.launch(origin, d, dmg, pierce)
+		p.launch(origin, d, dmg, pierce, 1.0, 0.0, weapon_id)

@@ -40,4 +40,4 @@ func _hit_annulus(hash: SpatialHash, origin: Vector2, inner: float, outer: float
 			continue
 		if d > outer:
 			continue
-		enemy.take_damage(roll_hit_damage(), true)
+		enemy.take_damage(roll_hit_damage(), true, false, weapon_id)

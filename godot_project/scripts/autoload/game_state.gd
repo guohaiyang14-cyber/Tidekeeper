@@ -668,6 +668,27 @@ func trigger_game_over(reason: String = "death") -> void:
 	_game_win_armed = false
 	game_over.emit(reason)
 	print("[GameState] 游戏结束: %s (已存活 %d 夜)" % [reason, current_night])
+	_log_damage_composition()
+
+
+## Debug/TestBot 可解析：整局累计伤害组成（含复活前后；数值为减伤后 applied）
+## 编辑器二进制 / debug 导出落盘；release 导出模板跳过（正式包降噪）
+func _log_damage_composition() -> void:
+	if not OS.is_debug_build() and not OS.has_feature("editor"):
+		return
+	var a: Dictionary = get_death_analysis()
+	var ranked: Array = []
+	for src in _damage_taken.keys():
+		ranked.append({"source": String(src), "damage": int(_damage_taken[src])})
+	ranked.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return x["damage"] > y["damage"])
+	var parts: PackedStringArray = PackedStringArray()
+	for entry in ranked:
+		parts.append("%s=%d" % [String(entry["source"]), int(entry["damage"])])
+	var body: String = " ".join(parts) if not parts.is_empty() else "(none)"
+	print(
+		"[GameState] 伤害组成: total=%d last=%s amt=%d | %s"
+		% [int(a.get("total_damage", 0)), String(a.get("last_hit_source", "")), int(a.get("last_hit_amount", 0)), body]
+	)
 
 
 ## 立刻锁通关（不发信号）：终局 Boss 死亡回调里调用，防止同帧接触抢先判负

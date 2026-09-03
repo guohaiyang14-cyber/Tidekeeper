@@ -26,4 +26,4 @@ func fire(_target: EnemyBase) -> void:
 			break
 		var angle: float = TAU * float(i) / float(count)
 		var dir: Vector2 = Vector2.from_angle(angle)
-		p.launch(origin, dir, dmg, 0, slow_factor, slow_dur)
+		p.launch(origin, dir, dmg, 0, slow_factor, slow_dur, weapon_id)

@@ -35,7 +35,7 @@ func _strike_at(hash: SpatialHash, mgr: WeaponManager, at: Vector2, radius: floa
 			var enemy: EnemyBase = p as EnemyBase
 			if enemy.is_dead():
 				continue
-			enemy.take_damage(roll_hit_damage())
+			enemy.take_damage(roll_hit_damage(), false, false, weapon_id)
 	_spawn_fx(mgr, at, radius)
 
 

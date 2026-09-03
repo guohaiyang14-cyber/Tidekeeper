@@ -76,6 +76,8 @@ var aura_timer: float = 0.0
 var target: Node2D
 var _hash: SpatialHash
 var _dead: bool = false
+## 生成时刻（秒，Time.get_ticks_msec）；供 TestBot 存活时间统计
+var _alive_since_sec: float = 0.0
 var _contact_cd: float = 0.0
 var _fire_timer: float = 0.0
 var _burrowed: bool = false
@@ -103,6 +105,7 @@ var _slow_timer: float = 0.0
 func _on_acquire() -> void:
 	_dead = false
 	health = max_health
+	_alive_since_sec = float(Time.get_ticks_msec()) * 0.001
 	_contact_cd = 0.0
 	_fire_timer = 0.0
 	_burrowed = false
@@ -161,8 +164,14 @@ func _ensure_enemy_projectile_pool() -> void:
 func spawn_at(pos: Vector2, tgt: Node2D) -> void:
 	global_position = pos
 	target = tgt
+	_alive_since_sec = float(Time.get_ticks_msec()) * 0.001
 	if _hash != null:
 		_hash.insert(self)
+
+
+## 已存活秒数（生成起算；TestBot / 调试）
+func get_alive_seconds() -> float:
+	return maxf(0.0, float(Time.get_ticks_msec()) * 0.001 - _alive_since_sec)
 
 
 ## 数据驱动配置：读 config 并按 §8.2 难度公式缩放血量/伤害
@@ -563,7 +572,8 @@ func _explode() -> void:
 # ============================================================================
 
 ## 受伤（潜地中免伤）；is_melee 供荆棘反伤；from_share 避免分摊递归/重入分裂
-func take_damage(amount: int, is_melee: bool = false, from_share: bool = false) -> bool:
+## source_id：武器 id（TestBot 伤害归因；空串跳过记账）
+func take_damage(amount: int, is_melee: bool = false, from_share: bool = false, source_id: String = "") -> bool:
 	if _dead or _burrowed:
 		return false
 	if amount <= 0:
@@ -575,8 +585,9 @@ func take_damage(amount: int, is_melee: bool = false, from_share: bool = false) 
 	if _charging:
 		amount = maxi(1, int(round(float(amount) * (1.0 - _charge_dr))))
 	if not from_share and behavior_type == "damage_share":
-		amount = _share_damage(amount)
+		amount = _share_damage(amount, source_id)
 	health -= amount
+	_notify_bot_damage(source_id, amount)
 	if is_boss and _boss_brain != null:
 		_boss_brain.on_health_changed()
 	if not from_share:
@@ -591,7 +602,7 @@ func take_damage(amount: int, is_melee: bool = false, from_share: bool = false) 
 	return false
 
 
-func _share_damage(amount: int) -> int:
+func _share_damage(amount: int, source_id: String = "") -> int:
 	if _hash == null or amount <= 0:
 		return amount
 	var shared: int = int(round(float(amount) * _share_ratio))
@@ -614,7 +625,7 @@ func _share_damage(amount: int) -> int:
 		return amount
 	var each: int = maxi(1, int(round(float(shared) / float(allies.size()))))
 	for ally in allies:
-		ally.take_damage(each, false, true)
+		ally.take_damage(each, false, true, source_id)
 	return maxi(1, amount - shared)
 
 
@@ -622,6 +633,7 @@ func _die(trigger_split: bool = true) -> void:
 	if _dead:
 		return
 	_dead = true
+	_notify_bot_death()
 	if trigger_split:
 		AffixSystem.on_death(self)
 	enemy_died.emit(self)
@@ -645,3 +657,28 @@ func is_burrowed() -> bool:
 
 func is_charging() -> bool:
 	return _charging
+
+
+## 可选战斗遥测槽（TestBot 启用时注册自身；未注册时命中路径仅一次 null 判断）
+static var _combat_telemetry: Object = null
+
+
+## TestBot 启用/关闭时调用；sink 需实现 note_damage / note_enemy_death
+static func set_combat_telemetry(sink: Object) -> void:
+	_combat_telemetry = sink
+
+
+static func get_combat_telemetry() -> Object:
+	return _combat_telemetry
+
+
+func _notify_bot_damage(source_id: String, amount: int) -> void:
+	if _combat_telemetry == null or source_id == "" or amount <= 0:
+		return
+	_combat_telemetry.note_damage(source_id, amount)
+
+
+func _notify_bot_death() -> void:
+	if _combat_telemetry == null:
+		return
+	_combat_telemetry.note_enemy_death(self)

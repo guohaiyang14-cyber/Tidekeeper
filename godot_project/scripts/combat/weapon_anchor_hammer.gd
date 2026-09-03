@@ -57,4 +57,4 @@ func _burst_toward(hash: SpatialHash, origin: Vector2, radius: float, aim_at: Ve
 		if hit.has(eid):
 			continue
 		hit[eid] = true
-		enemy.take_damage(roll_hit_damage(), true)
+		enemy.take_damage(roll_hit_damage(), true, false, weapon_id)
