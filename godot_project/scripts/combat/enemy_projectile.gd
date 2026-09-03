@@ -40,6 +40,10 @@ func launch(pos: Vector2, dir: Vector2, damage: int) -> void:
 	_life = MAX_LIFE
 
 
+func get_travel_dir() -> Vector2:
+	return _direction
+
+
 func _process(delta: float) -> void:
 	if not _active:
 		return
