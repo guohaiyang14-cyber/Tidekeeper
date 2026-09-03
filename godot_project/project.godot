@@ -32,6 +32,7 @@ SaveSystem="*res://scripts/autoload/save_system.gd"
 MetaSystem="*res://scripts/autoload/meta_system.gd"
 DifficultySystem="*res://scripts/autoload/difficulty_system.gd"
 LanguageSystem="*res://scripts/autoload/language_system.gd"
+TestBot="*res://scripts/debug/test_bot.gd"
 
 [display]
 

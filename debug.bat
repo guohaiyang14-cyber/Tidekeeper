@@ -50,13 +50,17 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo 启动 Tidekeeper（Debug）...
+set "BOT_FLAG=--test-bot"
+if defined TIDEKEEPER_NO_TEST_BOT set "BOT_FLAG=--no-test-bot"
+
+echo 启动 Tidekeeper（Debug + TestBot 自动试玩）...
 echo   Godot:   %GODOT_BIN%
 echo   版本:    %GODOT_VERSION%
 echo   工程:    %PROJECT%
+echo   关闭机器人: 设置环境变量 TIDEKEEPER_NO_TEST_BOT=1 或 debug.bat --no-test-bot
 echo.
 
-"%GODOT_BIN%" --path "%PROJECT%" --debug
+"%GODOT_BIN%" --path "%PROJECT%" --debug %BOT_FLAG% %*
 set "EXIT_CODE=%ERRORLEVEL%"
 
 if %EXIT_CODE% NEQ 0 (

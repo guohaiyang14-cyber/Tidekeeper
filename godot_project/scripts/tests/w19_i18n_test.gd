@@ -29,6 +29,8 @@ func _ready() -> void:
 	_assert(LanguageSystem.localize("ui.victory") == "通关", "zh 通关")
 	_assert(LanguageSystem.localize("ui.restart") == "再来一局 (Enter)", "zh 重开按钮")
 	_assert(LanguageSystem.localizef("ui.hud.hp", [80, 100]) == "HP 80 / 100", "zh localizef hp")
+	_assert(LanguageSystem.localizef("ui.struggle.body", [1, 5, 2.5])
+		== "挣扎求生中 · 击杀 1/5 敌可复活 · 2.5 秒后结算", "zh localizef %.1f 挣扎")
 
 	print("[assert] 切换英文")
 	LanguageSystem.set_language("en")
@@ -38,6 +40,8 @@ func _ready() -> void:
 	_assert(LanguageSystem.localize("ui.victory") == "Victory", "en 通关")
 	_assert(LanguageSystem.localize("ui.boss_warn") == "⚠ Boss appears this night", "en Boss 提示")
 	_assert(LanguageSystem.localizef("ui.hud.exp", [2, 10, 50]) == "Lv 2  XP 10 / 50", "en localizef exp")
+	_assert(LanguageSystem.localizef("ui.struggle.body", [1, 5, 2.5])
+		== "Struggling · kill 1/5 to revive · settle in 2.5s", "en localizef %.1f 挣扎")
 	_assert(SaveSystem.get_settings().get("language") == "en", "语言偏好已持久化")
 
 	print("[assert] 配置实体名")

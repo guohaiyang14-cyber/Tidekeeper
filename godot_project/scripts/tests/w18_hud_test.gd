@@ -71,6 +71,27 @@ func _ready() -> void:
 	_assert(hud._weapon_box.get_child_count() > chips_before,
 		"HUD 武器槽随 loadout_changed 增加 (%d→%d)" % [chips_before, hud._weapon_box.get_child_count()])
 
+	print("[assert] 挣扎模式提示横幅（致命伤进入免死窗口）")
+	# 夜 10 已过首夜保护；begin_run 后门控才允许挣扎（避免机检误食复活）
+	MetaSystem.begin_run()
+	GameState.current_night = 10
+	GameState.player_health = GameState.player_max_health
+	GameState.damage_player(100000, "enemy_contact")
+	hud.refresh()
+	_assert(GameState.is_struggling(), "致命伤进入挣扎窗口")
+	_assert(hud._struggle_banner.visible, "挣扎横幅可见")
+	_assert(hud._struggle_title.text != "", "挣扎标题非空")
+	var need_kills: int = GameState.get_struggle_kills_needed()
+	_assert(not hud._struggle_body.text.contains("%"), "挣扎正文已格式化（无 %% 占位符）")
+	_assert(hud._struggle_body.text.contains("0/%d" % need_kills), "挣扎正文含击杀进度 0/%d" % need_kills)
+	_assert(hud._struggle_body.text.contains("复活") or hud._struggle_body.text.contains("revive"),
+		"挣扎正文含复活提示")
+	GameState.revive_to_full()
+	GameState.clear_over_state()
+	MetaSystem.end_run()
+	hud.refresh()
+	_assert(not hud._struggle_banner.visible, "回血后横幅隐藏")
+
 	DifficultySystem.reset_tier()
 	print("------------------------------------------------------------")
 	print("W18 HUD 机检通过=%d 失败=%d" % [_passed, _failed])

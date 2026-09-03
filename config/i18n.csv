@@ -89,3 +89,5 @@ enemy.reef_giant.name,暗礁巨人,Reef Giant
 boss.jellyfish_queen.name,深渊水母后,Abyss Jelly Queen
 boss.tide_archon.name,潮汐执政官,Tide Archon
 boss.devouring_star.name,吞噬之星,Devouring Star
+ui.struggle.title,你已倒下！,You are down!
+ui.struggle.body,挣扎求生中 · 击杀 %d/%d 敌可复活 · %.1f 秒后结算,Struggling · kill %d/%d to revive · settle in %.1fs

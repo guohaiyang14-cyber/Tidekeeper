@@ -17,6 +17,7 @@ func _ready() -> void:
 	print("============================================================")
 	# 清空局外进度（防御性）：保证 max_health=100 断言不依赖被其他机检污染的存档
 	MetaSystem.reset_progress()
+	_assert(not TestBot.is_active(), "headless 下 TestBot 关闭")
 	_test_spatial_hash()
 	await _test_object_pool()
 	_test_rng_deterministic()

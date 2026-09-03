@@ -24,6 +24,9 @@ var _diff_label: Label
 var _boss_label: Label
 var _weapon_box: HBoxContainer
 var _passive_box: HBoxContainer
+var _struggle_banner: Panel
+var _struggle_title: Label
+var _struggle_body: Label
 
 
 func _ready() -> void:
@@ -116,6 +119,41 @@ func _build() -> void:
 	_passive_box.add_theme_constant_override("separation", 6)
 	add_child(_passive_box)
 
+	# 挣扎模式提示横幅（W17 挫败感控制：0 血免死窗口显式提示，避免被误判为卡死）
+	var sb := Panel.new()
+	sb.name = "StruggleBanner"
+	sb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sb.position = Vector2(VIEW_W * 0.5 - 230.0, VIEW_H * 0.40)
+	sb.size = Vector2(460.0, 92.0)
+	sb.visible = false
+	var sb_style := StyleBoxFlat.new()
+	sb_style.bg_color = Color(0.06, 0.02, 0.04, 0.80)
+	sb_style.border_color = Color(1.0, 0.35, 0.30, 0.95)
+	sb_style.set_corner_radius_all(10)
+	sb_style.set_border_width_all(2)
+	sb.add_theme_stylebox_override("panel", sb_style)
+	var sb_v := VBoxContainer.new()
+	sb_v.position = Vector2(14.0, 12.0)
+	sb_v.size = Vector2(432.0, 68.0)
+	sb_v.add_theme_constant_override("separation", 8)
+	var sb_title := Label.new()
+	sb_title.name = "Title"
+	sb_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sb_title.add_theme_font_size_override("font_size", 26)
+	sb_title.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32))
+	var sb_body := Label.new()
+	sb_body.name = "Body"
+	sb_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sb_body.add_theme_font_size_override("font_size", 15)
+	sb_body.add_theme_color_override("font_color", Color(1.0, 0.90, 0.84))
+	sb_v.add_child(sb_title)
+	sb_v.add_child(sb_body)
+	sb.add_child(sb_v)
+	add_child(sb)
+	_struggle_banner = sb
+	_struggle_title = sb_title
+	_struggle_body = sb_body
+
 
 # ---------------------------------------------------------------------------
 # 每帧刷新（world._process 调用；游戏结束/通关时 world 显式再调一次）
@@ -145,6 +183,20 @@ func refresh() -> void:
 		_boss_label.text = LanguageSystem.localize("ui.boss_warn")
 	else:
 		_boss_label.text = ""
+
+	# 挣扎模式提示：0 血免死窗口中显式提示（解释「延迟结算」非卡死）
+	if GameState.is_player_down():
+		if _struggle_banner != null:
+			if not _struggle_banner.visible:
+				_struggle_banner.visible = true
+			_struggle_title.text = LanguageSystem.localize("ui.struggle.title")
+			var got: int = GameState.get_struggle_kills()
+			var need_kills: int = GameState.get_struggle_kills_needed()
+			var remain: float = GameState.get_struggle_remaining()
+			_struggle_body.text = LanguageSystem.localizef("ui.struggle.body", [got, need_kills, remain])
+	else:
+		if _struggle_banner != null and _struggle_banner.visible:
+			_struggle_banner.visible = false
 
 
 func _on_loadout_changed() -> void:

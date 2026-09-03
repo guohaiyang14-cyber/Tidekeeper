@@ -190,6 +190,23 @@ func active_exp_total() -> int:
 	return total
 
 
+## 距 from 最近的经验珠世界坐标；无珠或均超出 max_range 时返回 Vector2.ZERO。
+## 调用方应先用 active_gem_count() 判断是否有珠，勿把 ZERO 当作「无珠」（原点也可能有珠）。
+func find_nearest_gem_position(from: Vector2, max_range: float = 2400.0) -> Vector2:
+	var best_dist: float = max_range
+	var best_pos: Vector2 = Vector2.ZERO
+	var found: bool = false
+	for gem in _active_gems:
+		if not is_instance_valid(gem):
+			continue
+		var dist: float = from.distance_to(gem.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best_pos = gem.global_position
+			found = true
+	return best_pos if found else Vector2.ZERO
+
+
 # ============================================================================
 # 内部方法
 # ============================================================================

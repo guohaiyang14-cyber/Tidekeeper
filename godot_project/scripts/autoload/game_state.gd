@@ -585,6 +585,17 @@ func get_struggle_remaining() -> float:
 	return _struggle_timer if _struggle_active else 0.0
 
 
+## 挣扎窗口内已击杀敌数（未挣扎返回 0）。供 HUD 显示「击杀进度」
+func get_struggle_kills() -> int:
+	return _struggle_kills if _struggle_active else 0
+
+
+## 挣扎复活所需总击杀数（取 config，未配置回退 5）。供 HUD 显示「击杀进度」
+func get_struggle_kills_needed() -> int:
+	var st: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
+	return int(st.get("kills_to_revive", 5))
+
+
 ## 死亡原因分析（W17 死因可视化）：最后一击来源 + 伤害来源 TopN
 func get_death_analysis() -> Dictionary:
 	var cfg: Dictionary = ConfigLoader.get_frustration_config().get("death_analysis", {})

@@ -145,21 +145,30 @@ func _parse_csv_row(line: String) -> PackedStringArray:
 	return out
 
 
-## 统计 fmt 中 %d/%s/%f 等占位符数量（忽略 %% 转义）
+## 统计 fmt 中 printf 占位符数量（忽略 %%；支持 %d / %.1f / %02d 等宽度精度）
 func _format_arg_count(fmt: String) -> int:
 	var count: int = 0
 	var i: int = 0
-	while i < fmt.length():
+	var n: int = fmt.length()
+	while i < n:
 		if fmt[i] != "%":
 			i += 1
 			continue
-		if i + 1 >= fmt.length():
+		if i + 1 >= n:
 			break
-		var n: String = fmt[i + 1]
-		if n == "%":
+		if fmt[i + 1] == "%":
 			i += 2
 			continue
-		if n in ["d", "s", "f", "x", "X", "o"]:
+		i += 1
+		while i < n and fmt[i] in ["-", "+", " ", "#", "0"]:
+			i += 1
+		while i < n and fmt[i] >= "0" and fmt[i] <= "9":
+			i += 1
+		if i < n and fmt[i] == ".":
+			i += 1
+			while i < n and fmt[i] >= "0" and fmt[i] <= "9":
+				i += 1
+		if i < n and fmt[i] in ["d", "s", "f", "x", "X", "o"]:
 			count += 1
-		i += 2
+			i += 1
 	return count
