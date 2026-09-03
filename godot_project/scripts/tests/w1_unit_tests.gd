@@ -191,6 +191,25 @@ func _test_game_state_leveling() -> void:
 	_assert(GameState.player_level == 2 and GameState.player_exp == 0, "22 -> Lv2")
 	GameState.add_exp(27)
 	_assert(GameState.player_level == 3 and GameState.player_exp == 0, "E(2)=27 -> Lv3")
+	# 普通局重开须重抽种子；合法种子 ∈ [0, 2^32)，可用日志 seed 回放
+	GameState.start_new_run("watcher")
+	var seed_a: int = GameState.run_seed
+	GameState.start_new_run("watcher")
+	var seed_b: int = GameState.run_seed
+	_assert(seed_a != seed_b, "连续无参 start_new_run 种子不同 (%d vs %d)" % [seed_a, seed_b])
+	_assert(seed_a >= 0 and seed_a <= RNG.SEED_MASK_32, "seed_a 为 32 位非负")
+	_assert(seed_b >= 0 and seed_b <= RNG.SEED_MASK_32, "seed_b 为 32 位非负")
+	_assert(seed_a != RNG.SEED_UNSET and seed_b != RNG.SEED_UNSET, "局种子 ≠ SEED_UNSET")
+	GameState.start_new_run("watcher", seed_a)
+	_assert(GameState.run_seed == seed_a, "显式种子可回放")
+	_assert(RNG.get_seed() == seed_a, "显式种子写入 RNG")
+	# 高位/负输入经 normalize 后仍可回放（不再被 <0 误判为重抽）
+	var raw_neg: int = -3390847677302330907
+	var norm: int = RNG.normalize_seed(raw_neg)
+	_assert(norm >= 0 and norm <= RNG.SEED_MASK_32, "负输入 normalize 后非负")
+	GameState.start_new_run("watcher", raw_neg)
+	_assert(GameState.run_seed == norm, "负输入开局写入规范种子")
+	_assert(RNG.get_seed() == norm, "负输入写入 RNG 规范种子")
 
 
 ## 开局默认武器授予 + 游戏结束只触发一次 + 昼夜循环冻结（修复 §4.2 / 用户反馈）

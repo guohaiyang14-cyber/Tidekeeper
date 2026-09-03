@@ -161,16 +161,28 @@ func _tick_upgrade(delta: float) -> void:
 
 
 func _pick_upgrade_index(offers: Array) -> int:
-	var fallback: int = -1
+	# 优先级：升级已有武器 > 被动 > 新武器（教学期留槽给 demo_weapons）
+	var best_weapon_up: int = -1
+	var best_passive: int = -1
+	var best_new_weapon: int = -1
 	for i in offers.size():
 		var offer: Dictionary = offers[i]
 		if not _can_apply_offer(offer):
 			continue
+		var id: String = str(offer.get("id", ""))
 		if offer.get("type") == "weapon":
-			return i
-		if fallback < 0:
-			fallback = i
-	return fallback
+			if id in GameState.weapon_slots:
+				if best_weapon_up < 0:
+					best_weapon_up = i
+			elif best_new_weapon < 0:
+				best_new_weapon = i
+		elif best_passive < 0:
+			best_passive = i
+	if best_weapon_up >= 0:
+		return best_weapon_up
+	if best_passive >= 0:
+		return best_passive
+	return best_new_weapon
 
 
 func _can_apply_offer(offer: Dictionary) -> bool:
@@ -180,10 +192,33 @@ func _can_apply_offer(offer: Dictionary) -> bool:
 	if offer.get("type") == "weapon":
 		if id in GameState.weapon_slots:
 			return GameState.get_weapon_level(id) < GameState.max_weapon_level
-		return GameState.weapon_slots.size() < GameState.MAX_WEAPON_SLOTS
+		return _weapon_slots_free_for_new()
 	if id in GameState.passive_slots:
 		return GameState.get_passive_level(id) < GameState.max_passive_level
 	return GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS
+
+
+## 教学期按「尚未拥有的 demo_weapons 数量」留空槽，保证夜2/3/4 展示能入槽
+func _weapon_slots_free_for_new() -> bool:
+	var used: int = GameState.weapon_slots.size()
+	if used >= GameState.MAX_WEAPON_SLOTS:
+		return false
+	var reserve: int = _teaching_demo_reserve()
+	return used < GameState.MAX_WEAPON_SLOTS - reserve
+
+
+func _teaching_demo_reserve() -> int:
+	if not (
+		DifficultySystem.is_teaching_night(GameState.current_night)
+		or DifficultySystem.is_teaching_night(GameState.current_night + 1)
+	):
+		return 0
+	var need: int = 0
+	for wid in ConfigLoader.get_teaching_demo_weapons():
+		var id: String = String(wid)
+		if id != "" and id not in GameState.weapon_slots:
+			need += 1
+	return need
 
 
 func _tick_day_shop(world: World, delta: float) -> void:
@@ -193,7 +228,8 @@ func _tick_day_shop(world: World, delta: float) -> void:
 	if world.shop_ui != null and world.shop_ui.visible:
 		_try_shop_actions(world)
 		print("[TestBot] 跳过抉择之昼 → 下一夜")
-		world.day_phase_ui.exit_day()
+		if world.day_phase_ui != null:
+			world.day_phase_ui.exit_day()
 		world.shop_ui.close()
 		world.day_night.skip_day_phase()
 	_action_timer = SHOP_DWELL
@@ -208,11 +244,38 @@ func _try_shop_actions(world: World) -> void:
 	for wid in RefineSystem.list_ready():
 		if RefineSystem.refine(wid) > 0:
 			print("[TestBot] 精炼武器 %s" % wid)
-	for item in world.shop_manager.get_current_items():
-		var cost: int = int(item.get("cost", 0))
-		if cost <= GameState.tidecoins:
+	# 先买已有武器/被动升级，再考虑新物品（同样遵守教学留槽）
+	var items: Array = world.shop_manager.get_current_items()
+	for prefer_owned in [true, false]:
+		for item in items:
+			var id: String = str(item.get("id", ""))
+			var owned: bool = id in GameState.weapon_slots or id in GameState.passive_slots
+			if prefer_owned != owned:
+				continue
+			if not _should_buy_shop_item(item):
+				continue
+			var cost: int = int(item.get("cost", 0))
+			if cost > GameState.tidecoins:
+				continue
 			if world.shop_manager.buy(item):
 				print("[TestBot] 购买 %s" % item.get("name", "?"))
+
+
+func _should_buy_shop_item(item: Dictionary) -> bool:
+	var id: String = str(item.get("id", ""))
+	if id == "":
+		return false
+	var kind: String = str(item.get("kind", ""))
+	if kind == "weapon":
+		if id in GameState.weapon_slots:
+			return GameState.get_weapon_level(id) < GameState.max_weapon_level
+		return _weapon_slots_free_for_new()
+	if kind == "passive":
+		if id in GameState.passive_slots:
+			return GameState.get_passive_level(id) < GameState.max_passive_level
+		return GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS
+	# 消耗品 / 其他：买得起就买
+	return true
 
 
 func _tick_night_movement(world: World, delta: float) -> void:
@@ -226,11 +289,20 @@ func _tick_night_movement(world: World, delta: float) -> void:
 
 
 func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
+	# 挣扎窗口必须贴脸击杀，否则 3s/5 杀必挂（机器人日志：夜5 反复 struggle 失败）
+	if GameState.is_struggling():
+		var hunt: Vector2 = _nearest_enemy_position(world, pos, 420.0)
+		if hunt != Vector2.INF:
+			return (hunt - pos).normalized()
+		return Vector2.ZERO
+
 	var target: Vector2 = Vector2.ZERO
 	var has_target: bool = false
-	if world.pickup_system != null and world.pickup_system.active_gem_count() > 0:
-		target = world.pickup_system.find_nearest_gem_position(pos)
-		has_target = true
+	if world.pickup_system != null:
+		var gem_out: Array[Vector2] = [Vector2.ZERO]
+		if world.pickup_system.try_nearest_gem_position(pos, gem_out):
+			target = gem_out[0]
+			has_target = true
 	if not has_target:
 		_orbit_angle += delta * 0.85
 		var orbit_center: Vector2 = Vector2(640.0, 360.0)
@@ -241,6 +313,25 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if combined.length_squared() < 0.01:
 		return Vector2.ZERO
 	return combined.normalized()
+
+
+func _nearest_enemy_position(world: World, pos: Vector2, radius: float) -> Vector2:
+	if world.spatial_hash_holder == null:
+		return Vector2.INF
+	var grid: SpatialHash = world.spatial_hash_holder.get_hash()
+	if grid == null:
+		return Vector2.INF
+	var best_dist: float = radius
+	var best_pos: Vector2 = Vector2.INF
+	for node in grid.query_radius(pos, radius):
+		var enemy: EnemyBase = node as EnemyBase
+		if enemy == null or enemy.is_dead():
+			continue
+		var dist: float = pos.distance_to(enemy.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best_pos = enemy.global_position
+	return best_pos
 
 
 func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:

@@ -156,12 +156,12 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 	# 重置 W17 挫败感控制计数（每局 fresh）
 	_reset_frustration_state()
 
-	# 种子
-	if seed_value < 0:
-		run_seed = RNG.get_seed()
+	# 种子：仅 SEED_UNSET(-1) 表示重抽；合法种子 [0, 2^32)，显式传入可回放
+	if seed_value == RNG.SEED_UNSET:
+		run_seed = RNG.randomize_seed()
 	else:
-		run_seed = seed_value
-		RNG.set_seed(seed_value)
+		run_seed = RNG.normalize_seed(seed_value)
+		RNG.set_seed(run_seed)
 
 	print("[GameState] 新局开始: character=%s seed=%d max_hp=%d" % [character, run_seed, player_max_health])
 
@@ -228,7 +228,7 @@ func add_weapon(weapon_id: String) -> bool:
 ## 教学夜武器展示：第 night 夜（教学期内）按 difficulty.json teaching.demo_weapons 顺序
 ## 授予一把「尚未拥有」的武器，让玩家直观看到不同武器的效果。
 ## 当夜顺位武器已持有（如铁匠开局锚锤）时，向后扫描 demo 列表，再回补更早顺位。
-## 非教学夜 / 无可授予 / 槽满 → 返回 ""（不授予，槽满时 push_warning）。
+## 非教学夜 / 无可授予 / 槽满 → 返回 ""（不授予；槽满静默跳过）。
 ## 仅真实对局 World 在进夜时调用；headless 单测直接调用本函数。
 func grant_teaching_demo_weapon(night: int) -> String:
 	if not DifficultySystem.is_teaching_night(night):
@@ -242,8 +242,9 @@ func grant_teaching_demo_weapon(night: int) -> String:
 	var wid: String = _pick_teaching_demo_weapon(demo, start_idx)
 	if wid == "":
 		return ""
+	# 槽满是可预期路径（玩家/机器人已自选满 4 槽），静默跳过；勿 push_warning 刷屏
 	if weapon_slots.size() >= MAX_WEAPON_SLOTS:
-		push_warning("[GameState] 教学夜展示武器槽已满，无法授予 %s (夜%d)" % [wid, night])
+		print("[GameState] 教学夜展示武器跳过（槽满）: %s (夜%d)" % [wid, night])
 		return ""
 	if add_weapon(wid):
 		print("[GameState] 教学夜展示武器: %s (夜%d)" % [wid, night])

@@ -12,24 +12,43 @@ extends Node
 # 注：autoload 单例不应声明 class_name（Godot 4.x 会冲突）
 # 全局通过 autoload 名 RNG 访问
 
+## 未指定种子哨兵（仅此值触发重抽；合法局种子为 [0, 2^32)）
+const SEED_UNSET: int = -1
+## 32 位无符号掩码（技术选型：普通局 randi 32 位种子，保证非负可回放）
+const SEED_MASK_32: int = 0xFFFFFFFF
+
 var _generator: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	# 默认用时间种子；正式局会用 set_seed 写入存档
-	_generator.randomize()
-	print("[RNG] 初始种子: %d" % _generator.seed)
+	randomize_seed()
 
 
-## 设置种子（用于每日挑战 / 回放）
+## 将任意 int 规范到 [0, 2^32)，避免负种子与 SEED_UNSET 冲突
+func normalize_seed(seed_value: int) -> int:
+	return seed_value & SEED_MASK_32
+
+
+## 设置种子（用于每日挑战 / 回放）；自动规范到 32 位无符号
 func set_seed(seed_value: int) -> void:
-	_generator.seed = seed_value
-	print("[RNG] 种子已设置: %d" % seed_value)
+	var s: int = normalize_seed(seed_value)
+	_generator.seed = s
+	print("[RNG] 种子已设置: %d" % s)
+
+
+## 重新随机化并返回 32 位非负种子（普通局开局用；每日挑战勿调）
+func randomize_seed() -> int:
+	_generator.randomize()
+	var s: int = normalize_seed(int(_generator.seed))
+	_generator.seed = s
+	print("[RNG] 种子已随机化: %d" % s)
+	return s
 
 
 ## 获取当前种子（存档用）
 func get_seed() -> int:
-	return _generator.seed
+	return int(_generator.seed)
 
 
 ## 整数随机 [from, to]（闭区间）
