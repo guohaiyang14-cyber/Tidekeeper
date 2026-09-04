@@ -66,7 +66,7 @@ pool_size = 200
 [node name="PickupPool" type="Node" parent="."]
 script = ExtResource("7_pickup_pool")
 scene = ExtResource("10_exp_gem")
-pool_size = 150
+pool_size = 350
 
 [node name="CoinPool" type="Node" parent="."]
 script = ExtResource("17_coin_pool")
