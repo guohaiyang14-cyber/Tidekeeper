@@ -17,73 +17,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
+_TOOLS_DIR = Path(__file__).resolve().parent
+if str(_TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR))
 
-APP_NAME = "Tidekeeper"
-INDEX_NAME = "index.json"
-
-
-def _default_log_dir() -> Path:
-    if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            return Path(appdata) / "Godot" / "app_userdata" / APP_NAME / "combat_logs"
-    home = Path.home()
-    # Linux / mac 常见 Godot userdata
-    for candidate in (
-        home / ".local" / "share" / "godot" / "app_userdata" / APP_NAME / "combat_logs",
-        home / "Library" / "Application Support" / "Godot" / "app_userdata" / APP_NAME / "combat_logs",
-    ):
-        if candidate.is_dir():
-            return candidate
-    return home / ".local" / "share" / "godot" / "app_userdata" / APP_NAME / "combat_logs"
-
-
-def _load_index(dir_path: Path) -> Dict[str, Any]:
-    path = dir_path / INDEX_NAME
-    if not path.is_file():
-        return {"version": 1, "runs": []}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"version": 1, "runs": []}
-
-
-def _resolve_run_path(dir_path: Path, row: Dict[str, Any]) -> Optional[Path]:
-    raw = str(row.get("path", "") or "")
-    rid = str(row.get("id", "") or "")
-    candidates: List[Path] = []
-    if raw:
-        if raw.startswith("user://"):
-            # user://combat_logs/foo.jsonl → dir/foo.jsonl
-            name = raw.split("/")[-1]
-            candidates.append(dir_path / name)
-        else:
-            candidates.append(Path(raw))
-    if rid:
-        candidates.append(dir_path / f"{rid}.jsonl")
-    for c in candidates:
-        if c.is_file():
-            return c
-    return None
-
-
-def _iter_events(path: Path) -> Iterable[Dict[str, Any]]:
-    with path.open("r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(obj, dict):
-                yield obj
+from combat_log_io import (  # noqa: E402
+    default_log_dir,
+    fmt_seed,
+    iter_events,
+    load_index,
+    resolve_run_path,
+)
 
 
 def _summarize_run(path: Path) -> Dict[str, Any]:
@@ -104,7 +52,7 @@ def _summarize_run(path: Path) -> Dict[str, Any]:
         "spawns_logged": 0,
         "moves": 0,
     }
-    for ev in _iter_events(path):
+    for ev in iter_events(path):
         summary["events"] += 1
         cat = str(ev.get("cat", ""))
         summary["cats"][cat] = int(summary["cats"].get(cat, 0)) + 1
@@ -142,14 +90,6 @@ def _summarize_run(path: Path) -> Dict[str, Any]:
     return summary
 
 
-def _fmt_seed(seed: Any) -> str:
-    if seed is None:
-        return "?"
-    if isinstance(seed, float):
-        return str(int(seed))
-    return str(seed)
-
-
 def _print_table(runs: List[Dict[str, Any]], dir_path: Path) -> None:
     print(f"CombatLog dir: {dir_path}")
     print(f"indexed runs: {len(runs)}")
@@ -159,14 +99,14 @@ def _print_table(runs: List[Dict[str, Any]], dir_path: Path) -> None:
     )
     print("-" * 88)
     for i, row in enumerate(runs, 1):
-        path = _resolve_run_path(dir_path, row)
+        path = resolve_run_path(dir_path, row)
         sm = _summarize_run(path) if path else {}
         outcome = str(row.get("outcome") or sm.get("outcome") or "?")
         nights = int(row.get("nights") or sm.get("max_night") or 0)
         level = int(sm.get("level_end") or 0)
         char = str(row.get("character") or sm.get("character") or "?")
         seed = row.get("seed", sm.get("seed"))
-        seed_s = _fmt_seed(seed)
+        seed_s = fmt_seed(seed)
         ev_n = int(sm.get("events") or 0)
         rid = str(row.get("id", "?"))
         print(
@@ -174,7 +114,7 @@ def _print_table(runs: List[Dict[str, Any]], dir_path: Path) -> None:
         )
 
 
-def _print_detail(path: Path, cats: Optional[set]) -> None:
+def _print_detail(path: Path, cats: Optional[Set[str]]) -> None:
     print(f"\n=== {path.name} ===")
     sm = _summarize_run(path)
     print(
@@ -190,7 +130,7 @@ def _print_detail(path: Path, cats: Optional[set]) -> None:
         print("events: " + ", ".join(sm["events_armed"]))
     print("cats:", ", ".join(f"{k}={v}" for k, v in sorted(sm["cats"].items())))
     print("-" * 72)
-    for ev in _iter_events(path):
+    for ev in iter_events(path):
         cat = str(ev.get("cat", ""))
         if cats and cat not in cats:
             continue
@@ -198,7 +138,6 @@ def _print_detail(path: Path, cats: Optional[set]) -> None:
         night = ev.get("night", 0)
         data = ev.get("data", {})
         action = data.get("action", "") if isinstance(data, dict) else ""
-        # 紧凑一行
         compact = data if isinstance(data, dict) else {"raw": data}
         body = {k: v for k, v in compact.items() if k != "action"}
         print(f"t={t:>7} N{night:<2} [{cat}:{action}] {json.dumps(body, ensure_ascii=True)}")
@@ -218,14 +157,15 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    dir_path = Path(args.dir) if args.dir else _default_log_dir()
+    dir_path = Path(args.dir) if args.dir else default_log_dir()
     if not dir_path.is_dir():
         print(f"No combat log dir: {dir_path}", file=sys.stderr)
         print("Play a non-headless run (debug.bat) first.", file=sys.stderr)
         return 1
 
-    index = _load_index(dir_path)
-    runs: List[Dict[str, Any]] = list(index.get("runs") or [])
+    index = load_index(dir_path)
+    raw_runs: List[Dict[str, Any]] = list(index.get("runs") or [])
+    runs: List[Dict[str, Any]] = list(raw_runs)
     if args.run:
         needle = args.run.lower()
         runs = [r for r in runs if needle in str(r.get("id", "")).lower()]
@@ -233,13 +173,16 @@ def main() -> int:
         runs = runs[-args.latest :]
 
     if not runs:
-        # fallback: list jsonl files
+        # Filtered miss (or empty after --latest) must not dump every jsonl.
+        if raw_runs or args.run:
+            print(f"No matching runs in {dir_path}")
+            return 0
         files = sorted(dir_path.glob("run_*.jsonl"))
         if not files:
             print(f"No runs in {dir_path}")
             return 0
         print(f"No index; found {len(files)} jsonl files under {dir_path}")
-        for f in files[-args.latest :]:
+        for f in files[-args.latest :] if args.latest > 0 else files:
             if args.detail:
                 cats = set(c.strip() for c in args.cat.split(",") if c.strip()) or None
                 _print_detail(f, cats)
@@ -255,10 +198,11 @@ def main() -> int:
     if args.detail:
         cats = set(c.strip() for c in args.cat.split(",") if c.strip()) or None
         for row in runs:
-            path = _resolve_run_path(dir_path, row)
+            path = resolve_run_path(dir_path, row)
             if path:
                 _print_detail(path, cats)
     return 0
+
 
 
 if __name__ == "__main__":

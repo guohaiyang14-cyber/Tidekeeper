@@ -64,3 +64,4 @@
 - 内容：人物、武器、升级、伤害（受击逐条 + 输出聚合）、BD、宝箱、走位、地图刷新、怪物刷样例/击杀聚合、随机事件、商店/进化/精炼
 - 遥测仅局内注册（不占用 TestBot 关闭时的空槽）；headless / 正式包默认跳过
 - 查看：`python tools/view_combat_logs.py` 或 `python tools/view_combat_logs.py --latest 5 --detail`
+- 统计：`python tools/stats_combat_logs.py`（`--detail` / `--completed-only` 仅胜负局 / `--json` / `--latest N` / `--self-test`）
