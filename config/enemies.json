@@ -31,7 +31,7 @@
       "budget_pace": "even",
       "budget_slack_sec": 5.0,
       "budget_exp_redundancy": 1.25,
-      "note_budget_pace": "even=有经验预算按（夜长−slack）均匀进度释放；落后时 pressure/burst 追赶；进度超前用无掉落 floor 顶压；slack=夜末捡珠空窗；进昼未拾珠自动入账；redundancy=预算数量成长冗余。约束：夜1预算(base×redundancy)≥约2×min_active，避免 even 超前窗口被无掉落 floor 稀释升级",
+      "note_budget_pace": "even=有经验预算按（夜长−slack）均匀进度释放；落后时 pressure/burst 追赶；进度超前用无掉落 floor 顶压；slack=夜末捡珠空窗；进昼未拾珠/币丢弃（不全局入账）；屏外超时见 pickups.offscreen_despawn_sec；redundancy=预算数量成长冗余。约束：夜1预算(base×redundancy)≥约2×min_active，避免 even 超前窗口被无掉落 floor 稀释升级",
       "ring_min": 140.0,
       "ring_extra": 160.0,
       "opening_grace_sec": 2.5,

@@ -1,8 +1,8 @@
 {
   "metadata": {
     "schema_version": 1,
-    "doc_source": "主设计文档 v0.3.4 §5.2 拾取 + W2 经验珠品质调参",
-    "note": "运行时只读；品质权重/倍率与吸附参数改表不改脚本；chest 为夜场宝箱 MVP（触碰开箱，奖励表占位）"
+    "doc_source": "主设计文档 v0.3.5 §5.2 拾取 + W2 经验珠品质调参",
+    "note": "运行时只读；品质权重/倍率与吸附参数改表不改脚本；chest 为夜场宝箱 MVP（触碰开箱，奖励表占位）；offscreen_despawn_sec 与夜末清场口径见 GDD §5.1/§6.7"
   },
   "exp_gem": {
     "default_pickup_radius": 60.0,
@@ -10,12 +10,14 @@
     "attract_speed": 560.0,
     "attract_snap_time": 0.1,
     "scatter_range": 12.0,
+    "offscreen_despawn_sec": 5.0,
     "quality_weights": [65.0, 25.0, 8.0, 2.0],
     "quality_exp_mult": [1.0, 2.0, 5.0, 10.0],
-    "note_attract": "attract_speed 须高于玩家软上限移速（约 4.2×1.6×60≈403px/s），否则会跟跑；snap_time 保证半径内约 0.1s 吸完"
+    "note_attract": "attract_speed 须高于玩家软上限移速（约 4.2×1.6×60≈403px/s），否则会跟跑；snap_time 保证半径内约 0.1s 吸完",
+    "note_despawn": "经验珠与潮币共用：连续不在相机显示区内超过 offscreen_despawn_sec 则回收（不入账）；夜末清场亦不全局拾取"
   },
   "chest": {
-    "doc_source": "主设计文档 v0.3.4 §5.2 / §9.3：每夜 0~2，灯塔外环，主动触碰；事件宝箱翻倍走 EventSystem.get_chest_mult",
+    "doc_source": "主设计文档 v0.3.5 §5.2 / §9.3：每夜 0~2，灯塔外环，主动触碰；事件宝箱翻倍走 EventSystem.get_chest_mult",
     "per_night_min": 0,
     "per_night_max": 2,
     "ring_radius_min": 180.0,

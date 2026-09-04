@@ -51,8 +51,9 @@ func _ready() -> void:
 	await _test_min_active_scales_with_night()  # min_active_per_night 夜成长
 	await _test_budget_floor_ratio()  # 有经验预算相对 floor 不稀释升级
 	await _test_even_budget_pace()  # even：前段不打光有经验预算
-	await _test_salvage_gems_at_day()  # 夜末未拾珠自动入账
-	await _test_coin_clear_no_salvage()  # 潮币 clear 不入账（GDD）
+	await _test_clear_gems_no_salvage()  # 夜末/清场未拾珠不入账
+	await _test_coin_clear_no_salvage()  # 潮币 clear 不入账
+	await _test_offscreen_despawn()  # 屏外超 5s 回收经验珠/潮币
 	await _test_coin_pool_soft_expand()  # CoinPool 耗尽软扩容
 
 	print("------------------------------------------------------------")
@@ -584,10 +585,10 @@ func _test_even_budget_pace() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 夜末经验珠回收：collect_all_gems_now 入账并清空活跃珠
+# 清场：经验珠 clear_all 回收但不入账（不全局拾取）
 # ---------------------------------------------------------------------------
-func _test_salvage_gems_at_day() -> void:
-	print("[夜末回收] collect_all_gems_now 入账")
+func _test_clear_gems_no_salvage() -> void:
+	print("[清场丢弃] clear_all 经验珠不入账")
 	spawner.clear_all()
 	pickup_system.clear_all()
 	GameState.player_health = GameState.player_max_health
@@ -596,16 +597,14 @@ func _test_salvage_gems_at_day() -> void:
 	var g2 = pickup_system.spawn_exp_gem(player.global_position + Vector2(-400.0, 0.0), 5)
 	_assert(g1 != null and g2 != null, "生成 2 颗远距经验珠")
 	_assert(pickup_system.active_gem_count() == 2, "场上 2 珠")
-	var salvaged: int = pickup_system.collect_all_gems_now()
-	_assert(salvaged > 0, "回收经验 > 0 (got=%d)" % salvaged)
-	_assert(pickup_system.active_gem_count() == 0, "回收后场上无珠")
-	_assert(GameState.player_exp > exp0, "经验已入账 (%d→%d)" % [exp0, GameState.player_exp])
 	pickup_system.clear_all()
+	_assert(pickup_system.active_gem_count() == 0, "clear 后场上无珠")
+	_assert(GameState.player_exp == exp0, "clear 不入账经验 (%d)" % GameState.player_exp)
 	GameState.player_health = GameState.player_max_health
 
 
 # ---------------------------------------------------------------------------
-# 潮币：clear_all 回收但不入账（对齐 GDD「需主动拾取」；与经验珠 salvage 不对称）
+# 潮币：clear_all 回收但不入账（需主动拾取）
 # ---------------------------------------------------------------------------
 func _test_coin_clear_no_salvage() -> void:
 	print("[潮币清场] clear_all 不入账")
@@ -623,7 +622,38 @@ func _test_coin_clear_no_salvage() -> void:
 	)
 	pickup_system.clear_all()
 	_assert(pickup_system.active_coin_count() == 0, "clear 后场上无币")
-	_assert(GameState.tidecoins == 0, "clear 不入账潮币（GDD）")
+	_assert(GameState.tidecoins == 0, "clear 不入账潮币")
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 屏外超时：连续不在显示区 ≥5s 回收经验珠/潮币（不入账）
+# ---------------------------------------------------------------------------
+func _test_offscreen_despawn() -> void:
+	print("[屏外回收] offscreen_despawn_sec")
+	spawner.clear_all()
+	pickup_system.clear_all()
+	GameState.player_health = GameState.player_max_health
+	var exp0: int = GameState.player_exp
+	GameState.tidecoins = 0
+	# 可视区仅覆盖玩家附近；掉落点在区外
+	pickup_system.set_test_view_rect(Rect2(player.global_position - Vector2(80, 80), Vector2(160, 160)), true)
+	var far: Vector2 = player.global_position + Vector2(2000.0, 0.0)
+	var gem: ExpGem = pickup_system.spawn_exp_gem(far, 9)
+	var coin: Coin = pickup_system.spawn_coin(far + Vector2(0.0, 40.0), 13)
+	_assert(gem != null and coin != null, "生成屏外经验珠+潮币")
+	# 4.5s 仍在场（@fixed-fps 60 → 270 帧）
+	await _run_frames(270)
+	_assert(pickup_system.active_gem_count() == 1, "4.5s 珠仍在")
+	_assert(pickup_system.active_coin_count() == 1, "4.5s 币仍在")
+	# 再等 ≥0.6s 触发 5s 阈值
+	await _run_frames(40)
+	_assert(pickup_system.active_gem_count() == 0, "5s+ 珠已回收")
+	_assert(pickup_system.active_coin_count() == 0, "5s+ 币已回收")
+	_assert(GameState.player_exp == exp0, "屏外回收不入账经验")
+	_assert(GameState.tidecoins == 0, "屏外回收不入账潮币")
+	pickup_system.set_test_view_rect(Rect2(), false)
+	pickup_system.clear_all()
 	GameState.player_health = GameState.player_max_health
 
 

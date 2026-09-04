@@ -22,6 +22,9 @@ var _attract_speed: float = 0.0
 var _attract_snap_time: float = 0.0
 var _target_pos: Vector2 = Vector2.ZERO
 
+## 连续屏外累计秒数（仅 PickupSystem 驱动）
+var _offscreen_time: float = 0.0
+
 
 func _ready() -> void:
 	z_index = 4
@@ -38,6 +41,7 @@ func _on_acquire() -> void:
 	_attract_speed = 0.0
 	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
+	_offscreen_time = 0.0
 	queue_redraw()
 
 
@@ -47,6 +51,7 @@ func _on_release() -> void:
 	_attract_speed = 0.0
 	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
+	_offscreen_time = 0.0
 	queue_redraw()
 
 
@@ -74,6 +79,19 @@ func update_attract(target: Vector2, delta: float) -> void:
 
 func is_attracted() -> bool:
 	return _state == State.ATTRACTED
+
+
+func clear_offscreen_time() -> void:
+	_offscreen_time = 0.0
+
+
+## 屏外累计；in_view 时清零；达 limit 返回 true（应回收）
+func tick_offscreen(delta: float, in_view: bool, limit: float) -> bool:
+	if in_view:
+		_offscreen_time = 0.0
+		return false
+	_offscreen_time += delta
+	return _offscreen_time >= limit
 
 
 func reset_to_idle() -> void:

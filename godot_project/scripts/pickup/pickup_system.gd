@@ -12,6 +12,9 @@ extends Node2D
 const _CHEST_SCRIPT = preload("res://scripts/pickup/chest.gd")
 const _CHEST_POOL_SCRIPT = preload("res://scripts/core/chest_pool.gd")
 
+## 无相机时假想可视半幅（机检 / headless；约 1080p 一半）
+const _FALLBACK_VIEW_HALF: Vector2 = Vector2(960.0, 540.0)
+
 ## 经验珠收集信号（UI 可连接显示经验变化）
 signal exp_collected(amount: int)
 
@@ -45,6 +48,8 @@ var _attract_speed: float = 560.0
 ## 半径内最大吸附时长（秒）；与 attract_speed 取 max，避免慢于玩家移速跟跑
 var _attract_snap_time: float = 0.1
 var _scatter_range: float = 12.0
+## 连续不在显示区内超过此时长则回收（不入账）；经验珠与潮币共用
+var _offscreen_despawn_sec: float = 5.0
 var _quality_weights: Array[float] = [65.0, 25.0, 8.0, 2.0]
 var _quality_exp_mult: Array[float] = [1.0, 2.0, 5.0, 10.0]
 
@@ -57,6 +62,10 @@ var _chest_per_night_max: int = 2
 var _chest_rarity_weights: Array[float] = [50.0, 30.0, 15.0, 5.0]
 var _chest_rarity_names: Array[String] = ["普通", "精良", "稀有", "史诗"]
 var _chest_rewards: Array = []
+
+## 测试注入：覆盖相机可见区（enabled=false 时改用相机/假想区）
+var _test_view_rect: Rect2 = Rect2()
+var _has_test_view: bool = false
 
 
 func _ready() -> void:
@@ -86,21 +95,29 @@ func bind_chest_pool(pool: ObjectPool) -> void:
 	_chest_pool = pool
 
 
+## 测试：覆盖显示区判定；enabled=false 清除
+func set_test_view_rect(rect: Rect2, enabled: bool = true) -> void:
+	_test_view_rect = rect
+	_has_test_view = enabled
+
+
 func _process(delta: float) -> void:
 	if _player == null:
 		return
 	var player_pos: Vector2 = _player.global_position
 	var pickup_radius: float = _player.get_pickup_radius()
+	# 本帧只算一次显示区，避免每个掉落重复查相机
+	var view_rect: Rect2 = _compute_display_rect()
 
 	if not _active_gems.is_empty():
-		_process_gems(delta, player_pos, pickup_radius)
+		_process_gems(delta, player_pos, pickup_radius, view_rect)
 	if not _active_coins.is_empty():
-		_process_coins(delta, player_pos, pickup_radius)
+		_process_coins(delta, player_pos, pickup_radius, view_rect)
 	if not _active_chests.is_empty():
 		_process_chests(player_pos)
 
 
-func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> void:
+func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float, view_rect: Rect2) -> void:
 	# 倒序遍历以便安全删除已收集的珠子
 	var i: int = _active_gems.size() - 1
 	while i >= 0:
@@ -113,13 +130,15 @@ func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> v
 		var dist: float = gem.global_position.distance_to(player_pos)
 
 		if gem.is_attracted():
-			# 已吸附：飞向玩家 + 检查收集
+			# 已吸附：飞向玩家 + 检查收集；吸附中不计屏外超时
+			gem.clear_offscreen_time()
 			gem.update_attract(player_pos, delta)
 			var new_dist: float = gem.global_position.distance_to(player_pos)
 			if new_dist <= _collect_radius:
 				_collect(gem, i)
 		elif dist <= pickup_radius:
 			# 进入拾取半径：近身直接入账，稍远则快速吸附（同帧可收）
+			gem.clear_offscreen_time()
 			if dist <= _collect_radius:
 				_collect(gem, i)
 			else:
@@ -127,7 +146,8 @@ func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> v
 				gem.update_attract(player_pos, delta)
 				if gem.global_position.distance_to(player_pos) <= _collect_radius:
 					_collect(gem, i)
-
+		elif gem.tick_offscreen(delta, view_rect.has_point(gem.global_position), _offscreen_despawn_sec):
+			_despawn_gem(gem, i)
 		i -= 1
 
 
@@ -175,7 +195,7 @@ func spawn_coin(pos: Vector2, amount: int) -> Coin:
 
 
 ## 潮币每帧更新（吸引 + 收集 → 入账）
-func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float) -> void:
+func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float, view_rect: Rect2) -> void:
 	var i: int = _active_coins.size() - 1
 	while i >= 0:
 		var coin: Coin = _active_coins[i]
@@ -185,10 +205,12 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float) -> 
 			continue
 		var dist: float = coin.global_position.distance_to(player_pos)
 		if coin.is_attracted():
+			coin.clear_offscreen_time()
 			coin.update_attract(player_pos, delta)
 			if coin.global_position.distance_to(player_pos) <= _collect_radius:
 				_collect_coin(coin, i)
 		elif dist <= pickup_radius:
+			coin.clear_offscreen_time()
 			if dist <= _collect_radius:
 				_collect_coin(coin, i)
 			else:
@@ -196,6 +218,8 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float) -> 
 				coin.update_attract(player_pos, delta)
 				if coin.global_position.distance_to(player_pos) <= _collect_radius:
 					_collect_coin(coin, i)
+		elif coin.tick_offscreen(delta, view_rect.has_point(coin.global_position), _offscreen_despawn_sec):
+			_despawn_coin(coin, i)
 		i -= 1
 
 
@@ -204,6 +228,13 @@ func _collect_coin(coin: Coin, index: int) -> void:
 	GameState.add_tidecoins(coin.value)
 	_active_coins.remove_at(index)
 	_coin_pool.release(coin)
+
+
+## 屏外超时丢弃潮币（不入账）
+func _despawn_coin(coin: Coin, index: int) -> void:
+	_active_coins.remove_at(index)
+	if _coin_pool != null:
+		_coin_pool.release(coin)
 
 
 ## 当前活跃潮币数（调试用）
@@ -432,6 +463,7 @@ func _load_config() -> void:
 		_attract_speed = float(cfg.get("attract_speed", _attract_speed))
 		_attract_snap_time = maxf(0.05, float(cfg.get("attract_snap_time", _attract_snap_time)))
 		_scatter_range = float(cfg.get("scatter_range", _scatter_range))
+		_offscreen_despawn_sec = maxf(0.1, float(cfg.get("offscreen_despawn_sec", _offscreen_despawn_sec)))
 		_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
 		_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
 		# 品质数组长度必须与 Quality 枚举（4）一致，否则 _roll_quality 索引越界
@@ -545,21 +577,29 @@ func _collect(gem: ExpGem, index: int) -> void:
 	_pool.release(gem)
 
 
-## 夜末结算：场上未拾经验珠全部入账并回收（避免进昼 clear 丢成长）
-## 返回入账总经验；潮币/宝箱不在此处理（GDD：潮币需主动拾取）。
-func collect_all_gems_now() -> int:
-	var total: int = 0
-	var i: int = _active_gems.size() - 1
-	while i >= 0:
-		var gem: ExpGem = _active_gems[i]
-		if is_instance_valid(gem):
-			total += gem.exp_value
-			GameState.add_exp(gem.exp_value)
-			exp_collected.emit(gem.exp_value)
-			_pool.release(gem)
-		_active_gems.remove_at(i)
-		i -= 1
-	return total
+## 屏外超时丢弃经验珠（不入账）
+func _despawn_gem(gem: ExpGem, index: int) -> void:
+	_active_gems.remove_at(index)
+	if _pool != null:
+		_pool.release(gem)
+
+
+## 本帧显示区（测试注入 / 相机 / 无相机假想区）
+func _compute_display_rect() -> Rect2:
+	if _has_test_view:
+		return _test_view_rect
+	var cam: Camera2D = get_viewport().get_camera_2d()
+	if cam != null:
+		var view_size: Vector2 = get_viewport().get_visible_rect().size / cam.zoom
+		var center: Vector2 = cam.get_screen_center_position()
+		return Rect2(center - view_size * 0.5, view_size)
+	# headless / 无相机：以玩家为中心假想可视区
+	if _player == null:
+		return Rect2(-1.0e9, -1.0e9, 2.0e9, 2.0e9)
+	return Rect2(
+		_player.global_position - _FALLBACK_VIEW_HALF,
+		_FALLBACK_VIEW_HALF * 2.0
+	)
 
 
 ## 查找最近潮币；找到时写入 out_pos[0] 并返回 true。

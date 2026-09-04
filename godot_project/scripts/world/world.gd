@@ -175,8 +175,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			if vision_overlay != null:
 				vision_overlay.call("clear_overlay")
-			# 进昼前先入账未拾经验珠，再清场（成长冗余）
-			_clear_night_entities(true)
+			# 进昼清场：未拾经验珠/潮币直接丢弃（不全局入账；屏外超时亦会回收）
+			_clear_night_entities()
 			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）
 			if EventSystem.has_stardust_bonus():
 				GameState.add_stardust(EventSystem.get_stardust_bonus_amount())
@@ -262,18 +262,13 @@ func _on_shop_retire() -> void:
 
 
 ## 停止刷怪并回收敌人 / 敌方弹道 / 拾取物
-## salvage_gems：进昼时为 true，未拾经验珠先入账再清；胜负结算为 false（避免死后/通关再弹升级）
-## 潮币不 salvage（GDD：需主动拾取；清场丢弃未拾币）
-func _clear_night_entities(salvage_gems: bool = false) -> void:
+## 经验珠 / 潮币均不全局入账（需主动拾取；清场丢弃未拾掉落）
+func _clear_night_entities() -> void:
 	enemy_spawner.stop()
 	enemy_spawner.clear_all()
 	if enemy_projectile_pool != null:
 		enemy_projectile_pool.release_all()
 	if pickup_system != null:
-		if salvage_gems:
-			var salvaged: int = pickup_system.collect_all_gems_now()
-			if salvaged > 0:
-				print("[World] 夜末回收未拾经验珠 +%d" % salvaged)
 		pickup_system.clear_all()
 
 
