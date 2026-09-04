@@ -3,6 +3,7 @@
 # 职责：debug.bat（--debug）启动时模拟玩家：选角开局、夜间走位拾取、
 #       三选一/商店/结算自动推进，便于无人值守冒烟试玩。
 # 红线：仅 debug 启动且非 headless/单测场景；不修改 GameState 数值逻辑。
+# 倍速：启用时 Engine.time_scale ∈ [2,10]（默认 4；--bot-speed=N / [ ] 调节）
 # ============================================================================
 extends Node
 
@@ -13,6 +14,11 @@ const UI_ACTION_DELAY: float = 0.55
 const CHAR_SELECT_DELAY: float = 0.9
 const RESULT_RESTART_DELAY: float = 1.1
 const SHOP_DWELL: float = 1.8
+
+## 机器人试玩墙钟加速（非玩法数值；仅 Debug Bot）
+const BOT_SPEED_MIN: float = 2.0
+const BOT_SPEED_MAX: float = 10.0
+const BOT_SPEED_DEFAULT: float = 4.0
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
 # N15 执政官：潮汐波在灯塔光晕外受伤（bosses.json aura_radius）；远距风筝=吃波致死。
@@ -82,6 +88,8 @@ var _panic_timer: float = 0.0
 var _panic_dir: Vector2 = Vector2.RIGHT
 ## BotCombatStats（preload.new）；不写 class_name 注解以免 autoload 启动时类型未注册
 var _combat_stats: Variant = null
+## 当前倍速（仅 _enabled 时写入 Engine.time_scale）
+var _speed_scale: float = BOT_SPEED_DEFAULT
 
 
 func _ready() -> void:
@@ -91,7 +99,12 @@ func _ready() -> void:
 		_combat_stats = _BotCombatStats.new()
 		# 注册后 EnemyBase 命中路径只判静态引用，避免每击 get_node
 		EnemyBase.set_combat_telemetry(self)
-		print("[TestBot] 已启用 — 自动模拟玩家（关闭：环境变量 TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）")
+		_speed_scale = _resolve_initial_speed()
+		_apply_speed_scale()
+		print(
+			"[TestBot] 已启用 — 自动模拟玩家 ×%.0f（[ / ] 调速 2~10；关闭：TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）"
+			% _speed_scale
+		)
 		get_tree().scene_changed.connect(_on_scene_changed)
 		GameState.night_started.connect(_on_night_started)
 		GameState.night_ended.connect(_on_night_ended)
@@ -103,8 +116,19 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 
 
+func _exit_tree() -> void:
+	if Engine.time_scale != 1.0:
+		Engine.time_scale = 1.0
+	EnemyBase.set_combat_telemetry(null)
+
+
 func is_active() -> bool:
 	return _enabled
+
+
+## 当前试玩倍速（未启用时恒为 1）
+func get_speed_scale() -> float:
+	return _speed_scale if _enabled else 1.0
 
 
 ## 武器命中记账（EnemyBase 静态遥测调用；非 Bot 时不应被注册）
@@ -179,6 +203,65 @@ func _has_cmdline_flag(flag: String) -> bool:
 		if arg == flag:
 			return true
 	return false
+
+
+func _resolve_initial_speed() -> float:
+	var from_cli: float = _parse_bot_speed_arg()
+	if from_cli > 0.0:
+		return clampf(roundf(from_cli), BOT_SPEED_MIN, BOT_SPEED_MAX)
+	if OS.has_environment("TIDEKEEPER_BOT_SPEED"):
+		var env_raw: String = OS.get_environment("TIDEKEEPER_BOT_SPEED").strip_edges()
+		if env_raw.is_valid_float():
+			return clampf(roundf(env_raw.to_float()), BOT_SPEED_MIN, BOT_SPEED_MAX)
+	return BOT_SPEED_DEFAULT
+
+
+func _parse_bot_speed_arg() -> float:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for i in args.size():
+		var arg: String = args[i]
+		if arg.begins_with("--bot-speed="):
+			var raw: String = arg.substr("--bot-speed=".length()).strip_edges()
+			if raw.is_valid_float():
+				return raw.to_float()
+			return -1.0
+		if arg == "--bot-speed" and i + 1 < args.size():
+			var next_raw: String = String(args[i + 1]).strip_edges()
+			if next_raw.is_valid_float():
+				return next_raw.to_float()
+			return -1.0
+	return -1.0
+
+
+func _apply_speed_scale() -> void:
+	if _enabled:
+		Engine.time_scale = _speed_scale
+	else:
+		Engine.time_scale = 1.0
+
+
+func _set_speed_scale(value: float) -> void:
+	var clamped: float = clampf(roundf(value), BOT_SPEED_MIN, BOT_SPEED_MAX)
+	if is_equal_approx(clamped, _speed_scale) and is_equal_approx(Engine.time_scale, clamped):
+		return
+	_speed_scale = clamped
+	_apply_speed_scale()
+	print("[TestBot] 倍速 ×%.0f（[ / ] 调节，--bot-speed=N）" % _speed_scale)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _enabled:
+		return
+	var key_event: InputEventKey = event as InputEventKey
+	if key_event == null or not key_event.pressed or key_event.echo:
+		return
+	match key_event.keycode:
+		KEY_BRACKETRIGHT, KEY_EQUAL:
+			_set_speed_scale(_speed_scale + 1.0)
+			get_viewport().set_input_as_handled()
+		KEY_BRACKETLEFT, KEY_MINUS:
+			_set_speed_scale(_speed_scale - 1.0)
+			get_viewport().set_input_as_handled()
 
 
 func _on_scene_changed() -> void:

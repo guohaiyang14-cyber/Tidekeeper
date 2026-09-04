@@ -58,6 +58,7 @@ echo   Godot:   %GODOT_BIN%
 echo   版本:    %GODOT_VERSION%
 echo   工程:    %PROJECT%
 echo   关闭机器人: 设置环境变量 TIDEKEEPER_NO_TEST_BOT=1 或 debug.bat --no-test-bot
+echo   倍速:    默认 ×4（2~10）；debug.bat --bot-speed=8 或键 [ / ]
 echo.
 
 "%GODOT_BIN%" --path "%PROJECT%" --debug %BOT_FLAG% %*

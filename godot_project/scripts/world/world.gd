@@ -119,7 +119,9 @@ func _update_debug_label() -> void:
 		hp_text = "挣扎中(%.1fs)" % GameState.get_struggle_remaining()
 	else:
 		hp_text = "%d/%d" % [GameState.player_health, GameState.player_max_health]
-	var bot_tag: String = "  |  BOT" if TestBot.is_active() else ""
+	var bot_tag: String = ""
+	if TestBot.is_active():
+		bot_tag = "  |  BOT ×%.0f" % TestBot.get_speed_scale()
 	debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %s  |  经验: %d  |  珠: %d%s" % [
 		day_night.get_current_night(),
 		_phase_label(day_night.get_phase()),

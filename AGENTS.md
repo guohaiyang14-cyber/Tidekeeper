@@ -49,3 +49,9 @@
 # 不固定帧率会导致依赖攻击/刷怪节奏的断言偶发失败（如 w5 area_burn）。
 & "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --fixed-fps 60 --path godot_project res://scenes/tests/w1_unit_tests.tscn
 ```
+
+## Debug / TestBot
+
+- `debug.bat`：Debug + TestBot；默认倍速 **×4**（范围 2~10）
+- 调速：`debug.bat --bot-speed=8`，或环境变量 `TIDEKEEPER_BOT_SPEED`，或游戏内 `[` / `]`
+- 关闭机器人：`TIDEKEEPER_NO_TEST_BOT=1` 或 `--no-test-bot`

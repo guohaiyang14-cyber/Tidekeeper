@@ -6,3 +6,6 @@ set "GODOT_BIN=E:\Godot\Godot_v4.7.1-stable_win64_console.exe"
 
 rem 设为 1 时，游戏正常退出后也会暂停控制台（便于查看输出）
 rem set "PAUSE_ON_EXIT=1"
+
+rem 可选：TestBot 默认倍速（2~10；也可 debug.bat --bot-speed=8）
+rem set "TIDEKEEPER_BOT_SPEED=6"
