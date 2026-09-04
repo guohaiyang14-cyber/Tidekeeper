@@ -389,25 +389,14 @@ func _pick_upgrade_index(offers: Array) -> int:
 	return best_i
 
 
-func _offer_score(offer: Dictionary) -> int:
-	var id: String = str(offer.get("id", ""))
-	if (_want_survival_bias() or _want_calamity_prep()) and id in ["pearl", "exp_sac"]:
-		return 5
-	if offer.get("type") == "weapon":
-		# 临近精英夜：已有武器升级仍优先，但新武器低于高分减伤被动
-		if id in GameState.weapon_slots:
-			return 88
-		if _want_calamity_prep():
-			return 22
-		return 28 if _want_survival_bias() else 36
-	return _survival_item_score(id)
-
-
 func _can_apply_offer(offer: Dictionary) -> bool:
+	var otype: String = str(offer.get("type", ""))
+	if otype == "tidecoins" or otype == "heal":
+		return true
 	var id: String = str(offer.get("id", ""))
 	if id == "":
 		return false
-	if offer.get("type") == "weapon":
+	if otype == "weapon":
 		if id in GameState.weapon_slots:
 			return GameState.get_weapon_level(id) < GameState.max_weapon_level
 		return _weapon_slots_free_for_new()
@@ -415,6 +404,30 @@ func _can_apply_offer(offer: Dictionary) -> bool:
 		return GameState.get_passive_level(id) < GameState.max_passive_level
 	return GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS
 
+
+func _offer_score(offer: Dictionary) -> int:
+	var otype: String = str(offer.get("type", ""))
+	if otype == "heal":
+		if GameState.player_health < GameState.player_max_health:
+			return 95
+		return 40
+	if otype == "tidecoins":
+		return 70
+	var id: String = str(offer.get("id", ""))
+	# 进化路径优先于「生存期压低拾取/经验钥」；exp_sac 可能是信天翁钥被动
+	var evo_boost: int = _evolution_build_boost(id, otype)
+	if evo_boost > 0:
+		return evo_boost
+	if (_want_survival_bias() or _want_calamity_prep()) and id in ["pearl", "exp_sac"]:
+		return 5
+	if otype == "weapon":
+		# 临近精英夜：已有武器升级仍优先，但新武器低于高分减伤被动
+		if id in GameState.weapon_slots:
+			return 88
+		if _want_calamity_prep():
+			return 22
+		return 28 if _want_survival_bias() else 36
+	return _survival_item_score(id)
 
 ## 教学期按「尚未拥有的 demo_weapons 数量」留空槽，保证夜2/3/4 展示能入槽
 func _weapon_slots_free_for_new() -> bool:
@@ -456,14 +469,67 @@ func _tick_day_shop(world: World, delta: float) -> void:
 func _try_shop_actions(world: World) -> void:
 	if world.shop_manager == null:
 		return
-	for wid in EvolutionSystem.list_ready():
-		if EvolutionSystem.fuse(wid):
-			print("[TestBot] 融合武器 %s" % wid)
-	for wid in RefineSystem.list_ready():
-		if RefineSystem.refine(wid) > 0:
-			print("[TestBot] 精炼武器 %s" % wid)
-	# 按存活分买到没钱或没货（教学留槽仍由 _should_buy_shop_item 约束）。
-	# buy 失败（槽满等）跳过该件，继续试下一候选，避免整段购买提前退出。
+	# 槽满时为进化钥腾位 → 购买 → 融合 → 精炼
+	_bot_free_slots_for_evolution_keys(world)
+	_bot_buy_shop_items(world)
+	_bot_fuse_ready_weapons()
+	_bot_refine_ready_weapons()
+
+
+## 商店有未持有的进化钥、被动槽满时：重铸非钥被动腾位，以便凑融合
+func _bot_free_slots_for_evolution_keys(world: World) -> void:
+	if GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS:
+		return
+	var needed: Dictionary = {}  # passive_id → true
+	for wid in GameState.weapon_slots:
+		if GameState.is_weapon_evolved(wid):
+			continue
+		var path: Dictionary = EvolutionSystem.evolution_path(wid)
+		if path.is_empty():
+			continue
+		var pid: String = String(path.get("passive_id", ""))
+		if pid == "" or pid in GameState.passive_slots:
+			continue
+		# 仅当武器已接近/满级，或货架上确实有该钥时才腾位
+		var on_shelf: bool = false
+		for item in world.shop_manager.get_current_items():
+			if str(item.get("kind", "")) == "passive" and str(item.get("id", "")) == pid:
+				on_shelf = true
+				break
+		if on_shelf or GameState.get_weapon_level(wid) >= GameState.max_weapon_level - 1:
+			needed[pid] = true
+	if needed.is_empty():
+		return
+	# 重铸「不是任何未进化武器钥」的被动；优先 pearl / 低价值
+	var protected: Dictionary = {}
+	for wid2 in GameState.weapon_slots:
+		if GameState.is_weapon_evolved(wid2):
+			continue
+		var p2: Dictionary = EvolutionSystem.evolution_path(wid2)
+		var k: String = String(p2.get("passive_id", ""))
+		if k != "":
+			protected[k] = true
+	var victims: Array[String] = []
+	for pid_owned in GameState.passive_slots:
+		if protected.has(pid_owned):
+			continue
+		victims.append(pid_owned)
+	# 低价值优先卸（冒泡，槽位 ≤6）
+	for i in victims.size():
+		for j in range(i + 1, victims.size()):
+			if _survival_item_score(victims[j]) < _survival_item_score(victims[i]):
+				var tmp: String = victims[i]
+				victims[i] = victims[j]
+				victims[j] = tmp
+	var slots_needed: int = needed.size()
+	for i in mini(slots_needed, victims.size()):
+		var refund: int = GameState.reroll_passive(victims[i])
+		if refund > 0:
+			print("[TestBot] 为进化钥腾位，重铸被动 %s（退 %d）" % [victims[i], refund])
+
+
+## 按存活/进化分买到没钱或没货（教学留槽仍由 _should_buy_shop_item 约束）
+func _bot_buy_shop_items(world: World) -> void:
 	var items: Array = world.shop_manager.get_current_items()
 	var skipped: Dictionary = {}
 	while true:
@@ -493,6 +559,29 @@ func _try_shop_actions(world: World) -> void:
 			skipped[fail_key] = true
 
 
+## 可融合则全部融合（需进化道具 + 武器满级 + 钥被动满级）
+func _bot_fuse_ready_weapons() -> void:
+	var guard: int = 0
+	while guard < 8:
+		var ready: Array[String] = EvolutionSystem.list_ready()
+		if ready.is_empty():
+			break
+		var fused_any: bool = false
+		for wid in ready:
+			if EvolutionSystem.fuse(wid):
+				print("[TestBot] 融合武器 %s → %s" % [wid, GameState.get_evolved_name(wid)])
+				fused_any = true
+		if not fused_any:
+			break
+		guard += 1
+
+
+func _bot_refine_ready_weapons() -> void:
+	for wid in RefineSystem.list_ready():
+		if RefineSystem.refine(wid) > 0:
+			print("[TestBot] 精炼武器 %s" % wid)
+
+
 func _shop_item_key(item: Dictionary) -> String:
 	var id: String = str(item.get("id", ""))
 	if id == "":
@@ -505,8 +594,8 @@ func _should_buy_shop_item(item: Dictionary) -> bool:
 	if id == "":
 		return false
 	var kind: String = str(item.get("kind", ""))
-	# 生存期不买纯拾取/经验被动（对深潜突袭零帮助，占槽占钱）
-	if _want_survival_bias() and id in ["pearl", "exp_sac"]:
+	# 生存期不买纯拾取/经验被动；但进化钥（如信天翁→exp_sac）例外
+	if _want_survival_bias() and id in ["pearl", "exp_sac"] and _evolution_build_boost(id, kind) <= 0:
 		return false
 	if kind == "weapon":
 		if id in GameState.weapon_slots:
@@ -523,6 +612,9 @@ func _should_buy_shop_item(item: Dictionary) -> bool:
 func _shop_item_score(item: Dictionary) -> int:
 	var id: String = str(item.get("id", ""))
 	var kind: String = str(item.get("kind", ""))
+	var evo_boost: int = _evolution_build_boost(id, kind)
+	if evo_boost > 0:
+		return evo_boost
 	var owned: bool = id in GameState.weapon_slots or id in GameState.passive_slots
 	var base: int = _survival_item_score(id)
 	var calamity_prep: bool = _want_calamity_prep()
@@ -548,6 +640,37 @@ func _shop_item_score(item: Dictionary) -> int:
 			stack += 30
 		return stack
 	return base + (12 if owned else 0)
+
+
+## 为已持有未进化武器凑满级 / 钥被动：高分驱动三选一与商店，便于抉择之昼融合
+func _evolution_build_boost(id: String, kind: String) -> int:
+	if id == "" or (kind != "weapon" and kind != "passive"):
+		return 0
+	var best: int = 0
+	for wid in GameState.weapon_slots:
+		if GameState.is_weapon_evolved(wid):
+			continue
+		var path: Dictionary = EvolutionSystem.evolution_path(wid)
+		if path.is_empty():
+			continue
+		var pid: String = String(path.get("passive_id", ""))
+		var wlv: int = GameState.get_weapon_level(wid)
+		var wmax: int = GameState.max_weapon_level
+		if kind == "weapon" and id == wid and wlv < wmax:
+			best = maxi(best, 170)
+		if kind == "passive" and id == pid:
+			var plv: int = GameState.get_passive_level(pid)
+			if plv >= GameState.max_passive_level:
+				continue
+			if wlv >= wmax:
+				# 武器已满级：钥被动最高优先，尽快触发融合
+				best = maxi(best, 210)
+			elif wlv >= 5:
+				best = maxi(best, 165)
+			else:
+				best = maxi(best, 135)
+	return best
+
 
 
 func _want_survival_bias() -> bool:

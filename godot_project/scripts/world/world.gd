@@ -144,7 +144,10 @@ func _verify_config() -> void:
 	assert(not ConfigLoader.passives.is_empty(), "[World] passives.json 未加载")
 	assert(not ConfigLoader.pickups.is_empty(), "[World] pickups.json 未加载")
 	assert(ConfigLoader.get_upgrade_config().has("reroll_cost"), "[World] upgrade.json 未加载")
-	assert(ExpTable.get_max_level() == 30, "[World] 经验表未加载或 max_level != 30")
+	assert(ExpTable.get_table_max_level() == 30, "[World] 经验表未加载或 table_max != 30")
+	assert(ExpTable.get_exp(1) == 22, "[World] E(1) 异常")
+	assert(ExpTable.get_exp(30) == ExpTable.get_exp(31), "[World] n≥30 时 E(n)=E(30)")
+	assert(not ExpTable.has_player_level_cap(), "[World] 人物无等级硬顶")
 	print("[World] 配置自检通过 [OK]")
 
 

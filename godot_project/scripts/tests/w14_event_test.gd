@@ -255,19 +255,22 @@ func _test_stardust_bonus_flow() -> void:
 
 
 ## 经验倍率接线：月食下 add_exp 实际翻倍（被动倍率默认 1.0）
-## 注：锁定最高等级避免升级消耗经验，方可直接比对 player_exp 增量
+## 注：用 exp_gained 信号比对实际获得量，避免升级扣经验干扰
 func _test_exp_mult_integration() -> void:
 	print("[经验倍率接线]")
 	_reset_run()
-	GameState.player_level = ExpTable.get_max_level()
 	EventSystem.reset(); EventSystem.apply_event("eclipse")
-	GameState.player_exp = 0
+	var gained_box: Array = [0]
+	var on_gained := func(gained: int, _total: int) -> void:
+		gained_box[0] = gained
+	GameState.exp_gained.connect(on_gained)
 	GameState.add_exp(100)
-	_assert(GameState.player_exp == 200, "月食下 100 经验→200（×2）")
+	_assert(gained_box[0] == 200, "月食下 100 经验→200（×2）")
 	EventSystem.reset()
-	GameState.player_exp = 0
 	GameState.add_exp(100)
-	_assert(GameState.player_exp == 100, "无事件 100 经验→100")
+	_assert(gained_box[0] == 100, "无事件 100 经验→100")
+	if GameState.exp_gained.is_connected(on_gained):
+		GameState.exp_gained.disconnect(on_gained)
 
 
 ## 灯塔共鸣攻速接线：WeaponBase.get_attack_rate 乘 EventSystem 攻速

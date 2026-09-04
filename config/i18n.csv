@@ -77,6 +77,14 @@ weapon.storm_cloud.name,雷暴云,Storm Cloud
 weapon.jellyfish_cannon.name,水母炮,Jelly Cannon
 weapon.anchor_chain.name,锚链,Anchor Chain
 weapon.albatross.name,信天翁,Albatross
+weapon.harpoon.evolved_name,深渊鱼叉,Abyss Harpoon
+weapon.holy_fire.evolved_name,永昼圣火,Eternal Dayfire
+weapon.anchor_hammer.evolved_name,风暴之锚,Storm Anchor
+weapon.spore.evolved_name,水母巢,Jelly Nest
+weapon.storm_cloud.evolved_name,湮灭雷暴,Annihilating Tempest
+weapon.jellyfish_cannon.evolved_name,深渊水母王,Abyss Jelly King
+weapon.anchor_chain.evolved_name,永恒锚轮,Eternal Anchor Wheel
+weapon.albatross.evolved_name,永恒鸥群,Eternal Albatross Flock
 passive.pearl.name,夜明珠,Night Pearl
 passive.amulet.name,护身符,Amulet
 passive.tide_bell.name,潮信铃,Tide Bell

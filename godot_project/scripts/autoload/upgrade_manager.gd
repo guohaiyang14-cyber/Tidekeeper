@@ -86,11 +86,22 @@ func apply_offer(index: int) -> void:
 		return
 	var offer: Dictionary = _current_offers[index]
 	var applied: bool = false
-	if offer.get("type") == "weapon":
-		applied = GameState.add_weapon(str(offer["id"]))
-	else:
-		applied = GameState.add_passive(str(offer["id"]))
-	print("[UpgradeManager] 选择: %s (%s) applied=%s" % [offer.get("name"), offer.get("type"), applied])
+	var otype: String = str(offer.get("type", ""))
+	match otype:
+		"weapon":
+			applied = GameState.add_weapon(str(offer["id"]))
+		"passive":
+			applied = GameState.add_passive(str(offer["id"]))
+		"tidecoins":
+			GameState.add_tidecoins(int(offer.get("amount", 0)))
+			applied = true
+		"heal":
+			# 满血也视为成功，避免卡在三选一
+			GameState.heal_player(int(offer.get("amount", 0)))
+			applied = true
+		_:
+			applied = false
+	print("[UpgradeManager] 选择: %s (%s) applied=%s" % [offer.get("name"), otype, applied])
 	if not applied:
 		return
 	_resolve(offer, false)
@@ -144,7 +155,7 @@ func _present_next() -> void:
 	_current_offers = _build_offers()
 	_note_offers_and_recompute_pity(_current_offers)
 	if _current_offers.is_empty():
-		print("[UpgradeManager] 候选池为空，自动跳过")
+		print("[UpgradeManager] 候选池与溢出奖励皆空，自动跳过")
 		_resolve({}, true)
 		return
 	get_tree().paused = true
@@ -155,7 +166,7 @@ func _reroll_offers() -> void:
 	_current_offers = _build_offers()
 	_note_offers_and_recompute_pity(_current_offers)
 	if _current_offers.is_empty():
-		print("[UpgradeManager] 重铸后候选池为空，自动跳过")
+		print("[UpgradeManager] 重铸后候选池与溢出奖励皆空，自动跳过")
 		_resolve({}, true)
 		return
 	upgrade_offered.emit(_current_offers, false)
@@ -193,13 +204,23 @@ func _capture_pity_baseline() -> void:
 
 
 ## 合并本轮已展示集合，并相对基线重算 miss（同一次三选一只计一次）
+## 溢出奖励（潮币/血包）不参与武器/系 pity
 func _note_offers_and_recompute_pity(offered: Array) -> void:
+	var only_overflow: bool = (not offered.is_empty())
 	for o in offered:
-		if o.get("type") == "weapon":
+		var t: String = str(o.get("type", ""))
+		if t != "tidecoins" and t != "heal":
+			only_overflow = false
+		if t == "weapon":
 			_weapon_seen_this_choice = true
 		var s: String = str(o.get("series", ""))
 		if s != "":
 			_series_seen_this_choice[s] = true
+	if only_overflow:
+		# 保持进入本轮时的 pity，避免满配后 miss 无意义暴涨
+		_no_weapon_streak = _pity_baseline_weapon
+		_series_miss_streak = _pity_baseline_series.duplicate()
+		return
 	_no_weapon_streak = 0 if _weapon_seen_this_choice else _pity_baseline_weapon + 1
 	for series in ConfigLoader.get_all_passive_series():
 		if _series_seen_this_choice.has(series):
@@ -262,7 +283,7 @@ func _build_offers() -> Array[Dictionary]:
 	var weapon_pity_threshold: int = int(cfg.get("weapon_pity_threshold", 2))
 	var pool: Array[Dictionary] = _build_candidate_pool()
 	if pool.is_empty():
-		return []
+		return _build_overflow_offers(max_offers)
 	var offers: Array[Dictionary] = []
 	# 武器保底看「进入本轮时」的 streak，避免同轮展示中间态干扰
 	var streak_for_force: int = _pity_baseline_weapon if _choosing else _no_weapon_streak
@@ -278,6 +299,20 @@ func _build_offers() -> Array[Dictionary]:
 			break
 		offers.append(pick)
 		pool.erase(pick)
+	return offers
+
+
+## 武器/被动皆不可再升时：潮币 / 血包等溢出奖励（config.overflow_offers）
+func _build_overflow_offers(max_offers: int) -> Array[Dictionary]:
+	var cfg: Dictionary = ConfigLoader.get_upgrade_config()
+	var raw: Variant = cfg.get("overflow_offers", [])
+	var offers: Array[Dictionary] = []
+	if raw is Array:
+		for item in raw:
+			if item is Dictionary:
+				offers.append((item as Dictionary).duplicate(true))
+				if offers.size() >= max_offers:
+					break
 	return offers
 
 

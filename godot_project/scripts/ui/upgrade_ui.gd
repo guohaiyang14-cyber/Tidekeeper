@@ -201,8 +201,20 @@ func _make_card(index: int) -> Panel:
 
 
 func _populate_card(i: int, offer: Dictionary) -> void:
-	var kind: String = "武器" if offer.get("type") == "weapon" else "被动"
-	var meta: String = offer.get("series", "") if offer.get("type") == "passive" else offer.get("category", "")
+	var otype: String = str(offer.get("type", ""))
+	var kind: String = "武器"
+	match otype:
+		"passive":
+			kind = "被动"
+		"tidecoins":
+			kind = "潮币"
+		"heal":
+			kind = "血包"
+	var meta: String = ""
+	if otype == "passive":
+		meta = str(offer.get("series", ""))
+	else:
+		meta = str(offer.get("category", ""))
 	_card_name[i].text = "%d. %s" % [i + 1, offer.get("name", "?")]
 	_card_meta[i].text = "[%s] %s" % [kind, meta]
 	_card_desc[i].text = offer.get("description", "")

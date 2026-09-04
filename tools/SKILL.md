@@ -34,7 +34,7 @@ description: "Godot 4 + GDScript dev assistant for Tidekeeper roguelite. Invoke 
 - **引擎**：Godot 4.7.1 stable（锁定版本）
 - **语言**：GDScript（强制静态类型）
 - **模式**：单人 + agent 开发，20 周周期
-- **主文档**：`docs/《潮汐守夜人》游戏设计文档.md`（v0.3.5）
+- **主文档**：`docs/《潮汐守夜人》游戏设计文档.md`（v0.3.6）
 - **任务表**：`docs/单人开发任务拆分表_20周.md`
 - **技术选型**：`docs/技术选型.md`
 

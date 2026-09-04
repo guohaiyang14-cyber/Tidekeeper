@@ -263,9 +263,7 @@ func _weapon_list() -> Array[String]:
 	var out: Array[String] = []
 	if _weapon_mgr != null:
 		for w in _weapon_mgr.get_weapons():
-			var d: Dictionary = ConfigLoader.get_weapon(w.weapon_id)
-			var wname: String = LanguageSystem.localize_config_name(
-				"weapon", w.weapon_id, String(d.get("name", w.weapon_id)))
+			var wname: String = GameState.get_weapon_display_name(w.weapon_id)
 			out.append("%s Lv%d" % [wname, w.level])
 	return out
 

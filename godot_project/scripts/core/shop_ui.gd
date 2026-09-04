@@ -225,7 +225,7 @@ func _refresh_fusion_buttons_only() -> void:
 		var path: Dictionary = EvolutionSystem.evolution_path(wid)
 		var btn: Button = Button.new()
 		btn.text = "融合 · %s → %s" % [
-			ConfigLoader.get_weapon(wid).get("name", wid),
+			GameState.get_weapon_display_name(wid),
 			path.get("evolved_name", "?"),
 		]
 		btn.pressed.connect(_on_fuse_pressed.bind(wid))
@@ -247,7 +247,7 @@ func _refresh_refine_buttons_only() -> void:
 		var btn: Button = Button.new()
 		btn.text = "精炼 T%d · %s → %s（本阶×%.2f / 累积×%.2f，精华 %d）" % [
 			target,
-			ConfigLoader.get_weapon(wid).get("name", wid),
+			GameState.get_weapon_display_name(wid),
 			path.get("name", "?"),
 			step_mult,
 			cum_mult,
@@ -267,14 +267,15 @@ func _refresh_reroll_buttons_only() -> void:
 		var paid: int = ConfigLoader.get_shop_paid_cost("weapon")
 		var refund: int = roundi(float(paid) * ConfigLoader.get_shop_refund_ratio("weapon"))
 		var btn: Button = Button.new()
+		var wlabel: String = GameState.get_weapon_display_name(wid)
 		if GameState.is_weapon_locked(wid):
-			btn.text = "重铸 · 武器 %s（事件锁定中）" % ConfigLoader.get_weapon(wid).get("name", wid)
+			btn.text = "重铸 · 武器 %s（事件锁定中）" % wlabel
 			btn.disabled = true
 		elif can_reroll_weapon:
-			btn.text = "重铸 · 武器 %s（退 %d）" % [ConfigLoader.get_weapon(wid).get("name", wid), refund]
+			btn.text = "重铸 · 武器 %s（退 %d）" % [wlabel, refund]
 			btn.pressed.connect(_on_reroll_weapon_pressed.bind(wid))
 		else:
-			btn.text = "重铸 · 武器 %s（需保留末把）" % ConfigLoader.get_weapon(wid).get("name", wid)
+			btn.text = "重铸 · 武器 %s（需保留末把）" % wlabel
 			btn.disabled = true
 		_vbox.add_child(btn)
 		_reroll_btns.append(btn)

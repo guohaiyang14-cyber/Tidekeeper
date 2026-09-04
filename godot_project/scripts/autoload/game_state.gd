@@ -198,7 +198,8 @@ func add_exp(amount: int) -> void:
 	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult() * MetaSystem.get_exp_mult()))
 	player_exp += gained
 	exp_gained.emit(gained, player_exp)
-	while player_level < ExpTable.get_max_level():
+	# 人物无等级硬顶：E(n) 表内查表、表外同公式外推
+	while true:
 		var need: int = ExpTable.get_exp(player_level)
 		if need <= 0:
 			break
@@ -424,11 +425,27 @@ func get_evolved_name(weapon_id: String) -> String:
 	return evolved_weapons.get(weapon_id, "")
 
 
+## HUD / 商店显示名：已进化用进化名，否则基础名（走 i18n）
+func get_weapon_display_name(weapon_id: String) -> String:
+	var base: Dictionary = ConfigLoader.get_weapon(weapon_id)
+	var base_name: String = String(base.get("name", weapon_id))
+	if is_weapon_evolved(weapon_id):
+		var evo_fallback: String = get_evolved_name(weapon_id)
+		if evo_fallback == "":
+			var evo_cfg: Dictionary = base.get("evolution", {})
+			evo_fallback = String(evo_cfg.get("name", base_name))
+		var evo_key: String = "weapon.%s.evolved_name" % weapon_id
+		var evo_text: String = LanguageSystem.localize(evo_key)
+		return evo_text if evo_text != evo_key else evo_fallback
+	return LanguageSystem.localize_config_name("weapon", weapon_id, base_name)
+
+
 ## 标记武器已进化（占原槽；被动槽由 EvolutionSystem 返还）
 func mark_weapon_evolved(weapon_id: String, evolved_name: String) -> void:
 	if weapon_id not in weapon_slots:
 		return
 	evolved_weapons[weapon_id] = evolved_name
+	loadout_changed.emit()
 
 
 func add_evolution_items(amount: int) -> void:

@@ -14,7 +14,7 @@ description: "Refactors Tidekeeper design/docs for consistency, version alignmen
 
 ## 二、权威顺序（冲突时）
 
-1. `docs/《潮汐守夜人》游戏设计文档.md`（当前 v0.3.5）
+1. `docs/《潮汐守夜人》游戏设计文档.md`（当前 v0.3.6）
 2. `docs/《潮汐守夜人》设计文档更新日志_*.md`
 3. `docs/技术选型.md` / `docs/单人开发任务拆分表_20周.md` / 原型验收清单
 4. `README.md`（目录与入口说明，不另立玩法规则）

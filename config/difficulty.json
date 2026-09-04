@@ -11,5 +11,6 @@
     "boss_prompt": true,
     "demo_weapons": ["holy_fire", "storm_cloud", "anchor_hammer"]
   },
-  "max_enemies": 350
+  "max_enemies": 350,
+  "enemy_pool_headroom": 32
 }

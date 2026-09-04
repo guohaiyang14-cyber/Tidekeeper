@@ -203,11 +203,15 @@ func _test_rng_deterministic() -> void:
 
 func _test_exp_table() -> void:
 	print("[ExpTable]")
-	_assert(ExpTable.get_max_level() == 30, "max_level 30")
+	_assert(ExpTable.get_max_level() == 30, "table_max/plateau 30")
+	_assert(ExpTable.get_plateau_level() == 30, "plateau 30")
+	_assert(not ExpTable.has_player_level_cap(), "人物无硬顶")
 	_assert(ExpTable.get_exp(1) == 22, "E(1)=22")
 	_assert(ExpTable.get_exp(10) == 83, "E(10)=83")
 	_assert(ExpTable.get_exp(20) == 216, "E(20)=216")
-	_assert(ExpTable.get_exp(30) == 0, "E(30) next=0 (capped)")
+	_assert(ExpTable.get_exp(30) == 540, "E(30)=540")
+	_assert(ExpTable.get_exp(31) == 540, "E(31)=E(30) 曲线封顶")
+	_assert(ExpTable.get_exp(40) == 540, "E(40)=E(30)")
 	_assert(ExpTable.get_exp_to_reach(1) == 0, "reach Lv1 costs 0")
 	_assert(ExpTable.get_exp_to_reach(2) == 22, "reach Lv2 costs 22")
 	_assert(ExpTable.get_exp_to_reach(3) == 49, "reach Lv3 costs 49")

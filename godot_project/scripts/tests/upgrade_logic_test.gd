@@ -186,9 +186,9 @@ func _test_reroll_does_not_double_pity() -> void:
 
 
 func _test_empty_pool_auto_skip() -> void:
-	print("[empty pool auto skip]")
+	print("[empty pool → overflow rewards]")
 	_fresh_run()
-	# 槽满且全部满级 → 无升级候选（含 W10「已持有升级」路径）
+	# 槽满且全部满级 → 武器/被动候选空，改出潮币/血包溢出奖励
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
 	for wid in GameState.weapon_slots:
 		GameState.weapon_levels[wid] = GameState.max_weapon_level
@@ -198,8 +198,23 @@ func _test_empty_pool_auto_skip() -> void:
 	for pid in GameState.passive_slots:
 		GameState.passive_levels[pid] = GameState.max_passive_level
 	GameState.add_exp(22)
-	_assert(not UpgradeManager.is_presenting(), "候选池空 → 不停留在三选一")
-	_assert(not get_tree().paused, "候选池空 → 不保持暂停")
+	_assert(UpgradeManager.is_presenting(), "满级后仍弹出三选一（溢出奖励）")
+	var offers: Array = UpgradeManager.get_current_offers()
+	_assert(offers.size() >= 2, "溢出奖励至少 2 项")
+	var types: Dictionary = {}
+	for o in offers:
+		types[str(o.get("type", ""))] = true
+	_assert(types.has("tidecoins"), "含潮币补给")
+	_assert(types.has("heal"), "含急救血包")
+	var coins_before: int = GameState.tidecoins
+	UpgradeManager.apply_offer(0)
+	_assert(not UpgradeManager.is_presenting() or UpgradeManager.pending_count() >= 0, "选择后可继续/结束")
+	# 若选了潮币应增加；若选了血包也不应卡住
+	if str(offers[0].get("type", "")) == "tidecoins":
+		_assert(GameState.tidecoins == coins_before + int(offers[0].get("amount", 0)), "潮币到账")
+	if UpgradeManager.is_presenting():
+		UpgradeManager.skip()
+	_assert(not get_tree().paused, "结束后不保持暂停")
 
 
 func _test_force_resume_closes_ui_signal() -> void:
@@ -265,7 +280,7 @@ func _test_series_seen_blocks_mult_on_reroll() -> void:
 
 
 func _test_reroll_empty_pool_auto_skip() -> void:
-	print("[reroll empty pool auto skip]")
+	print("[reroll empty pool → overflow]")
 	_fresh_run()
 	GameState.weapon_slots = ["harpoon", "holy_fire", "anchor_hammer", "spore"]
 	for wid in GameState.weapon_slots:
@@ -274,12 +289,15 @@ func _test_reroll_empty_pool_auto_skip() -> void:
 	GameState.passive_levels.clear()
 	_level_up_once()
 	_assert(UpgradeManager.is_presenting(), "先进入三选一")
-	# 中途塞满被动且满级，使重铸候选为空
+	# 中途塞满被动且满级 → 重铸走溢出奖励，不再自动结束
 	GameState.passive_slots = [
 		"pearl", "amulet", "tide_bell", "lamp_core", "tide_compass", "lamp_oil",
 	]
 	for pid in GameState.passive_slots:
 		GameState.passive_levels[pid] = GameState.max_passive_level
 	UpgradeManager._reroll_offers()
-	_assert(not UpgradeManager.is_presenting(), "重铸空池 → 自动结束")
-	_assert(not get_tree().paused, "重铸空池 → 恢复树")
+	_assert(UpgradeManager.is_presenting(), "重铸空池 → 溢出奖励仍展示")
+	var offers: Array = UpgradeManager.get_current_offers()
+	_assert(offers.size() >= 1, "重铸后有溢出项")
+	UpgradeManager.skip()
+	_assert(not get_tree().paused, "跳过后恢复树")

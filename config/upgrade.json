@@ -2,7 +2,7 @@
   "metadata": {
     "schema_version": 1,
     "doc_source": "主设计文档 v0.3.4 §6.2 三选一 + 实现疑点清单 Q14",
-    "note": "已持有武器升级/进化候选延后至 W5（GameState 武器等级就位后接入）"
+    "note": "武器/被动候选池空时改出 overflow_offers（潮币/血包），不自动跳过"
   },
   "max_offers": 3,
   "reroll_cost": 10,
@@ -11,5 +11,25 @@
   "weight_passive": 8,
   "weapon_pity_threshold": 2,
   "series_pity_threshold": 3,
-  "series_pity_mult": 3
+  "series_pity_mult": 3,
+  "overflow_offers": [
+    {
+      "id": "tidecoins",
+      "type": "tidecoins",
+      "name": "潮币补给",
+      "category": "溢出奖励",
+      "description": "获得 20 潮币",
+      "amount": 20,
+      "weight": 10
+    },
+    {
+      "id": "heal",
+      "type": "heal",
+      "name": "急救血包",
+      "category": "溢出奖励",
+      "description": "回复 30 生命",
+      "amount": 30,
+      "weight": 10
+    }
+  ]
 }
