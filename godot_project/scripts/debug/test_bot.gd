@@ -99,6 +99,13 @@ func note_enemy_death(enemy: EnemyBase) -> void:
 	_combat_stats.record_enemy_death(enemy)
 
 
+## 敌人刷出记账（位置样例 + 刷点距离）
+func note_enemy_spawn(enemy: EnemyBase) -> void:
+	if _combat_stats == null:
+		return
+	_combat_stats.record_enemy_spawn(enemy)
+
+
 func _on_night_started(night: int) -> void:
 	_panic_timer = 0.0
 	if _combat_stats == null:

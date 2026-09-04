@@ -86,11 +86,11 @@
       "base_contact_damage": 8,
       "base_exp": 2,
       "update_group": 2,
-      "move_speed": 195.0,
+      "move_speed": 275.0,
       "contact_radius": 18.0,
       "visual_size": 18.0,
       "tint": [0.85, 0.28, 0.28],
-      "notes": "数量单位；移速约玩家 77%（玩家≈252px/s），可追击围堵"
+      "notes": "数量单位；移速≈玩家 109%（玩家≈252px/s），可追击围堵"
     },
     "iron_crab": {
       "id": "iron_crab",
@@ -145,11 +145,11 @@
       "burrow_duration": 3.0,
       "burrow_cooldown": 2.0,
       "burrow_initial_delay": 1.0,
-      "move_speed": 210.0,
+      "move_speed": 280.0,
       "contact_radius": 18.0,
       "visual_size": 18.0,
       "tint": [0.18, 0.28, 0.62],
-      "notes": "突袭"
+      "notes": "突袭；地表追击略快于玩家"
     },
     "bomb_shell": {
       "id": "bomb_shell",
@@ -165,11 +165,11 @@
       "self_destruct_damage": 25,
       "explode_radius": 42.0,
       "update_group": 4,
-      "move_speed": 200.0,
+      "move_speed": 290.0,
       "contact_radius": 16.0,
       "visual_size": 16.0,
       "tint": [0.95, 0.45, 0.12],
-      "notes": "低血；自爆"
+      "notes": "低血；自爆；移速>玩家，需贴近爆炸"
     },
     "raven_flock": {
       "id": "raven_flock",
@@ -183,12 +183,12 @@
       "base_contact_damage": 10,
       "base_exp": 7,
       "update_group": 4,
-      "move_speed": 240.0,
+      "move_speed": 330.0,
       "contact_radius": 16.0,
       "visual_size": 16.0,
       "tint": [0.22, 0.12, 0.32],
       "flags": ["flying", "ignore_terrain"],
-      "notes": "飞行"
+      "notes": "飞行；最快追击单位（>小水鬼）"
     },
     "tide_summoner": {
       "id": "tide_summoner",
@@ -229,11 +229,11 @@
       "charge_duration": 0.8,
       "charge_cooldown": 2.0,
       "charge_trigger_range": 160.0,
-      "move_speed": 175.0,
+      "move_speed": 230.0,
       "contact_radius": 20.0,
       "visual_size": 22.0,
       "tint": [0.45, 0.55, 0.72],
-      "notes": "冲锋；冲锋时免伤 50%"
+      "notes": "冲锋；冲锋时免伤 50%；基础移速接近玩家，冲锋可追上"
     },
     "reef_giant": {
       "id": "reef_giant",

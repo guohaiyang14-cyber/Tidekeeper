@@ -92,6 +92,9 @@ class NightStat:
     passives_start: List[Dict[str, str]] = field(default_factory=list)
     enemies: List[Dict[str, str]] = field(default_factory=list)
     summary: Dict[str, str] = field(default_factory=dict)
+    proximity: Dict[str, str] = field(default_factory=dict)
+    spawn_samples: List[Dict[str, str]] = field(default_factory=list)
+    alive_samples: List[Dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -256,11 +259,20 @@ def _ingest_bot_stat(run: BotRun, body: str) -> None:
     if phase == "start" and kind == "passive":
         ns.passives_start.append(kv)
         return
+    if phase == "spawn" and kind == "pos":
+        ns.spawn_samples.append(kv)
+        return
     if phase == "end" and kind == "weapon":
         ns.weapons_end.append(kv)
         return
     if phase == "end" and kind == "enemy":
         ns.enemies.append(kv)
+        return
+    if phase == "end" and kind == "proximity":
+        ns.proximity = kv
+        return
+    if phase == "end" and kind == "alive_pos":
+        ns.alive_samples.append(kv)
         return
     if phase == "end" and kind == "summary":
         ns.summary = kv
@@ -524,14 +536,50 @@ def _print_night_stats(run: BotRun) -> None:
                     f"k={e.get('killed', '0')} u={e.get('unkilled', '0')} "
                     f"alive_k={e.get('avg_alive_k', '0')} alive_u={e.get('avg_alive_u', '0')} "
                     f"hp={e.get('avg_maxhp', '?')} spd={e.get('avg_spd', '?')} "
-                    f"cdmg={e.get('avg_cdmg', '?')}"
+                    f"cdmg={e.get('avg_cdmg', '?')} "
+                    f"ddist={e.get('avg_ddist', '?')} min_dd={e.get('min_ddist', '?')} "
+                    f"sdist={e.get('avg_sdist', '?')}"
                 )
+        if ns.proximity:
+            print(
+                f"       N{night} 近距: active={ns.proximity.get('active', '?')} "
+                f"near_contact={ns.proximity.get('near_contact', '?')} "
+                f"near_screen={ns.proximity.get('near_screen', '?')} "
+                f"avg_dist={ns.proximity.get('avg_dist', '?')} "
+                f"player_spd={ns.proximity.get('player_spd', '?')}"
+            )
+        if ns.spawn_samples:
+            s0 = ns.spawn_samples[0]
+            print(
+                f"       N{night} 刷点样例×{len(ns.spawn_samples)}: "
+                f"id={s0.get('id', '?')} dist={s0.get('dist', '?')} "
+                f"spd={s0.get('spd', '?')} player_spd={s0.get('player_spd', '?')}"
+            )
+        if ns.alive_samples:
+            parts = []
+            for a in ns.alive_samples[:5]:
+                parts.append(
+                    f"{a.get('id', '?')}@{a.get('dist', '?')}"
+                )
+            print(
+                f"       N{night} 存活样例×{len(ns.alive_samples)}: {'; '.join(parts)}"
+            )
         s = ns.summary
         if s:
+            extra = ""
+            if "avg_death_dist" in s:
+                extra = (
+                    f" death_dist={s.get('avg_death_dist', '?')}"
+                    f"(min={s.get('min_death_dist', '?')}"
+                    f" near_c={s.get('death_near_contact', '?')}"
+                    f" near_s={s.get('death_near_screen', '?')})"
+                    f" spawn_dist={s.get('avg_spawn_dist', '?')}"
+                    f" player_spd={s.get('player_spd', '?')}"
+                )
             print(
                 f"       N{night} 汇总: dealt={s.get('dealt_total', '0')} "
                 f"hits={s.get('hits_total', '0')} kills={s.get('kills', '0')} "
-                f"unkilled={s.get('unkilled', '0')}"
+                f"unkilled={s.get('unkilled', '0')}{extra}"
             )
 
 
@@ -677,10 +725,18 @@ def run_self_test() -> int:
         "[TestBot] STAT night=2 phase=start kind=passive id=amulet lv=2\n"
         "[TestBot] STAT night=2 phase=end kind=weapon id=harpoon dealt=400 hits=20\n"
         "[TestBot] STAT night=2 phase=end kind=enemy id=small_goblin tier=normal affix=- "
-        "killed=10 unkilled=2 avg_alive_k=8.5 avg_alive_u=20.0 avg_maxhp=30 avg_spd=60 avg_cdmg=8\n"
+        "killed=10 unkilled=2 avg_alive_k=8.5 avg_alive_u=20.0 avg_maxhp=30 avg_spd=60 avg_cdmg=8 "
+        "avg_ddist=140 min_ddist=40 avg_sdist=220\n"
         "[TestBot] STAT night=2 phase=end kind=enemy id=iron_crab tier=elite affix=swift+thorns "
-        "killed=0 unkilled=1 avg_alive_k=0.0 avg_alive_u=45.0 avg_maxhp=400 avg_spd=80 avg_cdmg=20\n"
-        "[TestBot] STAT night=2 phase=end kind=summary dealt_total=400 hits_total=20 kills=10 unkilled=3\n"
+        "killed=0 unkilled=1 avg_alive_k=0.0 avg_alive_u=45.0 avg_maxhp=400 avg_spd=80 avg_cdmg=20 "
+        "avg_ddist=-1 min_ddist=-1 avg_sdist=200\n"
+        "[TestBot] STAT night=2 phase=end kind=proximity active=12 near_contact=1 near_screen=4 "
+        "avg_dist=310 player=(100,200) player_spd=252\n"
+        "[TestBot] STAT night=2 phase=end kind=alive_pos id=small_goblin tier=normal "
+        "pos=(120,180) dist=45 spd=275\n"
+        "[TestBot] STAT night=2 phase=end kind=summary dealt_total=400 hits_total=20 kills=10 unkilled=3 "
+        "avg_death_dist=140 min_death_dist=40 death_near_contact=2 death_near_screen=8 "
+        "avg_spawn_dist=220 player_spd=252\n"
         "[GameState] 游戏结束: hp_zero (已存活 2 夜)\n"
     )
     s_runs = parse_bot_session(stats_log, "s")
@@ -696,7 +752,19 @@ def run_self_test() -> int:
         and any(e.get("tier") == "elite" and e.get("unkilled") == "1" for e in ns.enemies),
     )
     check("stat_summary", ns is not None and ns.summary.get("unkilled") == "3")
-
+    check("stat_death_dist", ns is not None and ns.summary.get("avg_death_dist") == "140")
+    check("stat_proximity", ns is not None and ns.proximity.get("near_screen") == "4")
+    check(
+        "stat_enemy_ddist",
+        ns is not None
+        and any(e.get("id") == "small_goblin" and e.get("avg_ddist") == "140" for e in ns.enemies),
+    )
+    check(
+        "stat_alive_sample",
+        ns is not None
+        and ns.alive_samples
+        and ns.alive_samples[0].get("dist") == "45",
+    )
     win = "[TestBot] x\n[GameState] 新局开始: character=a seed=1 max_hp=1\n[World] 通关！\n"
     w = parse_bot_session(win, "w")[0]
     check("win", w.outcome == "win" and w.max_night == 20)
@@ -727,7 +795,7 @@ def run_self_test() -> int:
     if failures:
         print("SELF-TEST FAIL:", ", ".join(failures))
         return 1
-    print("SELF-TEST OK (18 checks)")
+    print("SELF-TEST OK (19 checks)")
     return 0
 
 

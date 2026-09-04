@@ -241,7 +241,15 @@ func spawn_enemy(
 			ids.append(a)
 	if not ids.is_empty():
 		e.apply_affixes(ids)
+	_notify_bot_spawn(e)
 	return e
+
+
+func _notify_bot_spawn(enemy: EnemyBase) -> void:
+	var sink: Object = EnemyBase.get_combat_telemetry()
+	if sink == null or enemy == null:
+		return
+	sink.note_enemy_spawn(enemy)
 
 
 ## 成功刷出一只返回 true（失败不扣 _remaining）

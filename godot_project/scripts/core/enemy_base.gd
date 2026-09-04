@@ -78,6 +78,10 @@ var aura_timer: float = 0.0
 
 # ---- 状态 ----
 var target: Node2D
+## 本实例刷出时的世界坐标（TestBot 死亡距离/刷点分析；池复用时在 spawn_at 覆盖）
+var spawn_position: Vector2 = Vector2.ZERO
+## 刷出瞬间相对追击目标的距离（缓存；避免死亡时用「当前玩家位置」污染 avg_sdist）
+var spawn_distance_to_target: float = -1.0
 var _hash: SpatialHash
 var _dead: bool = false
 ## 生成时刻（秒，Time.get_ticks_msec）；供 TestBot 存活时间统计
@@ -131,6 +135,8 @@ func _on_acquire() -> void:
 	affix_state.clear()
 	aura_speed_bonus = 0.0
 	aura_timer = 0.0
+	spawn_position = Vector2.ZERO
+	spawn_distance_to_target = -1.0
 	_ensure_hash()
 	_ensure_enemy_projectile_pool()
 
@@ -167,10 +173,27 @@ func _ensure_enemy_projectile_pool() -> void:
 ## 刷怪生成：设位置与目标，并注册到空间哈希（由 Spawner 调用）
 func spawn_at(pos: Vector2, tgt: Node2D) -> void:
 	global_position = pos
+	spawn_position = pos
 	target = tgt
+	if tgt != null and is_instance_valid(tgt):
+		spawn_distance_to_target = pos.distance_to(tgt.global_position)
+	else:
+		spawn_distance_to_target = -1.0
 	_alive_since_sec = float(Time.get_ticks_msec()) * 0.001
 	if _hash != null:
 		_hash.insert(self)
+
+
+## 与追击目标的距离（无目标时返回 -1）
+func get_distance_to_target() -> float:
+	if target == null or not is_instance_valid(target):
+		return -1.0
+	return global_position.distance_to(target.global_position)
+
+
+## 刷出瞬间相对目标的距离（spawn_at 缓存；无目标时为 -1）
+func get_spawn_distance_to_target() -> float:
+	return spawn_distance_to_target
 
 
 ## 已存活秒数（生成起算；TestBot / 调试）
@@ -698,7 +721,7 @@ func is_charging() -> bool:
 static var _combat_telemetry: Object = null
 
 
-## TestBot 启用/关闭时调用；sink 需实现 note_damage / note_enemy_death
+## TestBot 启用/关闭时调用；sink 需实现 note_damage / note_enemy_death / note_enemy_spawn
 static func set_combat_telemetry(sink: Object) -> void:
 	_combat_telemetry = sink
 
