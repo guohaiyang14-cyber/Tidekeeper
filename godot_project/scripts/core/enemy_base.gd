@@ -717,26 +717,58 @@ func is_charging() -> bool:
 	return _charging
 
 
-## 可选战斗遥测槽（TestBot 启用时注册自身；未注册时命中路径仅一次 null 判断）
-static var _combat_telemetry: Object = null
+## 可选战斗遥测槽（CombatLog / TestBot 可同时注册；命中路径扇出）
+## sink 需实现 note_damage / note_enemy_death / note_enemy_spawn
+static var _combat_telemetry_sinks: Array[Object] = []
 
 
-## TestBot 启用/关闭时调用；sink 需实现 note_damage / note_enemy_death / note_enemy_spawn
+## 兼容旧调用 / 单测：null 清空全部 sink；非 null 替换为单一 sink。
+## 注意：会清掉已 add 的其它订阅者（如局内 CombatLog）；正式启停请用 add/remove。
 static func set_combat_telemetry(sink: Object) -> void:
-	_combat_telemetry = sink
+	_combat_telemetry_sinks.clear()
+	if sink != null:
+		_combat_telemetry_sinks.append(sink)
 
 
+static func add_combat_telemetry(sink: Object) -> void:
+	if sink == null:
+		return
+	if _combat_telemetry_sinks.has(sink):
+		return
+	_combat_telemetry_sinks.append(sink)
+
+
+static func remove_combat_telemetry(sink: Object) -> void:
+	_combat_telemetry_sinks.erase(sink)
+
+
+## 返回首个 sink（兼容旧查询）；无则 null
 static func get_combat_telemetry() -> Object:
-	return _combat_telemetry
+	if _combat_telemetry_sinks.is_empty():
+		return null
+	return _combat_telemetry_sinks[0]
+
+
+## 刷怪遥测扇出（EnemySpawner 调用）
+static func notify_spawn_telemetry(enemy: EnemyBase) -> void:
+	if _combat_telemetry_sinks.is_empty() or enemy == null:
+		return
+	for sink in _combat_telemetry_sinks:
+		if sink != null and is_instance_valid(sink):
+			sink.note_enemy_spawn(enemy)
 
 
 func _notify_bot_damage(source_id: String, amount: int) -> void:
-	if _combat_telemetry == null or source_id == "" or amount <= 0:
+	if _combat_telemetry_sinks.is_empty() or source_id == "" or amount <= 0:
 		return
-	_combat_telemetry.note_damage(source_id, amount)
+	for sink in _combat_telemetry_sinks:
+		if sink != null and is_instance_valid(sink):
+			sink.note_damage(source_id, amount)
 
 
 func _notify_bot_death() -> void:
-	if _combat_telemetry == null:
+	if _combat_telemetry_sinks.is_empty():
 		return
-	_combat_telemetry.note_enemy_death(self)
+	for sink in _combat_telemetry_sinks:
+		if sink != null and is_instance_valid(sink):
+			sink.note_enemy_death(self)

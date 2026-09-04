@@ -262,10 +262,7 @@ func spawn_enemy(
 
 
 func _notify_bot_spawn(enemy: EnemyBase) -> void:
-	var sink: Object = EnemyBase.get_combat_telemetry()
-	if sink == null or enemy == null:
-		return
-	sink.note_enemy_spawn(enemy)
+	EnemyBase.notify_spawn_telemetry(enemy)
 
 
 ## 成功刷出一只返回 true（失败不扣 _remaining）

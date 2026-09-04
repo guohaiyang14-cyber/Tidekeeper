@@ -33,6 +33,8 @@ var _lighthouse_nodes: Dictionary = {}
 var frustration: Dictionary = {}
 # W18 难度系统配置（档位 / 教学宽容）
 var difficulty: Dictionary = {}
+# 战斗局次日志（可选；缺省时 CombatLog 用内置默认）
+var combat_log: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -74,6 +76,8 @@ func _load_all() -> void:
 	frustration = _load_json("frustration.json", true)
 	# W18 难度系统配置（档位 守夜人0.7× / 灯塔1.0× + 教学宽容 1~4 夜减半）
 	difficulty = _load_json("difficulty.json", true)
+	# 战斗局次日志（缺文件不阻断启动）
+	combat_log = _load_json("combat_log.json", false)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -83,7 +87,7 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s combat_log=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
@@ -93,6 +97,7 @@ func _load_all() -> void:
 		evolutions.get("paths", {}).size(),
 		_pickups_status(),
 		"ok" if upgrade.has("reroll_cost") else "missing",
+		"ok" if combat_log.has("max_runs") else "default",
 	])
 
 
@@ -495,5 +500,10 @@ func get_meta_config() -> Dictionary:
 
 
 ## 挫败感控制参数（frustration.json；W17 首夜保护 / 挣扎模式 / 失败保底 / 死因可视化）
+## 战斗局次日志配置（config/combat_log.json）
+func get_combat_log_config() -> Dictionary:
+	return combat_log
+
+
 func get_frustration_config() -> Dictionary:
 	return frustration

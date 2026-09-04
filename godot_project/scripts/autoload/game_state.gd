@@ -23,6 +23,8 @@ signal evolution_items_changed(new_total: int)
 signal refine_essence_changed(new_total: int)
 signal player_health_changed(new_health: int)
 signal loadout_changed()
+## 新局已初始化（CombatLog / 调试订阅）
+signal run_started(character: String, seed_value: int)
 ## W17 挫败感控制：玩家复活（kind = "first_night" | "struggle"）
 signal player_revived(kind: String)
 ## W17 挫败感控制：玩家倒地进入挣扎（HP 归零但未判负，免死窗口中）。
@@ -164,6 +166,7 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 		RNG.set_seed(run_seed)
 
 	print("[GameState] 新局开始: character=%s seed=%d max_hp=%d" % [character, run_seed, player_max_health])
+	run_started.emit(character, run_seed)
 
 
 ## 进入第 N 夜
@@ -616,6 +619,16 @@ func get_struggle_kills() -> int:
 func get_struggle_kills_needed() -> int:
 	var st: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
 	return int(st.get("kills_to_revive", 5))
+
+
+## 最近一次实际扣血来源（CombatLog 受击行；避免每次 get_death_analysis）
+func get_last_hit_source() -> String:
+	return _last_hit_source
+
+
+## 最近一次实际扣血量
+func get_last_hit_amount() -> int:
+	return _last_hit_amount
 
 
 ## 死亡原因分析（W17 死因可视化）：最后一击来源 + 伤害来源 TopN

@@ -14,9 +14,14 @@ extends Node
 # 注：autoload 单例不应声明 class_name（Godot 4.x 会冲突）
 # 全局通过 autoload 名 EventSystem 访问
 
+## 昼阶段抽中/武装事件卡（CombatLog / UI）
+signal event_armed(event_id: String, event_name: String, for_night: int)
+
 # ---- 当前生效事件 ----
 var _active_id: String = ""
 var _active_name: String = ""
+## 最近一次 pick/arm 针对的夜次（CombatLog；0=未知）
+var _armed_for_night: int = 0
 
 # ---- 数值倍率（无事件 / 昼未 begin_night 时全为 1.0） ----
 var _enemy_speed_mult: float = 1.0
@@ -48,6 +53,7 @@ func _ready() -> void:
 func reset() -> void:
 	_active_id = ""
 	_active_name = ""
+	_armed_for_night = 0
 	_clear_combat_modifiers()
 	_elite_wave_pending = false
 	_elite_wave_count = 0
@@ -77,18 +83,20 @@ func pick_for_night(upcoming_night: int) -> String:
 	var idx: int = RNG.randi_range(0, pool.size() - 1)
 	var ev: Dictionary = pool[idx]
 	var id: String = String(ev.get("id", ""))
-	arm_event(id)
+	arm_event(id, upcoming_night)
 	return id
 
 
 ## 昼阶段锁定事件：identity + 即时效果；不加载战斗倍率（避免商店阶段吃到灯塔共鸣移速等）
-func arm_event(event_id: String) -> void:
+func arm_event(event_id: String, for_night: int = 0) -> void:
 	var ev: Dictionary = ConfigLoader.get_event(event_id)
 	if ev.is_empty():
 		return
 	_active_id = event_id
 	_active_name = String(ev.get("name", event_id))
+	_armed_for_night = for_night
 	_apply_instant_effects(ev.get("effects", {}))
+	event_armed.emit(_active_id, _active_name, _armed_for_night)
 
 
 ## 进夜：按已 arm 的事件加载战斗倍率（夹击 / 移速 / 掉落 / 攻速等）
@@ -108,9 +116,11 @@ func apply_event(event_id: String) -> void:
 		return
 	_active_id = event_id
 	_active_name = String(ev.get("name", event_id))
+	_armed_for_night = 0
 	var fx: Dictionary = ev.get("effects", {})
 	_apply_combat_modifiers(fx)
 	_apply_instant_effects(fx)
+	event_armed.emit(_active_id, _active_name, _armed_for_night)
 
 
 func _apply_combat_modifiers(fx: Dictionary) -> void:

@@ -1,0 +1,38 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "note": "战斗局次日志：落盘 user://combat_logs/；max_runs 控制保留最近局数；dir 必须 user:// 前缀否则回退"
+  },
+  "enabled": true,
+  "debug_only": true,
+  "max_runs": 10,
+  "dir": "user://combat_logs/",
+  "skip_headless": true,
+  "skip_test_scenes": true,
+  "movement_interval_sec": 2.0,
+  "damage_dealt_flush_sec": 5.0,
+  "spawn_sample": {
+    "elite_boss_always": true,
+    "budget_cap": 12,
+    "floor_every": 40
+  },
+  "death_sample": {
+    "elite_boss_detail": true,
+    "aggregate_normal": true
+  },
+  "categories": {
+    "character": true,
+    "weapon": true,
+    "upgrade": true,
+    "damage": true,
+    "build": true,
+    "chest": true,
+    "movement": true,
+    "map": true,
+    "monster": true,
+    "event": true,
+    "shop": true,
+    "evolution": true,
+    "refine": true
+  }
+}

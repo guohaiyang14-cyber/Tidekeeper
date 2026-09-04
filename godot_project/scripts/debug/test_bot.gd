@@ -102,8 +102,8 @@ func _ready() -> void:
 	if _enabled:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		_combat_stats = _BotCombatStats.new()
-		# 注册后 EnemyBase 命中路径只判静态引用，避免每击 get_node
-		EnemyBase.set_combat_telemetry(self)
+		## TestBot 启停：用 add/remove，避免清掉 CombatLog 遥测
+		EnemyBase.add_combat_telemetry(self)
 		_speed_scale = _resolve_initial_speed()
 		_apply_speed_scale()
 		print(
@@ -121,14 +121,14 @@ func _ready() -> void:
 		GameState.game_win.connect(_on_game_win_stats)
 		_reset_scene_timers()
 	else:
-		EnemyBase.set_combat_telemetry(null)
+		EnemyBase.remove_combat_telemetry(self)
 		process_mode = Node.PROCESS_MODE_DISABLED
 
 
 func _exit_tree() -> void:
 	if Engine.time_scale != 1.0:
 		Engine.time_scale = 1.0
-	EnemyBase.set_combat_telemetry(null)
+	EnemyBase.remove_combat_telemetry(self)
 	if _enabled:
 		MetaSystem.clear_lighthouse_override()
 

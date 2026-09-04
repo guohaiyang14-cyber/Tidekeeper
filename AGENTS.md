@@ -56,3 +56,11 @@
 - 调速：`debug.bat --bot-speed=8`，或环境变量 `TIDEKEEPER_BOT_SPEED`，或游戏内 `[` / `]`
 - 灯塔初始：每局随机（无升级 / 部分 / 全满）；`--bot-lighthouse=none|partial|full|random` 或 `TIDEKEEPER_BOT_LIGHTHOUSE`（会话覆盖，不写存档）
 - 关闭机器人：`TIDEKEEPER_NO_TEST_BOT=1` 或 `--no-test-bot`
+
+## 战斗日志（CombatLog）
+
+- 配置：`config/combat_log.json`（`enabled` / **`debug_only` 默认 true** / **`max_runs` 默认 10** / 分类开关 / 走位采样间隔）
+- 落盘：`user://combat_logs/`（Windows 约 `%APPDATA%/Godot/app_userdata/Tidekeeper/combat_logs/`）
+- 内容：人物、武器、升级、伤害（受击逐条 + 输出聚合）、BD、宝箱、走位、地图刷新、怪物刷样例/击杀聚合、随机事件、商店/进化/精炼
+- 遥测仅局内注册（不占用 TestBot 关闭时的空槽）；headless / 正式包默认跳过
+- 查看：`python tools/view_combat_logs.py` 或 `python tools/view_combat_logs.py --latest 5 --detail`
