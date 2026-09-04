@@ -38,6 +38,7 @@ func _ready() -> void:
 	await _test_ranged_fires_projectile()  # 2.2.2 远程行为
 	await _test_enemy_projectile_max_life()  # 敌方弹道 MAX_LIFE 回收（防池耗尽）
 	await _test_burrow_ambush()         # 2.2.2 潜地行为
+	await _test_burrow_emerge_dodge()   # 突袭浮现：站桩脚下 / 移动可躲
 	await _test_self_destruct()         # 2.2.2 自爆行为
 	await _test_spawn_loop_and_cap()    # 2.2.3 潮汐刷怪 + 2.2.4 同屏上限
 	await _test_quota_preserved_when_full()  # 池满不烧配额
@@ -47,6 +48,8 @@ func _ready() -> void:
 	await _test_coin_loop()             # 3.2 潮币闭环（掉落→拾取）
 	await _test_shop()                  # 3.1 商店刷新 + 3.2 购买
 	await _test_teaching_night_density()  # 教学夜密度回归（修复「一半时间没怪」空窗）
+	await _test_min_active_scales_with_night()  # min_active_per_night 夜成长
+	await _test_budget_floor_ratio()  # 有经验预算相对 floor 不稀释升级
 	await _test_even_budget_pace()  # even：前段不打光有经验预算
 	await _test_salvage_gems_at_day()  # 夜末未拾珠自动入账
 
@@ -151,6 +154,81 @@ func _test_burrow_ambush() -> void:
 			burrowed = true
 			break
 	_assert(burrowed, "深潜者进入潜地状态")
+	enemy_pool.release(e)
+
+
+# ---------------------------------------------------------------------------
+# 突袭浮现走位反制：站桩≈脚下；移动时落在速度反向（burrow_emerge_behind）
+# 完整 _tick_burrow 路径：浮现后 SpatialHash 须含新位置（回归传送未 update）
+# ---------------------------------------------------------------------------
+func _test_burrow_emerge_dodge() -> void:
+	print("[潜地浮现] 站桩脚下 / 移动可躲 / 哈希同步")
+	var def: Dictionary = ConfigLoader.get_enemy("deep_diver")
+	var combat: Dictionary = ConfigLoader.get_enemy_combat()
+	var behind: float = float(combat.get("burrow_emerge_behind", 40.0))
+	_assert(behind > 0.0, "config burrow_emerge_behind > 0 (=%s)" % behind)
+
+	var e: EnemyBase = enemy_pool.acquire() as EnemyBase
+	e.configure(def, 4)
+	e.spawn_at(player.global_position + Vector2(80.0, 0.0), player)
+
+	var p: Player = player as Player
+	_assert(p != null, "测试场景 Player 节点可用")
+	var feet: Vector2 = p.global_position
+
+	p.velocity = Vector2.ZERO
+	var stand_pos: Vector2 = e.compute_burrow_emerge_position(feet)
+	_assert(stand_pos.distance_to(feet) < 0.5, "站桩浮现≈脚下 (dist=%.2f)" % stand_pos.distance_to(feet))
+
+	p.velocity = Vector2.RIGHT * 300.0
+	var move_pos: Vector2 = e.compute_burrow_emerge_position(feet)
+	var expected: Vector2 = feet - Vector2.RIGHT * behind
+	_assert(move_pos.distance_to(expected) < 0.5,
+		"移动浮现在速度反向 (got=%s expect=%s)" % [move_pos, expected])
+	_assert(move_pos.distance_to(feet) > behind * 0.9,
+		"移动浮现离开脚下 (dist=%.1f ≥ %.1f)" % [move_pos.distance_to(feet), behind * 0.9])
+	p.velocity = Vector2.ZERO
+
+	# 完整 tick 路径：缩短潜地后等到浮现，断言位置 + 哈希格子含自身
+	enemy_pool.release(e)
+	var fast: Dictionary = def.duplicate(true)
+	fast["burrow_initial_delay"] = 0.05
+	fast["burrow_duration"] = 0.12
+	fast["burrow_cooldown"] = 9.0
+	e = enemy_pool.acquire() as EnemyBase
+	e.configure(fast, 4)
+	var far_spawn: Vector2 = player.global_position + Vector2(400.0, 0.0)
+	e.spawn_at(far_spawn, player)
+
+	var saw_burrow: bool = false
+	var emerged: bool = false
+	for _i in 120:
+		await get_tree().process_frame
+		if not is_instance_valid(e) or e.is_dead():
+			break
+		if e.is_burrowed():
+			saw_burrow = true
+		elif saw_burrow:
+			emerged = true
+			break
+	_assert(saw_burrow and emerged, "缩短潜地后完成一次浮现 (burrow=%s emerge=%s)" % [saw_burrow, emerged])
+	if emerged:
+		var emerge_feet: Vector2 = player.global_position
+		_assert(e.global_position.distance_to(emerge_feet) < behind + 8.0,
+			"浮现落点靠近玩家 (dist=%.1f)" % e.global_position.distance_to(emerge_feet))
+		_assert(e.global_position.distance_to(far_spawn) > 200.0,
+			"浮现已离开出生点 (dist=%.1f)" % e.global_position.distance_to(far_spawn))
+		var h: SpatialHash = e.get_spatial_hash()
+		_assert(h != null, "浮现后 SpatialHash 可用")
+		if h != null:
+			var cell_hits: Array = h.query_cell(e.global_position)
+			var in_cell: bool = cell_hits.has(e)
+			if not in_cell:
+				# 邻格容错：update 后应在当前格；再查半径兜底
+				var near: Array = h.query_radius(e.global_position, 1.0)
+				in_cell = near.has(e)
+			_assert(in_cell, "浮现后 SpatialHash 含该敌人（对齐 boss_teleport）")
+
 	enemy_pool.release(e)
 
 
@@ -321,8 +399,8 @@ func _test_shop() -> void:
 # ---------------------------------------------------------------------------
 # 教学夜密度回归（修复「一半时间没怪」长空窗）
 # 根因：旧 _process 在 _remaining（本夜预算）耗尽即 _spawning=false 停刷；
-#       教学夜预算仅 10~19 只，被快速清光后剩余 28~40s 全空窗。
-# 修复：预算耗尽后，只要 active < min_active 就持续补刷直到夜晚结束。
+#       有经验预算被快速清光后剩余夜段全空窗。
+# 修复：预算耗尽后，只要 active < 本夜 floor（min_active + per_night×(n-1)）就持续补刷。
 # 本机检：把教学夜跑到预算耗尽 → 模拟清场 → 断言仍回补至 min_active。
 # ---------------------------------------------------------------------------
 func _test_teaching_night_density() -> void:
@@ -413,6 +491,54 @@ func _test_teaching_night_density() -> void:
 				"floor 补刷不封顶仍持续补刷 (used=%d)" % spawner.get_floor_refills_used())
 	spawner.clear_all()
 	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# min_active_per_night：在屏 floor 随夜数成长（夜5 > 夜1）
+# ---------------------------------------------------------------------------
+func _test_min_active_scales_with_night() -> void:
+	print("[密度 floor] min_active_per_night 夜成长")
+	var spawn_meta: Dictionary = ConfigLoader.get_enemy_spawn()
+	var base_floor: int = int(spawn_meta.get("min_active", 0))
+	var per_night: int = int(spawn_meta.get("min_active_per_night", 0))
+	_assert(base_floor > 0, "min_active > 0")
+	_assert(per_night > 0, "min_active_per_night > 0（=%d）" % per_night)
+
+	spawner.start_night(1)
+	var f1: int = spawner.get_min_active_for_night()
+	_assert(f1 == base_floor, "夜1 floor=%d（期望 min_active=%d）" % [f1, base_floor])
+
+	spawner.start_night(5)
+	var f5: int = spawner.get_min_active_for_night()
+	var expect5: int = base_floor + per_night * 4
+	_assert(f5 == expect5, "夜5 floor=%d（期望 %d）" % [f5, expect5])
+	_assert(f5 > f1, "夜5 floor > 夜1 (%d > %d)" % [f5, f1])
+
+	spawner.start_night(10)
+	var f10: int = spawner.get_min_active_for_night()
+	var expect10: int = base_floor + per_night * 9
+	_assert(f10 == expect10, "夜10 floor=%d（期望 %d）" % [f10, expect10])
+	spawner.clear_all()
+
+
+# ---------------------------------------------------------------------------
+# 有经验预算相对 floor：夜1 预算 ≥ 约 2×min_active，降低 even 超前窗口的无掉落稀释
+# ---------------------------------------------------------------------------
+func _test_budget_floor_ratio() -> void:
+	print("[预算/floor] 有经验配额相对密度保底")
+	var spawn_meta: Dictionary = ConfigLoader.get_enemy_spawn()
+	var base_count: int = int(spawn_meta.get("base_count", 0))
+	var redundancy: float = float(spawn_meta.get("budget_exp_redundancy", 1.0))
+	var min_active: int = int(spawn_meta.get("min_active", 0))
+	var n1_budget: int = int(roundi(float(base_count) * redundancy))
+	_assert(min_active > 0 and n1_budget > 0, "夜1 预算与 min_active 有效")
+	_assert(n1_budget >= min_active * 2,
+		"夜1有经验预算≥2×min_active（budget=%d floor=%d）" % [n1_budget, min_active])
+	spawner.start_night(1)
+	var rem: int = spawner.get_remaining()
+	_assert(rem == n1_budget or rem == mini(n1_budget, spawner.max_enemies),
+		"start_night(1) remaining=%d 对齐预算公式 %d" % [rem, n1_budget])
+	spawner.clear_all()
 
 
 # ---------------------------------------------------------------------------

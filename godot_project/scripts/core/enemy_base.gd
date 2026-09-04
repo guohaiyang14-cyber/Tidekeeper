@@ -40,6 +40,10 @@ var _burrow_duration: float = 3.0
 var _contact_interval: float = 0.5
 var _burrow_cooldown_cfg: float = 2.0
 var _burrow_initial_delay: float = 1.0
+## 浮现时沿玩家速度反向偏移（0=脚下必中；>0 使保持移动可躲同帧接触）
+var _burrow_emerge_behind: float = 40.0
+## 判定玩家「在移动」的 velocity.length_squared 阈值（config metadata.combat）
+var _burrow_move_detect_speed_sq: float = 40.0
 var _summon_id: String = "small_goblin"
 var _summon_interval: float = 3.0
 var _summon_count: int = 1
@@ -231,6 +235,10 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	_contact_interval = float(data.get("contact_interval", combat.get("contact_interval", 0.5)))
 	_burrow_cooldown_cfg = float(data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
 	_burrow_initial_delay = float(data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
+	_burrow_emerge_behind = float(data.get("burrow_emerge_behind", combat.get("burrow_emerge_behind", 40.0)))
+	_burrow_move_detect_speed_sq = float(data.get(
+		"burrow_move_detect_speed_sq", combat.get("burrow_move_detect_speed_sq", 40.0)
+	))
 	_burrow_cooldown = _burrow_initial_delay
 	_summon_id = String(data.get("summons", "small_goblin"))
 	_summon_interval = float(data.get("summon_interval", 3.0))
@@ -280,6 +288,10 @@ func configure_boss(boss_data: Dictionary) -> void:
 	_contact_interval = float(boss_data.get("contact_interval", combat.get("contact_interval", 0.5)))
 	_burrow_cooldown_cfg = float(boss_data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
 	_burrow_initial_delay = float(boss_data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
+	_burrow_emerge_behind = float(boss_data.get("burrow_emerge_behind", combat.get("burrow_emerge_behind", 40.0)))
+	_burrow_move_detect_speed_sq = float(boss_data.get(
+		"burrow_move_detect_speed_sq", combat.get("burrow_move_detect_speed_sq", 40.0)
+	))
 	_burrow_cooldown = _burrow_initial_delay
 	affix_ids.clear()
 	affix_state.clear()
@@ -433,10 +445,11 @@ func _try_contact_damage(player_pos: Vector2) -> void:
 func _tick_burrow(delta: float, player_pos: Vector2, do_move: bool) -> void:
 	if _burrowed:
 		if _burrow_timer <= 0.0:
-			# 突袭：在玩家脚下浮现
+			# 突袭浮现：站桩打脚下；若玩家在移动则落在速度反向，使走位可躲开同帧接触
+			# 传送须更新 SpatialHash（与 boss_teleport 同契约，避免武器/弹道查旧格）
 			_burrowed = false
 			visible = true
-			global_position = player_pos
+			boss_teleport(_burrow_emerge_position(player_pos))
 			_burrow_cooldown = _burrow_cooldown_cfg
 		elif do_move:
 			_move_toward(player_pos, delta)
@@ -446,6 +459,28 @@ func _tick_burrow(delta: float, player_pos: Vector2, do_move: bool) -> void:
 			_burrowed = true
 			visible = false
 			_burrow_timer = _burrow_duration
+
+
+## 突袭浮现点（站桩=脚下；移动=速度反向偏移）。机检可直接调用。
+func compute_burrow_emerge_position(player_pos: Vector2) -> Vector2:
+	return _burrow_emerge_position(player_pos)
+
+
+func _burrow_emerge_position(player_pos: Vector2) -> Vector2:
+	if _burrow_emerge_behind <= 0.0:
+		return player_pos
+	var move_dir: Vector2 = Vector2.ZERO
+	var detect_sq: float = maxf(_burrow_move_detect_speed_sq, 0.0)
+	var player_node: Player = target as Player
+	if player_node != null and player_node.velocity.length_squared() > detect_sq:
+		move_dir = player_node.velocity.normalized()
+	elif target != null and target.get("velocity") is Vector2:
+		var vel: Vector2 = target.get("velocity") as Vector2
+		if vel.length_squared() > detect_sq:
+			move_dir = vel.normalized()
+	if move_dir.length_squared() < 0.0001:
+		return player_pos
+	return player_pos - move_dir * _burrow_emerge_behind
 
 
 func _tick_summoner(delta: float, player_pos: Vector2, do_move: bool) -> void:

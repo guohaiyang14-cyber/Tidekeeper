@@ -412,9 +412,17 @@ func is_pincer_mode() -> bool:
 # ============================================================================
 
 ## 本夜最低在屏敌人密度（保底 floor；清场后持续补刷直到夜晚结束，消除长空窗）
-## 数据驱动自 metadata.spawn.min_active；教学夜同样适用（教学=数值减半，不降密度 floor）
+## 数据驱动：min_active + min_active_per_night×(night-1)，封顶 max_enemies；教学夜同样适用（教学=数值减半，不降密度 floor）
 func _min_active_for_night() -> int:
-	return int(_spawn_meta.get("min_active", 0))
+	var base_floor: int = int(_spawn_meta.get("min_active", 0))
+	var per_night: int = int(_spawn_meta.get("min_active_per_night", 0))
+	var floor_count: int = base_floor + per_night * maxi(_night - 1, 0)
+	return mini(maxi(floor_count, 0), max_enemies)
+
+
+## 本夜在屏 floor（测试 / 调试；须先 start_night）
+func get_min_active_for_night() -> int:
+	return _min_active_for_night()
 
 
 ## 本夜 floor 补刷总量上限（预算耗尽后的无掉落补刷；<=0 不封顶）

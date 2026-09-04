@@ -15,7 +15,7 @@ const RESULT_RESTART_DELAY: float = 1.1
 const SHOP_DWELL: float = 1.8
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
-# N5 巨钳王 + swift/thorns/chain 时，旧参数易贴脸；挣扎期若无脑追怪会白给。
+# 日志主因：contact:deep_diver（潜地后脚下浮现）；贴脸时 dist≈0 旧 flee 直接 skip，再停捡珠会连吃接触伤。
 const ORBIT_SPEED: float = 1.85
 const STRUGGLE_HUNT_RADIUS: float = 520.0
 const STRUGGLE_SAFE_ELITE: float = 420.0
@@ -23,11 +23,13 @@ const STRUGGLE_SAFE_THORNS: float = 140.0
 const ELITE_SCAN_RADIUS: float = 1000.0
 const ELITE_MIN_DIST_N5: float = 520.0
 const ELITE_MIN_DIST: float = 300.0
-## 锁链精英：被打会绑 0.5s，需拉得更开（夜结束靠计时，不强制击杀精英）
+## 锁链精英：被打会减速，需拉得更开（夜结束靠计时，不强制击杀精英）
 const ELITE_MIN_DIST_CHAIN: float = 620.0
-const FLEE_RADIUS_N5: float = 440.0
+## N4 起深潜者登场：扩大逃离半径（不必等到 N5）
+const FLEE_RADIUS_N4: float = 400.0
+const FLEE_RADIUS_N5: float = 480.0
 const FLEE_RADIUS: float = 260.0
-const DANGER_HP_RATIO: float = 0.78
+const DANGER_HP_RATIO: float = 0.85
 const CHEST_SEEK_RANGE: float = 420.0
 const CHEST_SAFE_ENEMY: float = 110.0
 const CHEST_SAFE_ELITE: float = 420.0
@@ -38,8 +40,13 @@ const ELITE_FLEE_WEIGHT: float = 5.5
 const THORNS_FLEE_WEIGHT: float = 3.2
 const SWIFT_FLEE_WEIGHT: float = 2.4
 const CHAIN_FLEE_WEIGHT: float = 2.8
-## 第 4 夜起商店/三选一额外偏向减伤（进 N5 精英前囤生存）
-const SURVIVAL_BIAS_FROM_NIGHT: int = 4
+const BURROW_FLEE_WEIGHT: float = 4.0
+## 贴脸/突袭后锁定逃跑方向，避免轨道掉头又撞回去
+const PANIC_STICK_SEC: float = 0.85
+const PANIC_CONTACT_DIST: float = 48.0
+const BURROW_SCAN_RADIUS: float = 720.0
+## 第 3 夜昼起囤减伤（N4 深潜者 / N5 精英前）
+const SURVIVAL_BIAS_FROM_NIGHT: int = 3
 
 const _BotCombatStats = preload("res://scripts/debug/bot_combat_stats.gd")
 
@@ -47,6 +54,10 @@ var _enabled: bool = false
 var _action_timer: float = 0.0
 var _char_select_started: bool = false
 var _orbit_angle: float = 0.0
+## 上一帧有效移动方向（贴脸 dist≈0 时作逃离基准）
+var _last_move_dir: Vector2 = Vector2.RIGHT
+var _panic_timer: float = 0.0
+var _panic_dir: Vector2 = Vector2.RIGHT
 ## BotCombatStats（preload.new）；不写 class_name 注解以免 autoload 启动时类型未注册
 var _combat_stats: Variant = null
 
@@ -89,6 +100,7 @@ func note_enemy_death(enemy: EnemyBase) -> void:
 
 
 func _on_night_started(night: int) -> void:
+	_panic_timer = 0.0
 	if _combat_stats == null:
 		return
 	_combat_stats.begin_night(night, _current_world())
@@ -139,6 +151,7 @@ func _on_scene_changed() -> void:
 	_char_select_started = false
 	_reset_scene_timers()
 	_release_move_actions()
+	_panic_timer = 0.0
 	# World 首帧 scene_changed 可能晚于 night_started：不可在此 reset，否则夜 1 开局统计被清掉
 	if _combat_stats != null and _is_char_select_scene():
 		_combat_stats.reset_run()
@@ -261,6 +274,8 @@ func _pick_upgrade_index(offers: Array) -> int:
 
 func _offer_score(offer: Dictionary) -> int:
 	var id: String = str(offer.get("id", ""))
+	if _want_survival_bias() and id in ["pearl", "exp_sac"]:
+		return 5
 	if offer.get("type") == "weapon":
 		# 临近精英夜：已有武器升级仍优先，但新武器低于高分减伤被动
 		if id in GameState.weapon_slots:
@@ -371,6 +386,9 @@ func _should_buy_shop_item(item: Dictionary) -> bool:
 	if id == "":
 		return false
 	var kind: String = str(item.get("kind", ""))
+	# 生存期不买纯拾取/经验被动（对深潜突袭零帮助，占槽占钱）
+	if _want_survival_bias() and id in ["pearl", "exp_sac"]:
+		return false
 	if kind == "weapon":
 		if id in GameState.weapon_slots:
 			return GameState.get_weapon_level(id) < GameState.max_weapon_level
@@ -388,18 +406,21 @@ func _shop_item_score(item: Dictionary) -> int:
 	var kind: String = str(item.get("kind", ""))
 	var owned: bool = id in GameState.weapon_slots or id in GameState.passive_slots
 	var base: int = _survival_item_score(id)
-	# 消耗品回血：低血或临近精英夜时抬高
-	if kind == "consumable" or id in ["storm_flask", "pearl"]:
+	# 消耗品回血：低血或进 N4/N5 前抬到最高优先（休息回血在过完 N5 之后才结算）
+	if kind == "consumable" or id in ["storm_flask"]:
 		var hp_ratio: float = 1.0
 		if GameState.player_max_health > 0:
 			hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
-		if hp_ratio < 0.85 or _want_survival_bias():
-			base = maxi(base, 90)
+		if hp_ratio < 0.92 or _want_survival_bias():
+			base = maxi(base, 130)
 	if kind == "weapon" and owned:
-		return 86 if not _want_survival_bias() else 78
-	# 临近 N5：未拥有新武器略降，把钱留给减伤被动
+		return 86 if not _want_survival_bias() else 70
+	# 生存期：未拥有新武器再降，把钱留给护身符/珊瑚屏障
 	if kind == "weapon" and not owned and _want_survival_bias():
-		base = mini(base, 42)
+		base = mini(base, 36)
+	# 已有减伤被动继续叠级
+	if kind == "passive" and owned and id in ["amulet", "coral_barrier"]:
+		return 140 + (22 if _want_survival_bias() else 0)
 	return base + (12 if owned else 0)
 
 
@@ -408,36 +429,44 @@ func _want_survival_bias() -> bool:
 
 
 func _survival_item_score(id: String) -> int:
-	var bias: int = 18 if _want_survival_bias() else 0
+	var bias: int = 22 if _want_survival_bias() else 0
 	match id:
 		"amulet", "coral_barrier":
-			return 100 + bias
-		"lamp_core", "tide_bell", "storm_flask":
-			return 72 + bias
+			return 120 + bias
+		"storm_flask":
+			# 进化钥 + 常作回血消耗品入口；生存期仍高于纯输出
+			return 78 + bias
+		"lamp_core", "tide_bell":
+			return 48 if _want_survival_bias() else 72
 		"lamp_oil", "iron_chain", "humus", "abyss_eye", "tide_compass":
-			return 64 + (bias / 2)
+			return 40 if _want_survival_bias() else 64
 		"pearl":
-			return 40 + bias
+			# 拾取半径对深潜突袭无帮助；生存期刻意压分
+			return 12 if _want_survival_bias() else 40
 		"exp_sac":
-			return 18
+			return 8
 		_:
 			return 50
 
 
 func _tick_night_movement(world: World, delta: float) -> void:
 	var player: Player = world.player as Player
-	# 锁链改为减速后仍可走位；仅缺玩家时停手（完全定身 bind_move_mult=0 时由 Player 自清速度）
+	# 锁链改为减速后仍可走位；仅缺玩家时停手
 	if player == null:
 		_release_move_actions()
 		return
 	var pos: Vector2 = player.global_position
 	var dir: Vector2 = _compute_move_direction(world, pos, delta)
+	if dir.length_squared() > 0.01:
+		_last_move_dir = dir.normalized()
 	_apply_move_direction(dir)
 
 
 func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
 	_orbit_angle += delta * ORBIT_SPEED
 	var kite: Vector2 = Vector2(cos(_orbit_angle), sin(_orbit_angle))
+	if _panic_timer > 0.0:
+		_panic_timer = maxf(0.0, _panic_timer - delta)
 	# 挣扎窗口：无敌期内全力凑杀（见 _struggle_move_direction）
 	if GameState.is_struggling():
 		return _struggle_move_direction(world, pos, kite)
@@ -446,6 +475,23 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	var hp_ratio: float = 1.0
 	if GameState.player_max_health > 0:
 		hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
+
+	var nearest_contact: float = _nearest_enemy_distance(world, pos, PANIC_CONTACT_DIST + 40.0)
+	var burrow_threat: bool = _has_burrow_threat(world, pos, BURROW_SCAN_RADIUS)
+	# 贴脸或潜地威胁：锁定逃离方向，禁止掉头/捡珠（深潜者脚下浮现后须立刻离开接触半径）
+	if nearest_contact <= PANIC_CONTACT_DIST or burrow_threat:
+		_arm_panic(flee, kite)
+
+	if _panic_timer > 0.0:
+		# 恐慌期仍允许顺逃逸方向捡回血箱（深潜磨血时救命）
+		var hp_ratio_panic: float = 1.0
+		if GameState.player_max_health > 0:
+			hp_ratio_panic = float(GameState.player_health) / float(GameState.player_max_health)
+		if hp_ratio_panic < DANGER_HP_RATIO:
+			var panic_chest: Vector2 = _safe_chest_direction(world, pos)
+			if panic_chest != Vector2.ZERO and panic_chest.dot(_panic_dir) >= -0.1:
+				return panic_chest
+		return _panic_flee_direction(world, pos, flee, kite)
 
 	var elite_pos: Vector2 = _nearest_elite_position(world, pos, ELITE_SCAN_RADIUS)
 	var elite_near: bool = elite_pos != Vector2.INF
@@ -465,23 +511,35 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 		if low_hp_chest != Vector2.ZERO:
 			return low_hp_chest
 
-	# 贴身/中低血/精英在场：放弃捡珠，切向风筝
-	var danger: bool = flee.length_squared() > 0.08 or hp_ratio < DANGER_HP_RATIO or elite_near
+	# N4+ 有深潜者或贴身压力：放弃捡珠，切向风筝（保持移动吃掉突袭后的接触 CD）
+	var diver_pressure: bool = GameState.current_night >= 4 and _has_burrow_enemy(world, pos, BURROW_SCAN_RADIUS)
+	var danger: bool = (
+		flee.length_squared() > 0.08
+		or hp_ratio < DANGER_HP_RATIO
+		or elite_near
+		or diver_pressure
+	)
 	if danger:
-		var away: Vector2 = flee.normalized() if flee.length_squared() > 0.0001 else kite
+		var away: Vector2 = flee.normalized() if flee.length_squared() > 0.0001 else _last_move_dir
+		if away.length_squared() < 0.0001:
+			away = kite
 		if elite_near:
 			away = (away + (pos - elite_pos).normalized() * 2.4).normalized()
 		var tangent: Vector2 = Vector2(-away.y, away.x)
 		if kite.dot(tangent) < 0.0:
 			tangent = -tangent
-		var away_w: float = 4.4 if hp_ratio > DANGER_HP_RATIO else 5.8
+		var away_w: float = 4.8 if hp_ratio > DANGER_HP_RATIO else 6.2
 		if elite_near:
 			away_w += 2.2
-		if GameState.current_night >= 5:
-			away_w += 1.2
-		var combined: Vector2 = away * away_w + tangent * 2.6 + kite * 0.15
+		if GameState.current_night >= 4:
+			away_w += 1.4
+		if diver_pressure:
+			away_w += 1.6
+			# 深潜压力下少绕圈，优先直线拉开
+			tangent *= 0.45
+		var combined: Vector2 = away * away_w + tangent * 2.6 + kite * 0.1
 		if combined.length_squared() < 0.01:
-			return kite
+			return away
 		return combined.normalized()
 
 	# 安全时优先捡宝箱（主动触碰），再捡经验珠
@@ -492,6 +550,71 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if gem_dir != Vector2.ZERO:
 		return gem_dir
 	return kite
+
+
+func _arm_panic(flee: Vector2, kite: Vector2) -> void:
+	var dir: Vector2 = flee
+	if dir.length_squared() < 0.0001:
+		dir = _last_move_dir
+	if dir.length_squared() < 0.0001:
+		dir = kite
+	# 恐慌中途不换向（避免来回撞回接触圈）
+	if _panic_timer <= 0.0:
+		_panic_dir = dir.normalized()
+	_panic_timer = PANIC_STICK_SEC
+
+
+func _panic_flee_direction(world: World, pos: Vector2, flee: Vector2, kite: Vector2) -> Vector2:
+	var away: Vector2 = _panic_dir
+	if flee.length_squared() > 0.0001 and flee.normalized().dot(_panic_dir) > 0.15:
+		away = (away * 1.4 + flee.normalized()).normalized()
+	elif flee.length_squared() > 0.0001 and _panic_timer < PANIC_STICK_SEC * 0.35:
+		# 后半段允许轻微并入新 flee，仍禁止反向
+		var blended: Vector2 = away * 2.0 + flee.normalized()
+		if blended.dot(_panic_dir) > 0.0:
+			away = blended.normalized()
+	if away.length_squared() < 0.0001:
+		away = kite if kite.length_squared() > 0.0001 else Vector2.RIGHT
+	# 恐慌期仍躲弹，但权重低、且不反向
+	var proj: Vector2 = _projectile_flee_vector(world, pos)
+	if proj.length_squared() > 0.0001 and proj.normalized().dot(away) > -0.2:
+		away = (away * 3.0 + proj.normalized()).normalized()
+	return away.normalized()
+
+
+func _has_burrow_threat(world: World, pos: Vector2, radius: float) -> bool:
+	# 潜地突袭会传送到玩家附近：任一潜地中的深潜者都算威胁（全图）；贴脸未潜地也算
+	for enemy in _iter_live_enemies(world, pos, radius, true):
+		if enemy.behavior_type != "burrow_ambush":
+			continue
+		if enemy.is_burrowed():
+			return true
+		if pos.distance_to(enemy.global_position) <= PANIC_CONTACT_DIST * 1.5:
+			return true
+	return false
+
+
+func _has_burrow_enemy(world: World, pos: Vector2, radius: float) -> bool:
+	for enemy in _iter_live_enemies(world, pos, radius, false):
+		if enemy.behavior_type == "burrow_ambush":
+			return true
+	return false
+
+
+## 优先对象池；ignore_radius=true 时扫全活跃（潜地威胁跨距）；否则按 radius 过滤
+func _iter_live_enemies(world: World, pos: Vector2, radius: float, ignore_radius: bool = false) -> Array[EnemyBase]:
+	var out: Array[EnemyBase] = []
+	var radius_sq: float = radius * radius
+	if world.enemy_pool != null:
+		for node in world.enemy_pool.get_active():
+			var enemy: EnemyBase = node as EnemyBase
+			if enemy == null or enemy.is_dead():
+				continue
+			if not ignore_radius and pos.distance_squared_to(enemy.global_position) > radius_sq:
+				continue
+			out.append(enemy)
+		return out
+	return _query_enemies(world, pos, radius)
 
 
 ## 挣扎：无敌窗内全力凑杀；优先安全软怪，没有则追最近可计杀目标（含靠近精英）
@@ -668,13 +791,23 @@ func _query_enemies(world: World, pos: Vector2, radius: float) -> Array[EnemyBas
 
 func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 	var flee: Vector2 = Vector2.ZERO
-	var danger_radius: float = FLEE_RADIUS_N5 if GameState.current_night >= 5 else FLEE_RADIUS
+	var danger_radius: float = FLEE_RADIUS
+	if GameState.current_night >= 5:
+		danger_radius = FLEE_RADIUS_N5
+	elif GameState.current_night >= 4:
+		danger_radius = FLEE_RADIUS_N4
 	for enemy in _query_enemies(world, pos, danger_radius):
 		var offset: Vector2 = pos - enemy.global_position
 		var dist: float = offset.length()
-		if dist < 0.001:
-			continue
+		# 脚下浮现 / 重叠：旧逻辑 dist≈0 直接 skip，导致贴脸后无逃离力
+		var dir: Vector2
+		if dist < 1.0:
+			dir = _last_move_dir if _last_move_dir.length_squared() > 0.0001 else Vector2.RIGHT
+			dist = 1.0
+		else:
+			dir = offset / dist
 		var weight: float = 1.0 - (dist / danger_radius)
+		weight = maxf(weight, 0.05)
 		weight *= 1.0 + float(enemy.danger) * 0.28
 		if enemy.is_elite or enemy.is_boss:
 			weight *= ELITE_FLEE_WEIGHT
@@ -687,8 +820,12 @@ func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 		if enemy.behavior_type == "self_destruct":
 			weight *= 2.1
 		if enemy.behavior_type == "burrow_ambush":
-			weight *= 1.7
-		flee += offset.normalized() * weight
+			weight *= BURROW_FLEE_WEIGHT
+			if enemy.is_burrowed():
+				weight *= 1.8
+			if dist <= PANIC_CONTACT_DIST:
+				weight *= 2.5
+		flee += dir * weight
 	return flee
 
 
@@ -720,13 +857,14 @@ func _apply_move_direction(dir: Vector2) -> void:
 	_release_move_actions()
 	if dir.length_squared() < 0.01:
 		return
-	if dir.x < -0.25:
+	# 更低阈值：对角线更容易打出，突袭后离开接触圈更快
+	if dir.x < -0.18:
 		Input.action_press("move_left")
-	elif dir.x > 0.25:
+	elif dir.x > 0.18:
 		Input.action_press("move_right")
-	if dir.y < -0.25:
+	if dir.y < -0.18:
 		Input.action_press("move_up")
-	elif dir.y > 0.25:
+	elif dir.y > 0.18:
 		Input.action_press("move_down")
 
 
