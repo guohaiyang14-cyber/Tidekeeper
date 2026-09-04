@@ -15,7 +15,7 @@ const RESULT_RESTART_DELAY: float = 1.1
 const SHOP_DWELL: float = 1.8
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
-# 日志主因：N15 潮汐主宰 / 弹幕 / 接触；贴脸时 dist≈0 旧 flee 会 skip。
+# N15 执政官：潮汐波在灯塔光晕外受伤（bosses.json aura_radius）；远距风筝=吃波致死。
 const ORBIT_SPEED: float = 1.85
 const STRUGGLE_HUNT_RADIUS: float = 520.0
 const STRUGGLE_SAFE_ELITE: float = 420.0
@@ -26,9 +26,18 @@ const ELITE_MIN_DIST_N5: float = 560.0
 const ELITE_MIN_DIST: float = 300.0
 ## 锁链精英：被打会减速，需拉得更开（夜结束靠计时，不强制击杀精英）
 const ELITE_MIN_DIST_CHAIN: float = 680.0
-## Boss / 天灾夜：拉开距离（日志最后一击多为 boss_tide_archon）
+## Boss / 非执政官天灾：拉开距离（N10 水母后等）
 const BOSS_MIN_DIST: float = 780.0
 const BOSS_MIN_DIST_CALAMITY: float = 920.0
+## N15 执政官：光晕内环绕（对齐 metadata.lighthouse.aura_radius；勿用远距风筝）
+const ARCHON_AURA_STAY_RATIO: float = 0.78
+const ARCHON_AURA_HARD_RATIO: float = 0.92
+const ARCHON_PREF_RING_RATIO: float = 0.52
+const ARCHON_BOSS_SOFT_DIST: float = 78.0
+const ARCHON_ORBIT_SPEED: float = 2.55
+## 执政官夜捡箱：光晕内 Boss 常在，禁用 CHEST_SAFE_BOSS=720；仅拒脚下/贴脸
+const ARCHON_CHEST_SAFE_ENEMY: float = 70.0
+const ARCHON_CHEST_SAFE_BOSS: float = 55.0
 ## N4 起深潜者登场：扩大逃离半径（不必等到 N5）
 const FLEE_RADIUS_N4: float = 420.0
 const FLEE_RADIUS_N5: float = 540.0
@@ -56,6 +65,8 @@ const PROJ_LOOK: float = 180.0
 const PROJ_LOOK_CALAMITY: float = 300.0
 ## 对齐 config/enemies.json → metadata.affix_rules.calamity_nights（Bot 不读表，改夜次须同步）
 const CALAMITY_NIGHTS: Array[int] = [10, 15, 20]
+## 第 15 夜执政官（潮汐波光晕机制；与 bosses.json tide_archon.night 对齐）
+const ARCHON_NIGHT: int = 15
 ## 第 3 夜昼起囤减伤（N4 深潜者 / N5 精英前）
 const SURVIVAL_BIAS_FROM_NIGHT: int = 3
 
@@ -119,6 +130,11 @@ func note_enemy_spawn(enemy: EnemyBase) -> void:
 
 func _on_night_started(night: int) -> void:
 	_panic_timer = 0.0
+	if night == ARCHON_NIGHT:
+		print(
+			"[TestBot] N%d 执政官策略：贴灯塔光晕内环绕（aura=%.0f）"
+			% [night, _lighthouse_aura_radius()]
+		)
 	if _combat_stats == null:
 		return
 	_combat_stats.begin_night(night, _current_world())
@@ -432,7 +448,10 @@ func _shop_item_score(item: Dictionary) -> int:
 		var hp_ratio: float = 1.0
 		if GameState.player_max_health > 0:
 			hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
-		if hp_ratio < 0.95 or _want_survival_bias() or calamity_prep:
+		# N14 进执政官前：几乎无条件囤回血（光晕内存活仍靠满血/减伤）
+		if GameState.current_night + 1 == ARCHON_NIGHT:
+			base = maxi(base, 175)
+		elif hp_ratio < 0.95 or _want_survival_bias() or calamity_prep:
 			base = maxi(base, 150 if calamity_prep else 130)
 	if kind == "weapon" and owned:
 		return 86 if not _want_survival_bias() else 70
@@ -459,6 +478,22 @@ func _want_calamity_prep() -> bool:
 
 func _is_calamity_night() -> bool:
 	return GameState.current_night in CALAMITY_NIGHTS
+
+
+func _is_archon_night() -> bool:
+	return GameState.current_night == ARCHON_NIGHT
+
+
+func _lighthouse_aura_radius() -> float:
+	var light: Dictionary = ConfigLoader.get_lighthouse_meta()
+	return float(light.get("aura_radius", 140.0))
+
+
+func _lighthouse_position(world: World) -> Vector2:
+	# 圆心可能为 (0,0)；勿用 ZERO 作「未设置」哨兵（与 World 写入的真实坐标一致）
+	if world.enemy_spawner == null:
+		return Vector2.INF
+	return world.enemy_spawner.lighthouse_position
 
 
 func _survival_item_score(id: String) -> int:
@@ -511,6 +546,10 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if GameState.player_max_health > 0:
 		hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
 	var calamity: bool = _is_calamity_night()
+
+	# N15 执政官：必须待在灯塔光晕内，远距风筝会周期性吃潮汐波
+	if _is_archon_night():
+		return _archon_move_direction(world, pos, flee, kite, hp_ratio, delta)
 
 	var nearest_contact: float = _nearest_enemy_distance(world, pos, PANIC_CONTACT_DIST + 40.0)
 	var burrow_threat: bool = _has_burrow_threat(world, pos, BURROW_SCAN_RADIUS)
@@ -608,6 +647,124 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 		if gem_dir != Vector2.ZERO:
 			return gem_dir
 	return kite
+
+
+## N15：贴灯塔光晕内环绕；出圈立刻回撤（潮汐波 exam_point）
+func _archon_move_direction(
+	world: World, pos: Vector2, flee: Vector2, kite: Vector2, hp_ratio: float, delta: float
+) -> Vector2:
+	_orbit_angle += delta * (ARCHON_ORBIT_SPEED - ORBIT_SPEED)
+	var light: Vector2 = _lighthouse_position(world)
+	if light == Vector2.INF:
+		var boss_fb: Vector2 = _nearest_boss_position(world, pos, BOSS_SCAN_RADIUS)
+		if boss_fb != Vector2.INF:
+			return _kite_away_from(boss_fb, pos, flee, kite, 5.0, 2.0)
+		return kite if kite.length_squared() > 0.0001 else Vector2.RIGHT
+
+	var aura: float = _lighthouse_aura_radius()
+	var stay_r: float = aura * ARCHON_AURA_STAY_RATIO
+	var hard_r: float = aura * ARCHON_AURA_HARD_RATIO
+	var to_light: Vector2 = light - pos
+	var dist_light: float = to_light.length()
+	var inward: Vector2 = to_light / dist_light if dist_light > 1.0 else Vector2.RIGHT
+
+	# 硬出圈 / 接近出圈：最高优先级回撤（可略带侧移躲接触，但不允许净外向）
+	if dist_light > stay_r:
+		var back: Vector2 = inward
+		if flee.length_squared() > 0.0001:
+			var side: Vector2 = Vector2(-inward.y, inward.x)
+			if flee.normalized().dot(side) < 0.0:
+				side = -side
+			var blend: Vector2 = inward * 4.2 + side * 1.1
+			# 夹击杂兵 flee 若指向外圈则丢掉
+			if flee.normalized().dot(inward) > -0.05:
+				blend += flee.normalized() * 0.9
+			back = blend.normalized()
+		return back
+
+	var boss_pos: Vector2 = _nearest_boss_position(world, pos, BOSS_SCAN_RADIUS)
+	var nearest_contact: float = _nearest_enemy_distance(world, pos, PANIC_CONTACT_DIST + 30.0)
+	if nearest_contact <= PANIC_CONTACT_DIST:
+		# 恐慌仍锁向，但最终方向钳制在光晕内
+		_arm_panic(flee, kite)
+		var panic_dir: Vector2 = _panic_flee_direction(world, pos, flee, kite)
+		return _clamp_dir_inside_aura(panic_dir, pos, light, hard_r)
+
+	# 低血：光晕内专用寻箱（不走 CHEST_SAFE_BOSS=720）
+	if hp_ratio < DANGER_HP_RATIO:
+		var chest: Vector2 = _archon_chest_direction(world, pos, light, hard_r)
+		if chest != Vector2.ZERO:
+			return chest
+
+	# 光晕内：环绕灯塔 + 软拉开 Boss（flee 已含弹幕，勿再叠 _projectile_flee）
+	var radial: Vector2 = (pos - light).normalized() if dist_light > 8.0 else kite
+	var tangent: Vector2 = Vector2(-radial.y, radial.x)
+	var orbit_kite: Vector2 = Vector2(cos(_orbit_angle), sin(_orbit_angle))
+	if orbit_kite.dot(tangent) < 0.0:
+		tangent = -tangent
+
+	var away_boss: Vector2 = Vector2.ZERO
+	if boss_pos != Vector2.INF:
+		var bd: float = pos.distance_to(boss_pos)
+		if bd < ARCHON_BOSS_SOFT_DIST:
+			away_boss = (pos - boss_pos).normalized()
+		elif bd < ARCHON_BOSS_SOFT_DIST * 1.55:
+			away_boss = (pos - boss_pos).normalized() * 0.55
+
+	var prefer_r: float = aura * ARCHON_PREF_RING_RATIO
+	var radial_fix: Vector2 = Vector2.ZERO
+	if dist_light < prefer_r * 0.5:
+		radial_fix = radial
+	elif dist_light > prefer_r * 1.2:
+		radial_fix = -radial
+
+	var combined: Vector2 = (
+		tangent * 3.2
+		+ away_boss * 5.0
+		+ flee * 1.35
+		+ radial_fix * 2.4
+		+ orbit_kite * 0.25
+	)
+	if combined.length_squared() < 0.01:
+		combined = tangent
+	return _clamp_dir_inside_aura(combined.normalized(), pos, light, hard_r)
+
+
+## 执政官夜寻箱：须在 hard_r 内；只拒贴脸怪 / Boss 脚下（允许圈内 Boss 旁回血）
+func _archon_chest_direction(world: World, pos: Vector2, light: Vector2, hard_r: float) -> Vector2:
+	if world.pickup_system == null:
+		return Vector2.ZERO
+	var chest_out: Array[Vector2] = [Vector2.ZERO]
+	if not world.pickup_system.try_nearest_chest_position(pos, chest_out, CHEST_SEEK_RANGE):
+		return Vector2.ZERO
+	var chest: Vector2 = chest_out[0]
+	if light.distance_to(chest) > hard_r:
+		return Vector2.ZERO
+	if _nearest_enemy_distance(world, chest, ARCHON_CHEST_SAFE_ENEMY + 20.0) <= ARCHON_CHEST_SAFE_ENEMY:
+		return Vector2.ZERO
+	if _nearest_boss_position(world, chest, ARCHON_CHEST_SAFE_BOSS) != Vector2.INF:
+		return Vector2.ZERO
+	var to_chest: Vector2 = chest - pos
+	if to_chest.length_squared() < 4.0:
+		return Vector2.ZERO
+	return to_chest.normalized()
+
+
+## 禁止移动方向把玩家推出光晕硬边界
+func _clamp_dir_inside_aura(dir: Vector2, pos: Vector2, light: Vector2, hard_r: float) -> Vector2:
+	if dir.length_squared() < 0.0001:
+		return (light - pos).normalized() if pos.distance_to(light) > 1.0 else Vector2.RIGHT
+	var dist: float = pos.distance_to(light)
+	if dist <= hard_r * 0.85:
+		return dir.normalized()
+	var outward: Vector2 = (pos - light).normalized() if dist > 1.0 else Vector2.RIGHT
+	var outward_dot: float = dir.normalized().dot(outward)
+	if outward_dot <= 0.05:
+		return dir.normalized()
+	var fixed: Vector2 = dir.normalized() - outward * (outward_dot + 0.35)
+	if fixed.length_squared() < 0.0001:
+		return -outward
+	return fixed.normalized()
 
 
 func _arm_panic(flee: Vector2, kite: Vector2) -> void:
@@ -883,13 +1040,19 @@ func _query_enemies(world: World, pos: Vector2, radius: float) -> Array[EnemyBas
 func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 	var flee: Vector2 = Vector2.ZERO
 	var danger_radius: float = FLEE_RADIUS
-	if _is_calamity_night():
+	if _is_archon_night():
+		# 光晕仅 ~140：大半径 flee 会被两侧夹击推出安全区
+		danger_radius = _aura_safe_flee_radius()
+	elif _is_calamity_night():
 		danger_radius = FLEE_RADIUS_CALAMITY
 	elif GameState.current_night >= 5:
 		danger_radius = FLEE_RADIUS_N5
 	elif GameState.current_night >= 4:
 		danger_radius = FLEE_RADIUS_N4
 	for enemy in _query_enemies(world, pos, danger_radius):
+		# 执政官夜：Boss 接触由光晕环绕软拉开，不叠 BOSS_FLEE_WEIGHT 远推
+		if _is_archon_night() and enemy.is_boss:
+			continue
 		var offset: Vector2 = pos - enemy.global_position
 		var dist: float = offset.length()
 		# 脚下浮现 / 重叠：旧逻辑 dist≈0 直接 skip，导致贴脸后无逃离力
@@ -922,6 +1085,10 @@ func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 				weight *= 2.5
 		flee += dir * weight
 	return flee
+
+
+func _aura_safe_flee_radius() -> float:
+	return _lighthouse_aura_radius() * 0.95
 
 
 func _projectile_flee_vector(world: World, pos: Vector2) -> Vector2:
