@@ -261,6 +261,7 @@ func _on_shop_retire() -> void:
 
 ## 停止刷怪并回收敌人 / 敌方弹道 / 拾取物
 ## salvage_gems：进昼时为 true，未拾经验珠先入账再清；胜负结算为 false（避免死后/通关再弹升级）
+## 潮币不 salvage（GDD：需主动拾取；清场丢弃未拾币）
 func _clear_night_entities(salvage_gems: bool = false) -> void:
 	enemy_spawner.stop()
 	enemy_spawner.clear_all()

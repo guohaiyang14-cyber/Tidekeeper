@@ -52,6 +52,8 @@ func _ready() -> void:
 	await _test_budget_floor_ratio()  # 有经验预算相对 floor 不稀释升级
 	await _test_even_budget_pace()  # even：前段不打光有经验预算
 	await _test_salvage_gems_at_day()  # 夜末未拾珠自动入账
+	await _test_coin_clear_no_salvage()  # 潮币 clear 不入账（GDD）
+	await _test_coin_pool_soft_expand()  # CoinPool 耗尽软扩容
 
 	print("------------------------------------------------------------")
 	print("W2-W3 机检通过=%d 失败=%d" % [_passed, _failed])
@@ -586,5 +588,54 @@ func _test_salvage_gems_at_day() -> void:
 	_assert(salvaged > 0, "回收经验 > 0 (got=%d)" % salvaged)
 	_assert(pickup_system.active_gem_count() == 0, "回收后场上无珠")
 	_assert(GameState.player_exp > exp0, "经验已入账 (%d→%d)" % [exp0, GameState.player_exp])
+	pickup_system.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 潮币：clear_all 回收但不入账（对齐 GDD「需主动拾取」；与经验珠 salvage 不对称）
+# ---------------------------------------------------------------------------
+func _test_coin_clear_no_salvage() -> void:
+	print("[潮币清场] clear_all 不入账")
+	spawner.clear_all()
+	pickup_system.clear_all()
+	GameState.tidecoins = 0
+	var c1: Coin = pickup_system.spawn_coin(player.global_position + Vector2(400.0, 0.0), 11)
+	var c2: Coin = pickup_system.spawn_coin(player.global_position + Vector2(-400.0, 0.0), 7)
+	_assert(c1 != null and c2 != null, "生成 2 枚远距潮币")
+	_assert(pickup_system.active_coin_count() == 2, "场上 2 币")
+	var coin_out: Array[Vector2] = [Vector2.ZERO]
+	_assert(
+		pickup_system.try_nearest_coin_position(player.global_position, coin_out, 2000.0),
+		"可查最近潮币"
+	)
+	pickup_system.clear_all()
+	_assert(pickup_system.active_coin_count() == 0, "clear 后场上无币")
+	_assert(GameState.tidecoins == 0, "clear 不入账潮币（GDD）")
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# CoinPool：耗尽时软扩容（对齐 PickupPool；避免风筝未拾刷 ERROR）
+# ---------------------------------------------------------------------------
+func _test_coin_pool_soft_expand() -> void:
+	print("[CoinPool] 耗尽软扩容")
+	spawner.clear_all()
+	pickup_system.clear_all()
+	coin_pool.release_all()
+	var size0: int = coin_pool.pool_size
+	_assert(size0 >= 1, "CoinPool 已初始化 (size=%d)" % size0)
+	var acquired: int = 0
+	while coin_pool.available_count() > 0:
+		var node: Node = coin_pool.acquire()
+		if node == null:
+			break
+		acquired += 1
+	_assert(acquired == size0, "抽干预分配 (%d)" % acquired)
+	_assert(coin_pool.available_count() == 0, "可用为 0")
+	var extra: Node = coin_pool.acquire()
+	_assert(extra != null, "耗尽后仍可 acquire（软扩容）")
+	_assert(coin_pool.pool_size > size0, "pool_size 增大 (%d→%d)" % [size0, coin_pool.pool_size])
+	coin_pool.release_all()
 	pickup_system.clear_all()
 	GameState.player_health = GameState.player_max_health

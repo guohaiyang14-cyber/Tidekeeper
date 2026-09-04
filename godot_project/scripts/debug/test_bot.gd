@@ -907,20 +907,26 @@ func _safe_chest_direction(world: World, pos: Vector2) -> Vector2:
 func _safe_gem_direction(world: World, pos: Vector2) -> Vector2:
 	if world.pickup_system == null:
 		return Vector2.ZERO
+	# 经验珠优先，其次潮币（同吸附半径；避免风筝只捡珠导致 CoinPool 堆满）
+	var target: Vector2 = Vector2.ZERO
 	var gem_out: Array[Vector2] = [Vector2.ZERO]
-	if not world.pickup_system.try_nearest_gem_position(pos, gem_out, GEM_SEEK_RANGE):
+	if world.pickup_system.try_nearest_gem_position(pos, gem_out, GEM_SEEK_RANGE):
+		target = gem_out[0]
+	else:
+		var coin_out: Array[Vector2] = [Vector2.ZERO]
+		if not world.pickup_system.try_nearest_coin_position(pos, coin_out, GEM_SEEK_RANGE):
+			return Vector2.ZERO
+		target = coin_out[0]
+	if _nearest_enemy_distance(world, target, GEM_SAFE_ENEMY + 24.0) <= GEM_SAFE_ENEMY:
 		return Vector2.ZERO
-	var gem: Vector2 = gem_out[0]
-	if _nearest_enemy_distance(world, gem, GEM_SAFE_ENEMY + 24.0) <= GEM_SAFE_ENEMY:
+	if _nearest_boss_position(world, target, CHEST_SAFE_BOSS) != Vector2.INF:
 		return Vector2.ZERO
-	if _nearest_boss_position(world, gem, CHEST_SAFE_BOSS) != Vector2.INF:
+	if _nearest_elite_position(world, target, GEM_SAFE_ELITE) != Vector2.INF:
 		return Vector2.ZERO
-	if _nearest_elite_position(world, gem, GEM_SAFE_ELITE) != Vector2.INF:
+	var to_target: Vector2 = target - pos
+	if to_target.length_squared() < 4.0:
 		return Vector2.ZERO
-	var to_gem: Vector2 = gem - pos
-	if to_gem.length_squared() < 4.0:
-		return Vector2.ZERO
-	return to_gem.normalized()
+	return to_target.normalized()
 
 
 func _nearest_boss_position(world: World, pos: Vector2, radius: float) -> Vector2:

@@ -546,7 +546,7 @@ func _collect(gem: ExpGem, index: int) -> void:
 
 
 ## 夜末结算：场上未拾经验珠全部入账并回收（避免进昼 clear 丢成长）
-## 返回入账总经验；潮币/宝箱不在此处理。
+## 返回入账总经验；潮币/宝箱不在此处理（GDD：潮币需主动拾取）。
 func collect_all_gems_now() -> int:
 	var total: int = 0
 	var i: int = _active_gems.size() - 1
@@ -560,3 +560,25 @@ func collect_all_gems_now() -> int:
 		_active_gems.remove_at(i)
 		i -= 1
 	return total
+
+
+## 查找最近潮币；找到时写入 out_pos[0] 并返回 true。
+func try_nearest_coin_position(from: Vector2, out_pos: Array[Vector2], max_range: float = 2400.0) -> bool:
+	var best_dist: float = max_range
+	var best_pos: Vector2 = Vector2.ZERO
+	var found: bool = false
+	for coin in _active_coins:
+		if not is_instance_valid(coin):
+			continue
+		var dist: float = from.distance_to(coin.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best_pos = coin.global_position
+			found = true
+	if not found:
+		return false
+	if out_pos.is_empty():
+		out_pos.append(best_pos)
+	else:
+		out_pos[0] = best_pos
+	return true

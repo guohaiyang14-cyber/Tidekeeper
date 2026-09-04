@@ -71,7 +71,7 @@ pool_size = 350
 [node name="CoinPool" type="Node" parent="."]
 script = ExtResource("17_coin_pool")
 scene = ExtResource("18_coin")
-pool_size = 200
+pool_size = 350
 
 [node name="ChestPool" type="Node" parent="."]
 script = ExtResource("28_chest_pool")
