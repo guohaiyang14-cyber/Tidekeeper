@@ -55,8 +55,10 @@ func _process(delta: float) -> void:
 	if _player == null:
 		_player = _find_player()
 	if _player != null and global_position.distance_to(_player.global_position) <= hit_radius:
-		GameState.damage_player(_damage, "enemy_projectile")
+		# 先回收再结算伤害：damage_player 可能致死 → World.release_all，避免二次 release 告警
+		var dmg: int = _damage
 		_recycle()
+		GameState.damage_player(dmg, "enemy_projectile")
 		return
 	# 越界回收
 	if abs(global_position.x) > 5000.0 or abs(global_position.y) > 5000.0:
@@ -70,7 +72,11 @@ func _find_player() -> Node2D:
 	return null
 
 
+## 幂等回收：进昼/结算 release_all 与自身命中/超时可能同帧竞态
 func _recycle() -> void:
+	if not _active:
+		return
+	_active = false
 	var pool: ObjectPool = get_parent() as ObjectPool
 	if pool != null:
 		pool.release(self)
