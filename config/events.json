@@ -6,6 +6,8 @@
     "trigger_context": "抉择之昼随机 1 张事件卡，可跳过",
     "naming_note": "「潮汐反转」= 抉择之昼事件卡（夹击 + 宝箱翻倍）；「潮汐夹击」= 第 15 夜天灾规则（仅夹击）。两者实现 key 必须区分",
     "exclusion_rule": "第 15 夜事件池排除「潮汐反转」(tidal_reversal)，避免叠乘",
+    "base_vision_radius": 320.0,
+    "base_vision_radius_note": "像素；月食等 vision_radius_mult 乘此基准；倍率≈1 时不显示遮罩",
     "note": "运行时只读；effects 中的字段名与 modifier 系统对齐（命令/可序列化修改器，便于存档回放）"
   },
   "events": {

@@ -258,6 +258,11 @@ func get_boss_by_night(night: int) -> Dictionary:
 func get_event(event_id: String) -> Dictionary:
 	return events.get("events", {}).get(event_id, {})
 
+
+## 事件视野基准半径（像素；events.json metadata.base_vision_radius）
+func get_base_vision_radius() -> float:
+	return float(events.get("metadata", {}).get("base_vision_radius", 320.0))
+
 ## 获取第 N 夜可用事件池（排除 excluded_nights 命中的事件）
 ## 注意：JSON 数值解析为 float，需 int 比较（否则 15 in [15.0] 判定为 false，导致第 15 夜排除失效）
 func get_events_for_night(night: int) -> Array:

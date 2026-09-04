@@ -10,12 +10,16 @@ var _shop_manager: ShopManager
 
 ## 玩家请求跳过昼（继续下一夜）；World 监听后关店并进夜
 signal skip_requested()
+## 抉择之昼「点亮信号」提前收工；World 监听后按进度结算（非通关）
+signal retire_requested()
 ## 融合成功后通知 World 同步武器实例
 signal evolution_fused(weapon_id: String)
 
 @onready var _vbox: VBoxContainer = $VBox
 @onready var _coin_label: Label = $VBox/CoinLabel
 var _skip_btn: Button
+var _retire_btn: Button
+var _retire_confirm: ConfirmationDialog
 var _evo_label: Label
 var _refine_label: Label
 var _reroll_label: Label
@@ -40,14 +44,64 @@ func _ready() -> void:
 	_reroll_label.add_theme_color_override("font_color", Color(0.75, 0.95, 0.7))
 	_vbox.add_child(_reroll_label)
 	_skip_btn = Button.new()
-	_skip_btn.text = "继续下一夜 (Q)"
+	_skip_btn.text = LanguageSystem.localize("ui.shop.skip")
 	_skip_btn.pressed.connect(func(): skip_requested.emit())
 	_vbox.add_child(_skip_btn)
+	_retire_btn = Button.new()
+	_retire_btn.text = LanguageSystem.localize("ui.shop.retire")
+	_retire_btn.pressed.connect(_on_retire_pressed)
+	_vbox.add_child(_retire_btn)
+	_build_retire_confirm()
+	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
+		LanguageSystem.language_changed.connect(_on_language_changed)
 	if not GameState.evolution_items_changed.is_connected(_on_evo_items_changed):
 		GameState.evolution_items_changed.connect(_on_evo_items_changed)
 	if not GameState.refine_essence_changed.is_connected(_on_refine_essence_changed):
 		GameState.refine_essence_changed.connect(_on_refine_essence_changed)
 
+
+func _build_retire_confirm() -> void:
+	_retire_confirm = ConfirmationDialog.new()
+	_retire_confirm.process_mode = Node.PROCESS_MODE_ALWAYS
+	_retire_confirm.confirmed.connect(_on_retire_confirmed)
+	add_child(_retire_confirm)
+	_refresh_retire_confirm_text()
+
+
+func _refresh_retire_confirm_text() -> void:
+	if _retire_confirm == null:
+		return
+	_retire_confirm.title = LanguageSystem.localize("ui.shop.retire_confirm_title")
+	_retire_confirm.dialog_text = LanguageSystem.localize("ui.shop.retire_confirm_body")
+	_retire_confirm.ok_button_text = LanguageSystem.localize("ui.shop.retire_confirm_ok")
+	_retire_confirm.cancel_button_text = LanguageSystem.localize("ui.shop.retire_confirm_cancel")
+
+
+## 点「提前收工」→ 二次确认，避免误触结算
+func _on_retire_pressed() -> void:
+	if _retire_confirm == null:
+		_on_retire_confirmed()
+		return
+	_refresh_retire_confirm_text()
+	_retire_confirm.popup_centered()
+
+
+## 确认框 OK → 通知 World 结算离场
+func _on_retire_confirmed() -> void:
+	retire_requested.emit()
+
+
+## 机检：跳过确认框直接发出 retire_requested（等同玩家点确认）
+func emit_retire_confirmed_for_test() -> void:
+	_on_retire_confirmed()
+
+
+func _on_language_changed(_lang: String) -> void:
+	if _skip_btn != null:
+		_skip_btn.text = LanguageSystem.localize("ui.shop.skip")
+	if _retire_btn != null:
+		_retire_btn.text = LanguageSystem.localize("ui.shop.retire")
+	_refresh_retire_confirm_text()
 
 ## 注入 ShopManager（由 World 调用）
 func setup(sm: ShopManager) -> void:
@@ -105,6 +159,8 @@ func _clear_dynamic_rows() -> void:
 	_reroll_btns.clear()
 	if _skip_btn != null and _skip_btn.get_parent() == _vbox:
 		_vbox.remove_child(_skip_btn)
+	if _retire_btn != null and _retire_btn.get_parent() == _vbox:
+		_vbox.remove_child(_retire_btn)
 	if _evo_label != null and _evo_label.get_parent() == _vbox:
 		_vbox.remove_child(_evo_label)
 	if _refine_label != null and _refine_label.get_parent() == _vbox:
@@ -123,9 +179,11 @@ func _place_tail_controls() -> void:
 func _refresh_fusion() -> void:
 	if not visible:
 		return
-	# 重建尾部：摘尾部控件 → 清旧钮 → 重挂（融合 + 精炼 + 重铸 + 标签 + 跳过）
+	# 重建尾部：摘尾部控件 → 清旧钮 → 重挂（融合 + 精炼 + 重铸 + 标签 + 跳过 + 提前收工）
 	if _skip_btn != null and _skip_btn.get_parent() == _vbox:
 		_vbox.remove_child(_skip_btn)
+	if _retire_btn != null and _retire_btn.get_parent() == _vbox:
+		_vbox.remove_child(_retire_btn)
 	if _evo_label != null and _evo_label.get_parent() == _vbox:
 		_vbox.remove_child(_evo_label)
 	if _refine_label != null and _refine_label.get_parent() == _vbox:
@@ -155,6 +213,8 @@ func _refresh_fusion() -> void:
 		_vbox.add_child(_reroll_label)
 	if _skip_btn != null:
 		_vbox.add_child(_skip_btn)
+	if _retire_btn != null:
+		_vbox.add_child(_retire_btn)
 
 
 func _refresh_fusion_buttons_only() -> void:

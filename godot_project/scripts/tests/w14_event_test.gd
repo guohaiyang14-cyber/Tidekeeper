@@ -38,6 +38,7 @@ func _ready() -> void:
 	_test_drop_scaling()
 	_test_combat_mods_deferred_until_begin_night()
 	_test_reset_clears()
+	await _test_vision_overlay()
 	print("------------------------------------------------------------")
 	print("W14 机检通过=%d 失败=%d" % [_passed, _failed])
 	print("============================================================")
@@ -352,3 +353,35 @@ func _test_reset_clears() -> void:
 	_assert(EventSystem.get_elite_wave_count() == 0, "reset 精英波数量=0")
 	_assert(EventSystem.get_attack_speed_mult() == 1.0, "reset 攻速=1.0")
 	_assert(EventSystem.get_move_speed_mult() == 1.0, "reset 移速=1.0")
+
+
+## 视野遮罩消费 EventSystem.get_vision_mult（月食缩小半径）
+func _test_vision_overlay() -> void:
+	print("[视野遮罩]")
+	const _VO = preload("res://scripts/core/vision_overlay.gd")
+	var base: float = ConfigLoader.get_base_vision_radius()
+	_assert(abs(base - 320.0) < 0.01, "基准视野半径=320")
+	var vo: Node2D = _VO.new() as Node2D
+	add_child(vo)
+	await get_tree().process_frame
+	EventSystem.reset()
+	EventSystem.apply_event("storm")
+	vo.call("refresh_from_event")
+	_assert(not bool(vo.call("is_vision_restricted")), "无视野惩罚时遮罩关闭")
+	_assert(abs(float(vo.call("get_vision_radius")) - base) < 0.01, "暴风雨视野=基准")
+	EventSystem.reset()
+	EventSystem.apply_event("eclipse")
+	vo.call("refresh_from_event")
+	_assert(bool(vo.call("is_vision_restricted")), "月食激活遮罩")
+	_assert(abs(float(vo.call("get_vision_radius")) - base * 0.70) < 0.01, "月食半径=base×0.70")
+	EventSystem.reset()
+	vo.call("refresh_from_event")
+	_assert(not bool(vo.call("is_vision_restricted")), "reset 后遮罩关闭")
+	# 进昼等价：clear_overlay 须清 _active
+	EventSystem.apply_event("eclipse")
+	vo.call("refresh_from_event")
+	_assert(bool(vo.call("is_vision_restricted")), "月食再次激活")
+	vo.call("clear_overlay")
+	_assert(not bool(vo.call("is_vision_restricted")), "clear_overlay 后未激活")
+	_assert(vo.visible == false, "clear_overlay 后不可见")
+	vo.queue_free()

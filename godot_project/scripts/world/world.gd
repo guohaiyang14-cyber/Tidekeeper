@@ -15,6 +15,7 @@ const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
 const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
+const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -36,6 +37,8 @@ const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
 @onready var evolution_effect_ui: EvolutionEffectUI = $UI/EvolutionEffectUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
+## 视野遮罩（preload 保证 class_name 先于本脚本解析；类型用 VisionOverlay）
+var vision_overlay: VisionOverlay = null
 
 
 func _ready() -> void:
@@ -51,6 +54,9 @@ func _ready() -> void:
 	var p: Player = player as Player
 	if p != null:
 		p.apply_run_character(character_id)
+		# 视野遮罩挂在玩家下（跟随相机）；进夜刷新倍率
+		vision_overlay = _VISION_OVERLAY.new() as VisionOverlay
+		p.add_child(vision_overlay)
 	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
 	weapon_manager.sync_from_game_state()
 	UpgradeManager.reset()
@@ -67,6 +73,7 @@ func _ready() -> void:
 	shop_manager.setup(shop_ui)
 	shop_ui.setup(shop_manager)
 	shop_ui.skip_requested.connect(_on_shop_skip)
+	shop_ui.retire_requested.connect(_on_shop_retire)
 	shop_ui.evolution_fused.connect(_on_evolution_fused)
 	if not GameState.loadout_changed.is_connected(_on_loadout_changed):
 		GameState.loadout_changed.connect(_on_loadout_changed)
@@ -149,6 +156,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			print("[World] → 夜晚阶段 (第 %d 夜)" % day_night.get_current_night())
 			# 昼阶段 pick 只 arm 即时效果；进夜再加载战斗倍率（避免商店阶段吃到移速/攻速等）
 			EventSystem.begin_night()
+			if vision_overlay != null:
+				vision_overlay.refresh_from_event()
 			enemy_spawner.start_night(day_night.get_current_night())
 			# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
 			GameState.grant_teaching_demo_weapon(day_night.get_current_night())
@@ -162,6 +171,8 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 					pickup_system.chest_opened.connect(_on_chest_opened)
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
+			if vision_overlay != null:
+				vision_overlay.clear_overlay()
 			# 进昼前先入账未拾经验珠，再清场（成长冗余）
 			_clear_night_entities(true)
 			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）
@@ -237,6 +248,15 @@ func _on_shop_skip() -> void:
 	day_phase_ui.exit_day()
 	shop_ui.close()
 	day_night.skip_day_phase()
+
+
+## 抉择之昼「点亮信号」→ 按进度结算离场（GDD §8.4 P1；非通关）
+func _on_shop_retire() -> void:
+	if GameState.is_over:
+		return
+	day_phase_ui.exit_day()
+	shop_ui.close()
+	GameState.trigger_game_over("early_retire")
 
 
 ## 停止刷怪并回收敌人 / 敌方弹道 / 拾取物

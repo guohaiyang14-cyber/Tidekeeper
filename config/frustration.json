@@ -14,7 +14,9 @@
     "invuln_sec": 3.0,
     "kills_to_revive": 5,
     "max_revives": 1,
-    "revive_invuln_sec": 2.0
+    "max_revives_scope": "per_night",
+    "revive_invuln_sec": 5.0,
+    "note": "GDD §8.4：每夜最多 1 次；复活后无敌 5s（MVP 以本表为准）"
   },
   "fallback": {
     "enabled": true,

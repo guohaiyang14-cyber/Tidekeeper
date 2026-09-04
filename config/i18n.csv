@@ -3,6 +3,18 @@ ui.difficulty,难度：,Difficulty:
 ui.teaching,（教学夜）,(Tutorial)
 ui.boss_warn,⚠ 本夜有 Boss 出没,⚠ Boss appears this night
 ui.game_over,游戏结束,Game Over
+ui.early_retire,提前收工,Early Retire
+ui.shop.skip,继续下一夜 (Q),Next Night (Q)
+ui.shop.retire,点亮信号 · 提前收工,Light Signal · Retire
+ui.shop.retire_confirm_title,确认提前收工？,Confirm early retire?
+ui.shop.retire_confirm_body,将按当前进度结算星尘并结束本局（非通关）。,Settle stardust by progress and end this run (not a clear).
+ui.shop.retire_confirm_ok,点亮信号,Light Signal
+ui.shop.retire_confirm_cancel,取消,Cancel
+ui.day.title,抉择之昼,Day of Choice
+ui.day.hint,"右侧商店可购买强化 · 可融合时点「融合」· 按 Q 继续下一夜 · 「点亮信号」可提前收工","Shop on the right · Fuse when ready · Q for next night · Light Signal to retire early"
+ui.day.subtitle_rest,第 %d 夜结束 · 灯塔休息回血,Night %d ended · Lighthouse rest heal
+ui.day.subtitle,第 %d 夜结束,Night %d ended
+ui.day.event,事件：%s,Event: %s
 ui.victory,通关,Victory
 ui.restart,再来一局 (Enter),Play Again (Enter)
 ui.meta,角色 / 灯塔,Character / Lighthouse
@@ -20,6 +32,7 @@ ui.result.victory_reason,击败吞噬之星，第 20 夜结束,Devouring Star de
 ui.death.reason.hp_zero,死因：血量归零,Cause: HP depleted
 ui.death.reason.timeout,死因：超时,Cause: Time out
 ui.death.reason.death,死因：生命值耗尽,Cause: HP depleted
+ui.death.reason.early_retire,点亮信号，按进度结算离场,Signal lit — settled by progress
 ui.death.reason.other,死因：%s,Cause: %s
 ui.death.last_hit,最后一击：%s（%d）,Last hit: %s (%d)
 ui.death.no_record,伤害来源：无记录,Damage sources: none

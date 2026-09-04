@@ -5,9 +5,10 @@
 #   W17-2 伤害来源追踪（damage_player(source_id) → 累计 + 最后一击）
 #   W17-3 死因可视化（get_death_analysis：最后一击 + 伤害 TopN）
 #   W17-4 首夜保护（前 4 夜死亡满血复活 1 次；>4 夜不触发；复活后短暂无敌）
-#   W17-5 挣扎模式（免死窗口 + 击杀 K 敌复活；每局最多 1 次；窗口耗尽判负）
+#   W17-5 挣扎模式（免死窗口 + 击杀 K 敌复活；每夜最多 1 次；窗口耗尽判负）
 #   W17-6 失败保底结算（落败星尘 ≥ floor_pct × 满通应得）
 #   W17-7 门控：未 begin_run 时挫败感复活不生效（与角色/灯塔特性同门控，不污染单元机检）
+#   W17-14 提前收工（early_retire 按进度结算，非通关）
 # 运行：godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/w17_frustration_test.tscn
 #       退出码 0=全过 / 1=有失败
 # ============================================================================
@@ -37,6 +38,7 @@ func _ready() -> void:
 	_test_first_night_expiry()
 	_test_struggle_revive()
 	_test_struggle_once_then_death()
+	_test_struggle_per_night_reset()
 	_test_struggle_expire()
 	_test_failure_floor()
 	_test_gate_no_run()
@@ -45,6 +47,8 @@ func _ready() -> void:
 	_test_struggle_night_end()
 	_test_fallback_enabled()
 	_test_source_labels()
+	await _test_early_retire()
+	await _test_early_retire_shop_wiring()
 	print("------------------------------------------------------------")
 	print("Result: %d passed, %d failed" % [_passed, _failed])
 	if _failed > 0:
@@ -82,8 +86,9 @@ func _test_config() -> void:
 	_assert(bool(st.get("enabled", false)) == true, "挣扎模式启用")
 	_assert(abs(float(st.get("invuln_sec", -1.0)) - 3.0) < 0.001, "挣扎免死窗口 = 3.0s")
 	_assert(int(st.get("kills_to_revive", -1)) == 5, "挣扎需击杀 5 敌复活")
-	_assert(int(st.get("max_revives", -1)) == 1, "挣扎最多复活 1 次")
-	_assert(abs(float(st.get("revive_invuln_sec", -1.0)) - 2.0) < 0.001, "挣扎复活后无敌 2.0s（数据驱动）")
+	_assert(int(st.get("max_revives", -1)) == 1, "挣扎最多复活 1 次（每夜）")
+	_assert(abs(float(st.get("revive_invuln_sec", -1.0)) - 5.0) < 0.001, "挣扎复活后无敌 5.0s（对齐 GDD）")
+	_assert(String(st.get("max_revives_scope", "")) == "per_night", "挣扎次数作用域=per_night")
 	var fb: Dictionary = cfg.get("fallback", {})
 	_assert(bool(fb.get("enabled", false)) == true, "失败保底启用")
 	_assert(abs(float(fb.get("floor_pct", -1.0)) - 0.30) < 0.001, "失败保底 floor_pct = 0.30")
@@ -209,10 +214,10 @@ func _test_struggle_revive() -> void:
 
 
 # ============================================================================
-# W17-7 挣扎模式每局最多 1 次，用尽后真实死亡
+# W17-7 挣扎模式同夜最多 1 次，用尽后真实死亡
 # ============================================================================
 func _test_struggle_once_then_death() -> void:
-	print("[W17-7 挣扎模式仅 1 次]")
+	print("[W17-7 挣扎模式同夜仅 1 次]")
 	MetaSystem.begin_run()
 	GameState.start_new_run("watcher")
 	GameState.enter_night(10)
@@ -222,10 +227,36 @@ func _test_struggle_once_then_death() -> void:
 		GameState.register_enemy_kill()  # 第一次挣扎复活
 	_assert(GameState.player_health == GameState.player_max_health, "挣扎第一次复活成功")
 	var st_cfg: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
-	GameState.advance_timers_for_test(float(st_cfg.get("revive_invuln_sec", 2.0)) + 0.1)  # 清掉复活后无敌
-	GameState.damage_player(9999)    # 二次致命：挣扎已用尽、首夜已过期
-	_assert(GameState.is_over == true, "挣扎用尽后二次致命真实判负")
+	GameState.advance_timers_for_test(float(st_cfg.get("revive_invuln_sec", 5.0)) + 0.1)  # 清掉复活后无敌
+	GameState.damage_player(9999)    # 二次致命：同夜挣扎已用尽、首夜已过期
+	_assert(GameState.is_over == true, "同夜挣扎用尽后二次致命真实判负")
 	_assert(GameState.is_struggling() == false, "二次致命未再进入挣扎")
+
+
+# ============================================================================
+# W17-7b 跨夜重置：下一夜可再次进入挣扎
+# ============================================================================
+func _test_struggle_per_night_reset() -> void:
+	print("[W17-7b 挣扎跨夜重置]")
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(10)
+	GameState.damage_player(9999)
+	var need: int = int(ConfigLoader.get_frustration_config().get("struggle", {}).get("kills_to_revive", 5))
+	for _i in need:
+		GameState.register_enemy_kill()
+	_assert(GameState.is_struggling() == false, "夜10 挣扎复活成功")
+	var st_cfg: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
+	GameState.advance_timers_for_test(float(st_cfg.get("revive_invuln_sec", 5.0)) + 0.1)
+	# 进入第 11 夜 → 次数清零，可再挣扎
+	GameState.enter_night(11)
+	GameState.damage_player(9999)
+	_assert(GameState.is_over == false, "跨夜后致命未直接判负")
+	_assert(GameState.is_struggling() == true, "跨夜后可再次进入挣扎")
+	for _i in need:
+		GameState.register_enemy_kill()
+	_assert(GameState.player_health == GameState.player_max_health, "跨夜挣扎再次复活成功")
+	_assert(GameState.is_struggling() == false, "跨夜挣扎复活后窗口关闭")
 
 
 # ============================================================================
@@ -397,3 +428,73 @@ func _test_source_labels() -> void:
 	_assert(ui._source_label("explode:bomb_shell") == "自爆·爆炸贝", "自爆来源映射敌人名")
 	_assert(ui._source_label("enemy_projectile") == "敌方弹幕", "弹幕固定映射")
 	ui.free()
+
+
+# ============================================================================
+# W17-16 提前收工：按进度结算、非通关、ResultUI 无死因面板
+# ============================================================================
+func _test_early_retire() -> void:
+	print("[W17-16 提前收工 early_retire]")
+	MetaSystem.reset_progress()
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(6)
+	GameState.end_night()
+	_assert(GameState.is_day_phase == true, "收工前处于抉择之昼")
+	var before: int = MetaSystem.get_stardust()
+	GameState.trigger_game_over("early_retire")
+	_assert(GameState.is_over == true, "提前收工置 is_over")
+	var earned: int = MetaSystem.settle_stardust(6, false, GameState.stardust)
+	_assert(earned > 0, "提前收工按进度结算星尘>0")
+	_assert(MetaSystem.get_stardust() == before + earned, "星尘累计正确")
+	_assert(SaveSystem.get_save_meta().get("first_clear", false) == false, "提前收工非通关不置首通")
+	var ui: ResultUI = _RESULT_UI.new() as ResultUI
+	add_child(ui)
+	await get_tree().process_frame
+	ui.show_game_over("early_retire", 6, GameState.player_level, GameState.tidecoins, earned)
+	_assert(ui._title.text == LanguageSystem.localize("ui.early_retire"), "结算标题=提前收工")
+	_assert(ui._death_cause.text == "", "提前收工无死因 Top3")
+	_assert(ui._reason.text == LanguageSystem.localize("ui.death.reason.early_retire"), "离场文案正确")
+	ui.queue_free()
+
+
+# ============================================================================
+# W17-16b ShopUI.retire_requested 接线：确认后发信号 → 关店 + early_retire
+# ============================================================================
+func _test_early_retire_shop_wiring() -> void:
+	print("[W17-16b ShopUI 收工接线]")
+	const _SHOP_UI := preload("res://scripts/core/shop_ui.gd")
+	var shop: ShopUI = _SHOP_UI.new() as ShopUI
+	var vbox := VBoxContainer.new()
+	vbox.name = "VBox"
+	var coin := Label.new()
+	coin.name = "CoinLabel"
+	vbox.add_child(coin)
+	shop.add_child(vbox)
+	add_child(shop)
+	await get_tree().process_frame
+	_assert(shop.get_node_or_null("VBox") != null, "ShopUI 最小场景树就绪")
+
+	var fired: Array = [false]
+	var shop_closed: Array = [false]
+	shop.retire_requested.connect(func() -> void:
+		fired[0] = true
+		# 对齐 World._on_shop_retire：关店 + trigger_game_over
+		shop.close()
+		shop_closed[0] = not shop.visible
+		GameState.trigger_game_over("early_retire")
+	)
+
+	MetaSystem.reset_progress()
+	MetaSystem.begin_run()
+	GameState.start_new_run("watcher")
+	GameState.enter_night(4)
+	GameState.end_night()
+	shop.visible = true
+	# 未确认前不应发信号（仅点按钮会弹确认框；机检走确认入口）
+	shop.emit_retire_confirmed_for_test()
+	_assert(bool(fired[0]) == true, "确认后发出 retire_requested")
+	_assert(bool(shop_closed[0]) == true, "接线侧关闭商店")
+	_assert(GameState.is_over == true, "接线触发 early_retire")
+	_assert(shop._retire_confirm != null, "二次确认对话框已创建")
+	shop.queue_free()

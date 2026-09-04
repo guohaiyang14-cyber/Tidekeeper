@@ -89,7 +89,7 @@ var _struggle_active: bool = false
 var _struggle_timer: float = 0.0
 ## 本次挣扎窗口内累计击杀
 var _struggle_kills: int = 0
-## 挣扎模式已用复活次数（每局上限 max_revives）
+## 挣扎模式已用复活次数（每夜上限 max_revives；进夜清零，对齐 GDD「每夜 1 次」）
 var _struggle_revives: int = 0
 ## 当前无敌剩余秒数（复活后短暂无敌 / 挣扎免死窗口内）
 var _invuln_remaining: float = 0.0
@@ -170,6 +170,10 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 func enter_night(night: int) -> void:
 	current_night = night
 	is_day_phase = false
+	# GDD §8.4：挣扎「每夜 1 次」——按 config max_revives_scope 清零本夜已用次数
+	var st: Dictionary = ConfigLoader.get_frustration_config().get("struggle", {})
+	if String(st.get("max_revives_scope", "per_night")) == "per_night":
+		_struggle_revives = 0
 	night_started.emit(night)
 	print("[GameState] 进入第 %d 夜" % night)
 

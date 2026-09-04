@@ -35,11 +35,51 @@ func _ready() -> void:
 	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
 	_apply_pickup_config()
+	_ensure_gamepad_move_bindings()
 	if not GameState.player_damaged.is_connected(_on_player_damaged):
 		GameState.player_damaged.connect(_on_player_damaged)
 	print("[Player] 就绪: character=%s move_speed=%.1f pickup_radius=%.0f" % [
 		character_id, base_move_speed, base_pickup_radius,
 	])
+
+
+## 左摇杆绑定到 move_*（幂等；键盘事件已在 project.godot）
+func _ensure_gamepad_move_bindings() -> void:
+	_add_joy_axis_if_missing("move_left", JOY_AXIS_LEFT_X, -1.0)
+	_add_joy_axis_if_missing("move_right", JOY_AXIS_LEFT_X, 1.0)
+	_add_joy_axis_if_missing("move_up", JOY_AXIS_LEFT_Y, -1.0)
+	_add_joy_axis_if_missing("move_down", JOY_AXIS_LEFT_Y, 1.0)
+	_add_joy_button_if_missing("interact", JOY_BUTTON_A)
+	_add_joy_button_if_missing("skip", JOY_BUTTON_B)
+	# 摇杆手感：0.5 过大；数字键仍为 0/1，降到 0.25 不影响键盘
+	for action in ["move_left", "move_right", "move_up", "move_down"]:
+		if InputMap.has_action(action):
+			InputMap.action_set_deadzone(action, 0.25)
+
+
+func _add_joy_axis_if_missing(action: String, axis: int, axis_value: float) -> void:
+	if not InputMap.has_action(action):
+		return
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventJoypadMotion:
+			var jm: InputEventJoypadMotion = ev as InputEventJoypadMotion
+			if jm.axis == axis and signf(jm.axis_value) == signf(axis_value):
+				return
+	var motion := InputEventJoypadMotion.new()
+	motion.axis = axis
+	motion.axis_value = axis_value
+	InputMap.action_add_event(action, motion)
+
+
+func _add_joy_button_if_missing(action: String, button: int) -> void:
+	if not InputMap.has_action(action):
+		return
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventJoypadButton and (ev as InputEventJoypadButton).button_index == button:
+			return
+	var btn := InputEventJoypadButton.new()
+	btn.button_index = button
+	InputMap.action_add_event(action, btn)
 
 
 ## 开局同步当前角色（World 在 start_new_run 后调用；覆盖场景默认 watcher）
@@ -77,19 +117,10 @@ func _on_player_damaged(_amount: int) -> void:
 	queue_redraw()
 
 
-## 处理移动输入（WASD，§5.2）；锁链等束缚期间按 bind_move_mult 减速（0 则定身）
+## 处理移动输入（WASD + 左摇杆，§5.2）；锁链等束缚期间按 bind_move_mult 减速（0 则定身）
 func _handle_movement() -> void:
-	var input_vector: Vector2 = Vector2.ZERO
-	if Input.is_action_pressed("move_up"):
-		input_vector.y -= 1.0
-	if Input.is_action_pressed("move_down"):
-		input_vector.y += 1.0
-	if Input.is_action_pressed("move_left"):
-		input_vector.x -= 1.0
-	if Input.is_action_pressed("move_right"):
-		input_vector.x += 1.0
-
-	input_vector = input_vector.normalized()
+	# get_vector 合成键盘与摇杆（死区走 InputMap）
+	var input_vector: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	# 移速 = 基础 × 加成（受软上限约束）× 事件移速（W14 灯塔共鸣），单位→像素换算
 	var speed: float = base_move_speed * _effective_move_mult()
 	if _bind_timer > 0.0:

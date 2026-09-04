@@ -174,9 +174,15 @@ func show_victory(night: int, level: int, tidecoins: int, stardust_earned: int =
 
 
 func _apply_game_over_text() -> void:
-	_title.text = LanguageSystem.localize("ui.game_over")
-	_title.remove_theme_color_override("font_color")
-	_title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+	var is_retire: bool = _last_game_over_reason == "early_retire"
+	if is_retire:
+		_title.text = LanguageSystem.localize("ui.early_retire")
+		_title.remove_theme_color_override("font_color")
+		_title.add_theme_color_override("font_color", Color(0.75, 0.88, 1.0))
+	else:
+		_title.text = LanguageSystem.localize("ui.game_over")
+		_title.remove_theme_color_override("font_color")
+		_title.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
 	_reason.text = _reason_label(_last_game_over_reason)
 	_stats.text = LanguageSystem.localizef("ui.result.stats_defeat", [
 		_last_night, _last_level, _last_tidecoins, DifficultySystem.get_tier_label(),
@@ -184,7 +190,8 @@ func _apply_game_over_text() -> void:
 	_stardust.text = LanguageSystem.localizef("ui.result.stardust", [
 		_last_stardust_earned, MetaSystem.get_stardust(),
 	])
-	_death_cause.text = _death_cause_text()
+	# 提前收工无死因面板（主动离场，非致死）
+	_death_cause.text = "" if is_retire else _death_cause_text()
 
 
 func _apply_victory_text() -> void:
@@ -221,12 +228,13 @@ func _on_meta_pressed() -> void:
 		get_tree().change_scene_to_file("res://scenes/character_select.tscn")
 
 
-## 死因文案映射
+## 死因 / 离场文案映射
 func _reason_label(reason: String) -> String:
 	match reason:
 		"hp_zero": return LanguageSystem.localize("ui.death.reason.hp_zero")
 		"timeout": return LanguageSystem.localize("ui.death.reason.timeout")
 		"death": return LanguageSystem.localize("ui.death.reason.death")
+		"early_retire": return LanguageSystem.localize("ui.death.reason.early_retire")
 		_: return LanguageSystem.localizef("ui.death.reason.other", [reason])
 
 
