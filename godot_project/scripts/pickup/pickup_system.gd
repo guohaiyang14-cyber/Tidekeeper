@@ -40,8 +40,10 @@ var _active_coins: Array[Coin] = []
 var _active_chests: Array[Chest] = []
 
 ## 自 config/pickups.json 加载的运行时参数
-var _collect_radius: float = 10.0
-var _attract_speed: float = 120.0
+var _collect_radius: float = 16.0
+var _attract_speed: float = 560.0
+## 半径内最大吸附时长（秒）；与 attract_speed 取 max，避免慢于玩家移速跟跑
+var _attract_snap_time: float = 0.1
 var _scatter_range: float = 12.0
 var _quality_weights: Array[float] = [65.0, 25.0, 8.0, 2.0]
 var _quality_exp_mult: Array[float] = [1.0, 2.0, 5.0, 10.0]
@@ -116,10 +118,15 @@ func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float) -> v
 			var new_dist: float = gem.global_position.distance_to(player_pos)
 			if new_dist <= _collect_radius:
 				_collect(gem, i)
-		else:
-			# 未吸附：检查是否进入拾取半径
-			if dist <= pickup_radius:
-				gem.start_attract(player_pos, _attract_speed)
+		elif dist <= pickup_radius:
+			# 进入拾取半径：近身直接入账，稍远则快速吸附（同帧可收）
+			if dist <= _collect_radius:
+				_collect(gem, i)
+			else:
+				gem.start_attract(player_pos, _attract_speed, _attract_snap_time)
+				gem.update_attract(player_pos, delta)
+				if gem.global_position.distance_to(player_pos) <= _collect_radius:
+					_collect(gem, i)
 
 		i -= 1
 
@@ -180,13 +187,23 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float) -> 
 		if coin.is_attracted():
 			coin.update_attract(player_pos, delta)
 			if coin.global_position.distance_to(player_pos) <= _collect_radius:
-				GameState.add_tidecoins(coin.value)
-				_active_coins.remove_at(i)
-				_coin_pool.release(coin)
-		else:
-			if dist <= pickup_radius:
-				coin.start_attract(player_pos, _attract_speed)
+				_collect_coin(coin, i)
+		elif dist <= pickup_radius:
+			if dist <= _collect_radius:
+				_collect_coin(coin, i)
+			else:
+				coin.start_attract(player_pos, _attract_speed, _attract_snap_time)
+				coin.update_attract(player_pos, delta)
+				if coin.global_position.distance_to(player_pos) <= _collect_radius:
+					_collect_coin(coin, i)
 		i -= 1
+
+
+## 收集潮币（入账 + 回收）
+func _collect_coin(coin: Coin, index: int) -> void:
+	GameState.add_tidecoins(coin.value)
+	_active_coins.remove_at(index)
+	_coin_pool.release(coin)
 
 
 ## 当前活跃潮币数（调试用）
@@ -413,6 +430,7 @@ func _load_config() -> void:
 	else:
 		_collect_radius = float(cfg.get("collect_radius", _collect_radius))
 		_attract_speed = float(cfg.get("attract_speed", _attract_speed))
+		_attract_snap_time = maxf(0.05, float(cfg.get("attract_snap_time", _attract_snap_time)))
 		_scatter_range = float(cfg.get("scatter_range", _scatter_range))
 		_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
 		_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)

@@ -79,8 +79,8 @@ func _test_spawn_and_collect() -> void:
 	print("[Test] === 阶段2：等待吸附收集（半径内，应自动飞向玩家）===")
 	_test_phase = 2
 
-	# 等待足够帧让吸附完成（速度 120px/s，距离 30px，约 0.25s ≈ 15 帧）
-	for i in 30:
+	# 等待足够帧让吸附完成（snap≈0.1s / 560px/s，距离 30px，数帧即可）
+	for i in 20:
 		await get_tree().process_frame
 
 	_assert(_pickup_system.active_gem_count() == 0, "3 颗珠全部被收集")
@@ -107,6 +107,32 @@ func _test_spawn_and_collect() -> void:
 
 	_assert(_pickup_system.active_gem_count() == 0, "移动后远珠被收集")
 	_assert(GameState.player_exp == _expected_exp_near + _expected_exp_far, "经验总计 %d" % (_expected_exp_near + _expected_exp_far))
+
+	print("[Test] === 阶段4b：全速远离时珠子仍吸完（不跟跑）===")
+	_pickup_system.clear_all()
+	# 清掉前序经验，避免本段入账触发三选一暂停后续用例
+	GameState.player_exp = 0
+	while UpgradeManager.is_presenting():
+		UpgradeManager.skip()
+	_player.set_move_speed_mult(Player.MOVE_SPEED_SOFT_CAP)
+	var chase_origin: Vector2 = Vector2(400, 300)
+	_player.global_position = chase_origin
+	var chase_gem: ExpGem = _pickup_system.spawn_exp_gem(chase_origin + Vector2(45, 0), 1)
+	_assert(chase_gem != null, "跟跑回归：生成半径内经验珠")
+	var chase_exp: int = chase_gem.exp_value
+	var exp_before_chase: int = GameState.player_exp
+	var run_speed: float = _player.get_current_speed()
+	_assert(run_speed >= 400.0, "软上限移速 ≥400px/s（实际=%.1f）" % run_speed)
+	# 旧 attract_speed=120 时无法追上；现应在 ~0.2s 内吸完
+	for _f in 30:
+		_player.global_position.x += run_speed / 60.0
+		await get_tree().process_frame
+	_assert(_pickup_system.active_gem_count() == 0, "全速远离时珠子仍被吸完（不跟跑）")
+	_assert(GameState.player_exp == exp_before_chase + chase_exp, "跟跑回归经验入账 +%d" % chase_exp)
+	while UpgradeManager.is_presenting():
+		UpgradeManager.skip()
+	_player.set_move_speed_mult(1.0)
+	_player.global_position = Vector2(400, 300)
 
 	print("[Test] === 阶段5：spawn_exp_gems 总经验守恒（单次品质 × 拆分）===")
 	_pickup_system.clear_all()

@@ -18,6 +18,8 @@ var value: int = 1
 
 var _state: State = State.IDLE
 var _attract_speed: float = 0.0
+## 由 start_attract 写入（表驱动）；0=未吸附
+var _attract_snap_time: float = 0.0
 var _target_pos: Vector2 = Vector2.ZERO
 
 
@@ -34,6 +36,7 @@ func _on_acquire() -> void:
 	_state = State.IDLE
 	value = 1
 	_attract_speed = 0.0
+	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
 	queue_redraw()
 
@@ -42,15 +45,17 @@ func _on_release() -> void:
 	_state = State.IDLE
 	value = 1
 	_attract_speed = 0.0
+	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
 	queue_redraw()
 
 
-func start_attract(target: Vector2, speed: float) -> void:
+func start_attract(target: Vector2, speed: float, snap_time: float) -> void:
 	if _state == State.ATTRACTED:
 		return
 	_state = State.ATTRACTED
 	_attract_speed = speed
+	_attract_snap_time = maxf(0.05, snap_time)
 	_target_pos = target
 	queue_redraw()
 
@@ -61,8 +66,10 @@ func update_attract(target: Vector2, delta: float) -> void:
 	var dist: float = to_target.length()
 	if dist < 1.0:
 		return
-	var speed: float = _attract_speed * (1.0 + (1.0 - clampf(dist / 80.0, 0.0, 1.0)) * 0.5)
-	global_position += to_target.normalized() * speed * delta
+	var snap: float = maxf(_attract_snap_time, 0.05)
+	var speed: float = maxf(_attract_speed, dist / snap)
+	var step: float = minf(speed * delta, dist)
+	global_position += to_target.normalized() * step
 
 
 func is_attracted() -> bool:

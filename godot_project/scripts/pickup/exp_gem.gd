@@ -59,8 +59,11 @@ var _quality: Quality = Quality.COMMON
 ## 当前状态
 var _state: State = State.IDLE
 
-## 吸引速度（像素/秒，由 PickupSystem 每帧驱动）
+## 吸引速度（像素/秒，由 PickupSystem 每帧驱动；须高于玩家移速）
 var _attract_speed: float = 0.0
+
+## 最大吸附时长（秒）：由 start_attract 写入（表驱动）；0=未吸附
+var _attract_snap_time: float = 0.0
 
 ## 飞行目标（玩家位置，由 PickupSystem 每帧更新）
 var _target_pos: Vector2 = Vector2.ZERO
@@ -99,6 +102,7 @@ func _on_acquire() -> void:
 	_quality = Quality.COMMON
 	exp_value = 1
 	_attract_speed = 0.0
+	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
 	queue_redraw()
 
@@ -109,6 +113,7 @@ func _on_release() -> void:
 	_quality = Quality.COMMON
 	exp_value = 1
 	_attract_speed = 0.0
+	_attract_snap_time = 0.0
 	_target_pos = Vector2.ZERO
 	queue_redraw()
 
@@ -117,12 +122,13 @@ func _on_release() -> void:
 # 拾取系统驱动接口
 # ============================================================================
 
-## 开始被吸引（PickupSystem 检测到玩家进入拾取半径时调用）
-func start_attract(target: Vector2, speed: float) -> void:
+## 开始被吸引（PickupSystem 检测到玩家进入拾取半径时调用；snap_time 来自 pickups.json）
+func start_attract(target: Vector2, speed: float, snap_time: float) -> void:
 	if _state == State.ATTRACTED:
 		return
 	_state = State.ATTRACTED
 	_attract_speed = speed
+	_attract_snap_time = maxf(0.05, snap_time)
 	_target_pos = target
 	queue_redraw()
 
@@ -134,9 +140,11 @@ func update_attract(target: Vector2, delta: float) -> void:
 	var dist: float = to_target.length()
 	if dist < 1.0:
 		return
-	# 速度随距离轻微递增（越近越快，但有上限，保证飞行轨迹可见）
-	var speed: float = _attract_speed * (1.0 + (1.0 - clampf(dist / 80.0, 0.0, 1.0)) * 0.5)
-	global_position += to_target.normalized() * speed * delta
+	# 基础速 + 按 snap_time 抬升：半径内快速吸完，且快于玩家移速
+	var snap: float = maxf(_attract_snap_time, 0.05)
+	var speed: float = maxf(_attract_speed, dist / snap)
+	var step: float = minf(speed * delta, dist)
+	global_position += to_target.normalized() * step
 
 
 ## 是否处于吸引状态
