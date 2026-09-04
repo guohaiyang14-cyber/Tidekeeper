@@ -49,6 +49,9 @@ RE_BOT_FUSE = re.compile(r"\[TestBot\]\s*融合武器\s+(\S+)")
 RE_BOT_REFINE = re.compile(r"\[TestBot\]\s*精炼武器\s+(\S+)")
 RE_BOT_SKIP = re.compile(r"\[TestBot\]\s*跳过抉择之昼")
 RE_BOT_STAT = re.compile(r"\[TestBot\]\s+STAT\s+(.+)$")
+RE_BOT_LIGHTHOUSE = re.compile(
+    r"\[TestBot\]\s*灯塔初始\s+profile=(\S+)\s+vigil=(\d+)\s+edge=(\d+)\s+tide=(\d+)\s+lit=(\d+)/(\d+)"
+)
 RE_SCRIPT_ERR = re.compile(r"SCRIPT ERROR|Error at:", re.I)
 # [GameState] 伤害组成: total=120 last=contact:claw_crab amt=18 | affix_thorns=50 contact:claw_crab=40
 RE_DAMAGE_COMP = re.compile(
@@ -117,6 +120,12 @@ class BotRun:
     last_hit_amount: int = 0
     damage_sources: dict = field(default_factory=dict)  # source_id -> applied damage
     night_stats: Dict[int, NightStat] = field(default_factory=dict)
+    lh_profile: str = ""  # none | partial | full
+    lh_vigil: int = 0
+    lh_edge: int = 0
+    lh_tide: int = 0
+    lh_lit: int = 0
+    lh_total: int = 15
 
     @property
     def label(self) -> str:
@@ -286,6 +295,7 @@ def parse_bot_session(text: str, source: str) -> List[BotRun]:
     runs: List[BotRun] = []
     current: Optional[BotRun] = None
     bot_active = False  # 见过任意 [TestBot] 后，后续新局都算 bot 局
+    pending_lh: Optional[dict] = None  # 开局前 [TestBot] 灯塔初始 → 下一局
 
     for line in text.splitlines():
         line = line.rstrip("\r")
@@ -294,6 +304,17 @@ def parse_bot_session(text: str, source: str) -> List[BotRun]:
             bot_active = True
             if current is not None:
                 current.bot_touched = True
+
+        m_lh = RE_BOT_LIGHTHOUSE.search(line)
+        if m_lh:
+            pending_lh = {
+                "profile": m_lh.group(1),
+                "vigil": int(m_lh.group(2)),
+                "edge": int(m_lh.group(3)),
+                "tide": int(m_lh.group(4)),
+                "lit": int(m_lh.group(5)),
+                "total": int(m_lh.group(6)),
+            }
 
         if RE_SCRIPT_ERR.search(line) and current is not None and current.bot_touched:
             current.script_errors += 1
@@ -310,6 +331,14 @@ def parse_bot_session(text: str, source: str) -> List[BotRun]:
                 max_hp=int(m.group(3)),
                 bot_touched=bot_active,
             )
+            if pending_lh is not None:
+                current.lh_profile = str(pending_lh.get("profile", ""))
+                current.lh_vigil = int(pending_lh.get("vigil", 0))
+                current.lh_edge = int(pending_lh.get("edge", 0))
+                current.lh_tide = int(pending_lh.get("tide", 0))
+                current.lh_lit = int(pending_lh.get("lit", 0))
+                current.lh_total = int(pending_lh.get("total", 15))
+                pending_lh = None
             runs.append(current)
             continue
 
@@ -599,6 +628,12 @@ def print_table(runs: List[BotRun], detail: bool) -> None:
             f"{r.label:<16}  {len(r.buys):3d}  {src}"
         )
         if detail:
+            if r.lh_profile:
+                print(
+                    f"       灯塔: {r.lh_profile} "
+                    f"vigil={r.lh_vigil} edge={r.lh_edge} tide={r.lh_tide} "
+                    f"lit={r.lh_lit}/{r.lh_total}"
+                )
             if r.buys:
                 print(f"       购买: {', '.join(r.buys)}")
             if r.fuses:
@@ -697,6 +732,7 @@ def run_self_test() -> int:
 
     death = (
         "[TestBot] 已启用\n"
+        "[TestBot] 灯塔初始 profile=partial vigil=2 edge=0 tide=4 lit=6/15\n"
         "[GameState] 新局开始: character=watcher seed=42 max_hp=100\n"
         "[GameState] 进入第 5 夜\n"
         "[TestBot] 购买 铁链\n"
@@ -712,6 +748,13 @@ def run_self_test() -> int:
     check("death_dmg_total", d_runs[0].total_damage == 120)
     check("death_dmg_last", d_runs[0].last_hit_source == "affix_thorns" and d_runs[0].last_hit_amount == 12)
     check("death_dmg_src", d_runs[0].damage_sources.get("affix_thorns") == 70)
+    check(
+        "death_lh",
+        d_runs[0].lh_profile == "partial"
+        and d_runs[0].lh_vigil == 2
+        and d_runs[0].lh_tide == 4
+        and d_runs[0].lh_lit == 6,
+    )
 
     stats_log = (
         "[TestBot] 已启用\n"

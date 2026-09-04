@@ -21,6 +21,8 @@ var _run_active: bool = false
 ## 灯塔效果累加缓存（购买 / begin_run / 重置时失效）
 var _lh_effects_cache: Dictionary = {}
 var _lh_effects_dirty: bool = true
+## Debug/TestBot 会话覆盖：非 null 时 is_node_purchased / 效果聚合读此表，不落盘
+var _lighthouse_override: Variant = null
 
 
 ## 标记一局正式开始（World._ready 调用）：此后角色/灯塔特性倍率才生效
@@ -137,17 +139,49 @@ func record_first_clear() -> void:
 # 灯塔升级树
 # ============================================================================
 
+## 当前生效的已购灯塔表快照（会话覆盖优先；返回副本，调用方可安全改）
+func get_lighthouse_purchased() -> Dictionary:
+	return _lighthouse_purchased_ref().duplicate()
+
+
+## 只读引用（内部查询用，避免 is_node_purchased 每次 duplicate）
+func _lighthouse_purchased_ref() -> Dictionary:
+	if _lighthouse_override is Dictionary:
+		return _lighthouse_override as Dictionary
+	var raw: Variant = SaveSystem.get_save_meta().get("lighthouse", {})
+	if raw is Dictionary:
+		return raw as Dictionary
+	return {}
+
+
+## Debug/TestBot：会话覆盖灯塔点亮状态（不写存档；传空 Dictionary 表示零升级）
+func set_lighthouse_override(purchased: Dictionary) -> void:
+	_lighthouse_override = purchased.duplicate()
+	_lh_effects_dirty = true
+
+
+## 清除会话覆盖，恢复读存档
+func clear_lighthouse_override() -> void:
+	_lighthouse_override = null
+	_lh_effects_dirty = true
+
+
+## 是否正在使用会话覆盖
+func has_lighthouse_override() -> bool:
+	return _lighthouse_override is Dictionary
+
+
 ## 节点是否已点亮
 func is_node_purchased(node_id: String) -> bool:
-	var raw: Variant = SaveSystem.get_save_meta().get("lighthouse", {})
-	if not (raw is Dictionary):
-		return false
-	return bool((raw as Dictionary).get(node_id, false))
+	return bool(_lighthouse_purchased_ref().get(node_id, false))
 
 
 ## 节点当前是否可购买（未点亮 + 前置已点亮 + 星尘充足）
 func can_purchase_node(node_id: String) -> bool:
 	if is_node_purchased(node_id):
+		return false
+	# 会话覆盖期间禁止改存档节点，避免与 Debug 覆盖互相污染
+	if has_lighthouse_override():
 		return false
 	var node: Dictionary = ConfigLoader.get_lighthouse_node(node_id)
 	if node.is_empty():
@@ -166,6 +200,8 @@ func purchase_node(node_id: String) -> bool:
 	var meta: Dictionary = SaveSystem.get_save_meta()
 	meta["stardust"] = int(meta.get("stardust", 0)) - int(node.get("cost", 0))
 	var lh: Dictionary = meta.get("lighthouse", {})
+	if not (lh is Dictionary):
+		lh = {}
 	lh[node_id] = true
 	meta["lighthouse"] = lh
 	SaveSystem.set_save_meta(meta)
@@ -193,7 +229,7 @@ func _lighthouse_effects() -> Dictionary:
 	if not _lh_effects_dirty:
 		return _lh_effects_cache
 	var out: Dictionary = {}
-	var lh: Dictionary = SaveSystem.get_save_meta().get("lighthouse", {})
+	var lh: Dictionary = _lighthouse_purchased_ref()
 	for node_id in lh.keys():
 		if not bool(lh[node_id]):
 			continue
@@ -304,4 +340,5 @@ func settle_stardust(nights_survived: int, is_win: bool, extra_stardust: int = 0
 func reset_progress() -> void:
 	SaveSystem.reset_save_meta()
 	pending_character = "watcher"
+	_lighthouse_override = null
 	_lh_effects_dirty = true

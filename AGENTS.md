@@ -54,4 +54,5 @@
 
 - `debug.bat`：Debug + TestBot；默认倍速 **×4**（范围 2~10）
 - 调速：`debug.bat --bot-speed=8`，或环境变量 `TIDEKEEPER_BOT_SPEED`，或游戏内 `[` / `]`
+- 灯塔初始：每局随机（无升级 / 部分 / 全满）；`--bot-lighthouse=none|partial|full|random` 或 `TIDEKEEPER_BOT_LIGHTHOUSE`（会话覆盖，不写存档）
 - 关闭机器人：`TIDEKEEPER_NO_TEST_BOT=1` 或 `--no-test-bot`

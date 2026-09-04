@@ -231,4 +231,22 @@ func _test_lighthouse_and_settlement() -> void:
 		if meta_v is Dictionary:
 			disk_lh_ok = (meta_v as Dictionary).get("lighthouse") is Dictionary
 	_assert(disk_lh_ok, "set_save_meta 落盘 lighthouse 已是 Dictionary")
+
+	# W16-j Debug/TestBot 会话覆盖（不落盘、阻断购买、效果可读）
+	MetaSystem.reset_progress()
+	var dust_before: int = MetaSystem.get_stardust()
+	MetaSystem.set_lighthouse_override({"vigil_1": true})
+	_assert(MetaSystem.has_lighthouse_override() == true, "会话覆盖已启用")
+	_assert(MetaSystem.is_node_purchased("vigil_1") == true, "覆盖下 vigil_1 已点亮")
+	_assert(MetaSystem.get_max_health_bonus() == 20, "覆盖下最大生命加成 = 20")
+	_assert(MetaSystem.can_purchase_node("vigil_1") == false, "覆盖期间不可购买（已点亮）")
+	_assert(MetaSystem.can_purchase_node("edge_1") == false, "覆盖期间不可购买（禁写档）")
+	_assert(MetaSystem.purchase_node("edge_1") == false, "覆盖期间 purchase 返回 false")
+	_assert(MetaSystem.get_stardust() == dust_before, "覆盖不扣星尘")
+	var disk_lh: Dictionary = SaveSystem.get_save_meta().get("lighthouse", {})
+	_assert(bool(disk_lh.get("vigil_1", false)) == false, "覆盖不写入存档 lighthouse")
+	MetaSystem.clear_lighthouse_override()
+	_assert(MetaSystem.has_lighthouse_override() == false, "清除覆盖后 has=false")
+	_assert(MetaSystem.is_node_purchased("vigil_1") == false, "清除覆盖后 vigil_1 未点亮")
+	_assert(MetaSystem.get_max_health_bonus() == 0, "清除覆盖后生命加成归零")
 	MetaSystem.reset_progress()

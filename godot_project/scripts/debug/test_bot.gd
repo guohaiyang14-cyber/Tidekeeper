@@ -4,6 +4,8 @@
 #       三选一/商店/结算自动推进，便于无人值守冒烟试玩。
 # 红线：仅 debug 启动且非 headless/单测场景；不修改 GameState 数值逻辑。
 # 倍速：启用时 Engine.time_scale ∈ [2,10]（默认 4；--bot-speed=N / [ ] 调节）
+# 局外：每局随机/指定灯塔树初始状态（会话覆盖，不写存档）
+#       --bot-lighthouse=none|partial|full|random（默认 random；含 0 与全满）
 # ============================================================================
 extends Node
 
@@ -19,6 +21,9 @@ const SHOP_DWELL: float = 1.8
 const BOT_SPEED_MIN: float = 2.0
 const BOT_SPEED_MAX: float = 10.0
 const BOT_SPEED_DEFAULT: float = 4.0
+
+## 合法 --bot-lighthouse / TIDEKEEPER_BOT_LIGHTHOUSE 取值
+const LH_MODE_VALUES: Array[String] = ["none", "partial", "full", "random"]
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
 # N15 执政官：潮汐波在灯塔光晕外受伤（bosses.json aura_radius）；远距风筝=吃波致死。
@@ -105,6 +110,10 @@ func _ready() -> void:
 			"[TestBot] 已启用 — 自动模拟玩家 ×%.0f（[ / ] 调速 2~10；关闭：TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）"
 			% _speed_scale
 		)
+		print(
+			"[TestBot] 灯塔模式 mode=%s（--bot-lighthouse=none|partial|full|random）"
+			% _resolve_lighthouse_mode()
+		)
 		get_tree().scene_changed.connect(_on_scene_changed)
 		GameState.night_started.connect(_on_night_started)
 		GameState.night_ended.connect(_on_night_ended)
@@ -120,6 +129,8 @@ func _exit_tree() -> void:
 	if Engine.time_scale != 1.0:
 		Engine.time_scale = 1.0
 	EnemyBase.set_combat_telemetry(null)
+	if _enabled:
+		MetaSystem.clear_lighthouse_override()
 
 
 func is_active() -> bool:
@@ -315,6 +326,7 @@ func _tick_character_select(delta: float) -> void:
 	_char_select_started = true
 	var char_id: String = _pick_unlocked_character()
 	MetaSystem.set_active_character(char_id)
+	_apply_lighthouse_for_new_run()
 	print("[TestBot] 选择角色 %s 并开始游戏" % char_id)
 	get_tree().change_scene_to_file(MAIN_SCENE)
 
@@ -328,6 +340,144 @@ func _pick_unlocked_character() -> String:
 		if MetaSystem.is_character_unlocked(cid):
 			return cid
 	return fallback
+
+
+## 每局开局前：随机/指定灯塔树初始状态（会话覆盖，不写存档）
+func _apply_lighthouse_for_new_run() -> void:
+	var mode: String = _resolve_lighthouse_mode()
+	var profile: String = mode
+	if mode == "random":
+		# 等权：无升级 / 部分 / 全满
+		match RNG.randi_range(0, 2):
+			0:
+				profile = "none"
+			1:
+				profile = "full"
+			_:
+				profile = "partial"
+	var depths: Dictionary = _roll_lighthouse_depths(profile)
+	var purchased: Dictionary = _build_lighthouse_purchased(depths)
+	MetaSystem.set_lighthouse_override(purchased)
+	var lit: int = 0
+	for nid in purchased.keys():
+		if bool(purchased[nid]):
+			lit += 1
+	var total: int = ConfigLoader.get_all_lighthouse_nodes().size()
+	print(
+		"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d"
+		% [
+			profile,
+			int(depths.get("vigil", 0)),
+			int(depths.get("edge", 0)),
+			int(depths.get("tide", 0)),
+			lit,
+			total,
+		]
+	)
+
+
+func _resolve_lighthouse_mode() -> String:
+	var from_cli: String = _parse_bot_lighthouse_arg()
+	if from_cli != "":
+		return from_cli
+	if OS.has_environment("TIDEKEEPER_BOT_LIGHTHOUSE"):
+		var env_raw: String = OS.get_environment("TIDEKEEPER_BOT_LIGHTHOUSE").strip_edges().to_lower()
+		if env_raw in LH_MODE_VALUES:
+			return env_raw
+		if env_raw != "":
+			push_warning("[TestBot] 非法 TIDEKEEPER_BOT_LIGHTHOUSE=%s，回落 random" % env_raw)
+	return "random"
+
+
+func _parse_bot_lighthouse_arg() -> String:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for i in args.size():
+		var arg: String = args[i]
+		if arg.begins_with("--bot-lighthouse="):
+			var raw: String = arg.substr("--bot-lighthouse=".length()).strip_edges().to_lower()
+			if raw in LH_MODE_VALUES:
+				return raw
+			push_warning("[TestBot] 非法 --bot-lighthouse=%s，回落 random" % raw)
+			return ""
+		if arg == "--bot-lighthouse" and i + 1 < args.size():
+			var next_raw: String = String(args[i + 1]).strip_edges().to_lower()
+			if next_raw in LH_MODE_VALUES:
+				return next_raw
+			push_warning("[TestBot] 非法 --bot-lighthouse %s，回落 random" % next_raw)
+			return ""
+	return ""
+
+
+## 配置分支 id 列表（稳定顺序，便于日志）
+func _lighthouse_branch_ids() -> Array[String]:
+	var out: Array[String] = []
+	var branches: Dictionary = ConfigLoader.get_lighthouse_branches()
+	for bid in branches.keys():
+		out.append(String(bid))
+	out.sort()
+	return out
+
+
+## 某分支按 tier 升序的节点 id
+func _lighthouse_branch_node_ids(branch_id: String) -> Array[String]:
+	var branch: Dictionary = ConfigLoader.get_lighthouse_branches().get(branch_id, {})
+	var nodes: Dictionary = branch.get("nodes", {})
+	var entries: Array[Dictionary] = []
+	for nid in nodes.keys():
+		var node: Dictionary = nodes[nid]
+		entries.append({"id": String(nid), "tier": int(node.get("tier", 0))})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["tier"]) < int(b["tier"])
+	)
+	var ids: Array[String] = []
+	for e in entries:
+		ids.append(String(e["id"]))
+	return ids
+
+
+## profile → 各分支深度（partial 每支独立随机，排除全 0 / 全满）
+func _roll_lighthouse_depths(profile: String) -> Dictionary:
+	var branch_ids: Array[String] = _lighthouse_branch_ids()
+	var depths: Dictionary = {}
+	var max_depths: Dictionary = {}
+	var total_nodes: int = 0
+	for bid in branch_ids:
+		var n: int = _lighthouse_branch_node_ids(bid).size()
+		max_depths[bid] = n
+		depths[bid] = 0
+		total_nodes += n
+	match profile:
+		"none":
+			return depths
+		"full":
+			for b in branch_ids:
+				depths[b] = int(max_depths[b])
+			return depths
+		_:
+			for _attempt in 8:
+				var sum: int = 0
+				for b2 in branch_ids:
+					var cap: int = int(max_depths[b2])
+					var d: int = RNG.randi_range(0, cap) if cap > 0 else 0
+					depths[b2] = d
+					sum += d
+				if sum > 0 and sum < total_nodes:
+					return depths
+			# 兜底：点亮第一支路径的第 1 个节点
+			if not branch_ids.is_empty() and int(max_depths[branch_ids[0]]) > 0:
+				depths[branch_ids[0]] = 1
+			return depths
+
+
+## 按分支深度点亮节点（ConfigLoader 按 tier 排序，尊重前置链）
+func _build_lighthouse_purchased(depths: Dictionary) -> Dictionary:
+	var purchased: Dictionary = {}
+	for branch_id in _lighthouse_branch_ids():
+		var ids: Array[String] = _lighthouse_branch_node_ids(branch_id)
+		var depth: int = clampi(int(depths.get(branch_id, 0)), 0, ids.size())
+		for i in depth:
+			purchased[ids[i]] = true
+	return purchased
 
 
 func _tick_world(world: World, delta: float) -> void:
@@ -354,6 +504,7 @@ func _tick_result(_world: World, delta: float) -> void:
 	if _action_timer > 0.0:
 		return
 	print("[TestBot] 结算页 → 重开")
+	_apply_lighthouse_for_new_run()
 	if get_tree() != null:
 		get_tree().paused = false
 		get_tree().reload_current_scene()
