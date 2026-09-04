@@ -37,8 +37,8 @@ const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
 @onready var evolution_effect_ui: EvolutionEffectUI = $UI/EvolutionEffectUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
-## 视野遮罩（preload 保证 class_name 先于本脚本解析；类型用 VisionOverlay）
-var vision_overlay: VisionOverlay = null
+## 视野遮罩（用 Node2D：class_name 未入 global cache 时 typed VisionOverlay 会解析失败）
+var vision_overlay: Node2D = null
 
 
 func _ready() -> void:
@@ -55,7 +55,7 @@ func _ready() -> void:
 	if p != null:
 		p.apply_run_character(character_id)
 		# 视野遮罩挂在玩家下（跟随相机）；进夜刷新倍率
-		vision_overlay = _VISION_OVERLAY.new() as VisionOverlay
+		vision_overlay = _VISION_OVERLAY.new() as Node2D
 		p.add_child(vision_overlay)
 	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
 	weapon_manager.sync_from_game_state()
@@ -157,7 +157,7 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			# 昼阶段 pick 只 arm 即时效果；进夜再加载战斗倍率（避免商店阶段吃到移速/攻速等）
 			EventSystem.begin_night()
 			if vision_overlay != null:
-				vision_overlay.refresh_from_event()
+				vision_overlay.call("refresh_from_event")
 			enemy_spawner.start_night(day_night.get_current_night())
 			# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
 			GameState.grant_teaching_demo_weapon(day_night.get_current_night())
@@ -172,7 +172,7 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			if vision_overlay != null:
-				vision_overlay.clear_overlay()
+				vision_overlay.call("clear_overlay")
 			# 进昼前先入账未拾经验珠，再清场（成长冗余）
 			_clear_night_entities(true)
 			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）

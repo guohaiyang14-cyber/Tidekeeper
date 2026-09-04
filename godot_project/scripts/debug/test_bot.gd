@@ -15,36 +15,47 @@ const RESULT_RESTART_DELAY: float = 1.1
 const SHOP_DWELL: float = 1.8
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
-# 日志主因：contact:deep_diver（潜地后脚下浮现）；贴脸时 dist≈0 旧 flee 直接 skip，再停捡珠会连吃接触伤。
+# 日志主因：N15 潮汐主宰 / 弹幕 / 接触；贴脸时 dist≈0 旧 flee 会 skip。
 const ORBIT_SPEED: float = 1.85
 const STRUGGLE_HUNT_RADIUS: float = 520.0
 const STRUGGLE_SAFE_ELITE: float = 420.0
 const STRUGGLE_SAFE_THORNS: float = 140.0
 const ELITE_SCAN_RADIUS: float = 1000.0
-const ELITE_MIN_DIST_N5: float = 520.0
+const BOSS_SCAN_RADIUS: float = 1400.0
+const ELITE_MIN_DIST_N5: float = 560.0
 const ELITE_MIN_DIST: float = 300.0
 ## 锁链精英：被打会减速，需拉得更开（夜结束靠计时，不强制击杀精英）
-const ELITE_MIN_DIST_CHAIN: float = 620.0
+const ELITE_MIN_DIST_CHAIN: float = 680.0
+## Boss / 天灾夜：拉开距离（日志最后一击多为 boss_tide_archon）
+const BOSS_MIN_DIST: float = 780.0
+const BOSS_MIN_DIST_CALAMITY: float = 920.0
 ## N4 起深潜者登场：扩大逃离半径（不必等到 N5）
-const FLEE_RADIUS_N4: float = 400.0
-const FLEE_RADIUS_N5: float = 480.0
+const FLEE_RADIUS_N4: float = 420.0
+const FLEE_RADIUS_N5: float = 540.0
+const FLEE_RADIUS_CALAMITY: float = 640.0
 const FLEE_RADIUS: float = 260.0
-const DANGER_HP_RATIO: float = 0.85
+const DANGER_HP_RATIO: float = 0.90
 const CHEST_SEEK_RANGE: float = 420.0
 const CHEST_SAFE_ENEMY: float = 110.0
 const CHEST_SAFE_ELITE: float = 420.0
+const CHEST_SAFE_BOSS: float = 720.0
 const GEM_SEEK_RANGE: float = 360.0
 const GEM_SAFE_ENEMY: float = 80.0
 const GEM_SAFE_ELITE: float = 360.0
-const ELITE_FLEE_WEIGHT: float = 5.5
-const THORNS_FLEE_WEIGHT: float = 3.2
+const ELITE_FLEE_WEIGHT: float = 6.5
+const BOSS_FLEE_WEIGHT: float = 9.5
+const THORNS_FLEE_WEIGHT: float = 3.8
 const SWIFT_FLEE_WEIGHT: float = 2.4
 const CHAIN_FLEE_WEIGHT: float = 2.8
 const BURROW_FLEE_WEIGHT: float = 4.0
 ## 贴脸/突袭后锁定逃跑方向，避免轨道掉头又撞回去
-const PANIC_STICK_SEC: float = 0.85
-const PANIC_CONTACT_DIST: float = 48.0
+const PANIC_STICK_SEC: float = 1.15
+const PANIC_CONTACT_DIST: float = 52.0
 const BURROW_SCAN_RADIUS: float = 720.0
+const PROJ_LOOK: float = 180.0
+const PROJ_LOOK_CALAMITY: float = 300.0
+## 对齐 config/enemies.json → metadata.affix_rules.calamity_nights（Bot 不读表，改夜次须同步）
+const CALAMITY_NIGHTS: Array[int] = [10, 15, 20]
 ## 第 3 夜昼起囤减伤（N4 深潜者 / N5 精英前）
 const SURVIVAL_BIAS_FROM_NIGHT: int = 3
 
@@ -281,12 +292,14 @@ func _pick_upgrade_index(offers: Array) -> int:
 
 func _offer_score(offer: Dictionary) -> int:
 	var id: String = str(offer.get("id", ""))
-	if _want_survival_bias() and id in ["pearl", "exp_sac"]:
+	if (_want_survival_bias() or _want_calamity_prep()) and id in ["pearl", "exp_sac"]:
 		return 5
 	if offer.get("type") == "weapon":
 		# 临近精英夜：已有武器升级仍优先，但新武器低于高分减伤被动
 		if id in GameState.weapon_slots:
 			return 88
+		if _want_calamity_prep():
+			return 22
 		return 28 if _want_survival_bias() else 36
 	return _survival_item_score(id)
 
@@ -413,21 +426,25 @@ func _shop_item_score(item: Dictionary) -> int:
 	var kind: String = str(item.get("kind", ""))
 	var owned: bool = id in GameState.weapon_slots or id in GameState.passive_slots
 	var base: int = _survival_item_score(id)
-	# 消耗品回血：低血或进 N4/N5 前抬到最高优先（休息回血在过完 N5 之后才结算）
-	if kind == "consumable" or id in ["storm_flask"]:
+	var calamity_prep: bool = _want_calamity_prep()
+	# 仅真正消耗品回血：低血或进天灾前抬优先（storm_flask 是减 CD 被动，不走此分支）
+	if kind == "consumable":
 		var hp_ratio: float = 1.0
 		if GameState.player_max_health > 0:
 			hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
-		if hp_ratio < 0.92 or _want_survival_bias():
-			base = maxi(base, 130)
+		if hp_ratio < 0.95 or _want_survival_bias() or calamity_prep:
+			base = maxi(base, 150 if calamity_prep else 130)
 	if kind == "weapon" and owned:
 		return 86 if not _want_survival_bias() else 70
-	# 生存期：未拥有新武器再降，把钱留给护身符/珊瑚屏障
-	if kind == "weapon" and not owned and _want_survival_bias():
-		base = mini(base, 36)
+	# 生存期 / 天灾前：未拥有新武器再降，把钱留给护身符/珊瑚屏障
+	if kind == "weapon" and not owned and (_want_survival_bias() or calamity_prep):
+		base = mini(base, 30 if calamity_prep else 36)
 	# 已有减伤被动继续叠级
 	if kind == "passive" and owned and id in ["amulet", "coral_barrier"]:
-		return 140 + (22 if _want_survival_bias() else 0)
+		var stack: int = 140 + (22 if _want_survival_bias() else 0)
+		if calamity_prep:
+			stack += 30
+		return stack
 	return base + (12 if owned else 0)
 
 
@@ -435,14 +452,25 @@ func _want_survival_bias() -> bool:
 	return GameState.current_night >= SURVIVAL_BIAS_FROM_NIGHT
 
 
+## 天灾夜前一昼（N9/14/19）：囤回血与减伤，少买新武器
+func _want_calamity_prep() -> bool:
+	return GameState.current_night + 1 in CALAMITY_NIGHTS
+
+
+func _is_calamity_night() -> bool:
+	return GameState.current_night in CALAMITY_NIGHTS
+
+
 func _survival_item_score(id: String) -> int:
 	var bias: int = 22 if _want_survival_bias() else 0
+	if _want_calamity_prep():
+		bias += 18
 	match id:
 		"amulet", "coral_barrier":
 			return 120 + bias
 		"storm_flask":
-			# 进化钥 + 常作回血消耗品入口；生存期仍高于纯输出
-			return 78 + bias
+			# 进化钥被动（减 CD）；天灾前略抬，但仍低于减伤叠级与真回血消耗品
+			return 78 + bias + (12 if _want_calamity_prep() else 0)
 		"lamp_core", "tide_bell":
 			return 48 if _want_survival_bias() else 72
 		"lamp_oil", "iron_chain", "humus", "abyss_eye", "tide_compass":
@@ -482,6 +510,7 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	var hp_ratio: float = 1.0
 	if GameState.player_max_health > 0:
 		hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
+	var calamity: bool = _is_calamity_night()
 
 	var nearest_contact: float = _nearest_enemy_distance(world, pos, PANIC_CONTACT_DIST + 40.0)
 	var burrow_threat: bool = _has_burrow_threat(world, pos, BURROW_SCAN_RADIUS)
@@ -500,6 +529,18 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 				return panic_chest
 		return _panic_flee_direction(world, pos, flee, kite)
 
+	# Boss 优先于精英：天灾夜潮汐主宰是主死因
+	var boss_pos: Vector2 = _nearest_boss_position(world, pos, BOSS_SCAN_RADIUS)
+	var boss_near: bool = boss_pos != Vector2.INF
+	var boss_dist: float = pos.distance_to(boss_pos) if boss_near else 9999.0
+	var boss_min_dist: float = BOSS_MIN_DIST_CALAMITY if calamity else BOSS_MIN_DIST
+	if boss_near and boss_dist < boss_min_dist:
+		if hp_ratio < DANGER_HP_RATIO:
+			var rescue_chest: Vector2 = _safe_chest_direction(world, pos)
+			if rescue_chest != Vector2.ZERO and _chest_away_from_elite(rescue_chest, pos, boss_pos):
+				return rescue_chest
+		return _kite_away_from(boss_pos, pos, flee, kite, 7.5, 2.2)
+
 	var elite_pos: Vector2 = _nearest_elite_position(world, pos, ELITE_SCAN_RADIUS)
 	var elite_near: bool = elite_pos != Vector2.INF
 	var elite_dist: float = pos.distance_to(elite_pos) if elite_near else 9999.0
@@ -507,9 +548,9 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	# N5 开场精英刷在玩家上方约 200：立刻南向拉开，勿捡箱/珠
 	if elite_near and elite_dist < elite_min_dist:
 		if hp_ratio < DANGER_HP_RATIO:
-			var rescue_chest: Vector2 = _safe_chest_direction(world, pos)
-			if rescue_chest != Vector2.ZERO and _chest_away_from_elite(rescue_chest, pos, elite_pos):
-				return rescue_chest
+			var rescue_chest2: Vector2 = _safe_chest_direction(world, pos)
+			if rescue_chest2 != Vector2.ZERO and _chest_away_from_elite(rescue_chest2, pos, elite_pos):
+				return rescue_chest2
 		return _kite_away_from(elite_pos, pos, flee, kite, 6.0, 2.6)
 
 	# 低血：优先安全宝箱（可能回血），再风筝
@@ -521,7 +562,9 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	# N4+ 有深潜者或贴身压力：放弃捡珠，切向风筝（保持移动吃掉突袭后的接触 CD）
 	var diver_pressure: bool = GameState.current_night >= 4 and _has_burrow_enemy(world, pos, BURROW_SCAN_RADIUS)
 	var danger: bool = (
-		flee.length_squared() > 0.08
+		calamity
+		or boss_near
+		or flee.length_squared() > 0.08
 		or hp_ratio < DANGER_HP_RATIO
 		or elite_near
 		or diver_pressure
@@ -530,16 +573,23 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 		var away: Vector2 = flee.normalized() if flee.length_squared() > 0.0001 else _last_move_dir
 		if away.length_squared() < 0.0001:
 			away = kite
-		if elite_near:
+		if boss_near:
+			away = (away + (pos - boss_pos).normalized() * 3.2).normalized()
+		elif elite_near:
 			away = (away + (pos - elite_pos).normalized() * 2.4).normalized()
 		var tangent: Vector2 = Vector2(-away.y, away.x)
 		if kite.dot(tangent) < 0.0:
 			tangent = -tangent
 		var away_w: float = 4.8 if hp_ratio > DANGER_HP_RATIO else 6.2
-		if elite_near:
+		if boss_near:
+			away_w += 3.4
+		elif elite_near:
 			away_w += 2.2
 		if GameState.current_night >= 4:
 			away_w += 1.4
+		if calamity:
+			away_w += 1.8
+			tangent *= 0.55
 		if diver_pressure:
 			away_w += 1.6
 			# 深潜压力下少绕圈，优先直线拉开
@@ -549,13 +599,14 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 			return away
 		return combined.normalized()
 
-	# 安全时优先捡宝箱（主动触碰），再捡经验珠
+	# 安全时优先捡宝箱；天灾夜整晚不捡珠（保命优先于经验）
 	var chest_dir: Vector2 = _safe_chest_direction(world, pos)
 	if chest_dir != Vector2.ZERO:
 		return chest_dir
-	var gem_dir: Vector2 = _safe_gem_direction(world, pos)
-	if gem_dir != Vector2.ZERO:
-		return gem_dir
+	if not calamity and not boss_near:
+		var gem_dir: Vector2 = _safe_gem_direction(world, pos)
+		if gem_dir != Vector2.ZERO:
+			return gem_dir
 	return kite
 
 
@@ -644,8 +695,9 @@ func _elite_keep_distance(world: World, elite_pos: Vector2) -> float:
 	var base: float = ELITE_MIN_DIST_N5 if GameState.current_night >= 5 else ELITE_MIN_DIST
 	if elite_pos == Vector2.INF:
 		return base
+	# 仅精英（Boss 由 _nearest_boss_position / BOSS_MIN_DIST_* 处理）
 	for enemy in _query_enemies(world, elite_pos, 40.0):
-		if not (enemy.is_elite or enemy.is_boss):
+		if not enemy.is_elite or enemy.is_boss:
 			continue
 		if enemy.has_affix("chain"):
 			return maxf(base, ELITE_MIN_DIST_CHAIN)
@@ -685,6 +737,8 @@ func _safe_chest_direction(world: World, pos: Vector2) -> Vector2:
 	var chest: Vector2 = chest_out[0]
 	if _nearest_enemy_distance(world, chest, CHEST_SAFE_ENEMY + 20.0) <= CHEST_SAFE_ENEMY:
 		return Vector2.ZERO
+	if _nearest_boss_position(world, chest, CHEST_SAFE_BOSS) != Vector2.INF:
+		return Vector2.ZERO
 	if _nearest_elite_position(world, chest, CHEST_SAFE_ELITE) != Vector2.INF:
 		return Vector2.ZERO
 	var to_chest: Vector2 = chest - pos
@@ -702,6 +756,8 @@ func _safe_gem_direction(world: World, pos: Vector2) -> Vector2:
 	var gem: Vector2 = gem_out[0]
 	if _nearest_enemy_distance(world, gem, GEM_SAFE_ENEMY + 24.0) <= GEM_SAFE_ENEMY:
 		return Vector2.ZERO
+	if _nearest_boss_position(world, gem, CHEST_SAFE_BOSS) != Vector2.INF:
+		return Vector2.ZERO
 	if _nearest_elite_position(world, gem, GEM_SAFE_ELITE) != Vector2.INF:
 		return Vector2.ZERO
 	var to_gem: Vector2 = gem - pos
@@ -710,11 +766,36 @@ func _safe_gem_direction(world: World, pos: Vector2) -> Vector2:
 	return to_gem.normalized()
 
 
+func _nearest_boss_position(world: World, pos: Vector2, radius: float) -> Vector2:
+	# 走对象池扫 is_boss（通常 0~1 只），避免 BOSS_SCAN_RADIUS 大半径 SpatialHash 扫格
+	var best_dist: float = radius
+	var best_pos: Vector2 = Vector2.INF
+	if world.enemy_pool != null:
+		for node in world.enemy_pool.get_active():
+			var enemy: EnemyBase = node as EnemyBase
+			if enemy == null or enemy.is_dead() or not enemy.is_boss:
+				continue
+			var dist: float = pos.distance_to(enemy.global_position)
+			if dist < best_dist:
+				best_dist = dist
+				best_pos = enemy.global_position
+		return best_pos
+	for enemy in _query_enemies(world, pos, radius):
+		if not enemy.is_boss:
+			continue
+		var dist2: float = pos.distance_to(enemy.global_position)
+		if dist2 < best_dist:
+			best_dist = dist2
+			best_pos = enemy.global_position
+	return best_pos
+
+
 func _nearest_elite_position(world: World, pos: Vector2, radius: float) -> Vector2:
 	var best_dist: float = radius
 	var best_pos: Vector2 = Vector2.INF
 	for enemy in _query_enemies(world, pos, radius):
-		if not enemy.is_elite and not enemy.is_boss:
+		# Boss 由 _nearest_boss_position 单独处理，避免精英距离套用到 Boss
+		if not enemy.is_elite or enemy.is_boss:
 			continue
 		var dist: float = pos.distance_to(enemy.global_position)
 		if dist < best_dist:
@@ -723,11 +804,12 @@ func _nearest_elite_position(world: World, pos: Vector2, radius: float) -> Vecto
 	return best_pos
 
 
-## 挣扎击杀目标：排除 floor 补刷 / 荆棘怪；优先远离精英的软怪
+## 挣扎击杀目标：排除 floor 补刷 / 荆棘怪；优先远离精英/Boss 的软怪
 func _nearest_struggle_target(world: World, pos: Vector2, radius: float) -> Vector2:
 	var best_dist: float = radius
 	var best_pos: Vector2 = Vector2.INF
 	var elite_ref: Vector2 = _nearest_elite_position(world, pos, ELITE_SCAN_RADIUS)
+	var boss_ref: Vector2 = _nearest_boss_position(world, pos, BOSS_SCAN_RADIUS)
 	for enemy in _query_enemies(world, pos, radius):
 		if enemy.is_floor_refill or enemy.is_elite or enemy.is_boss:
 			continue
@@ -735,6 +817,8 @@ func _nearest_struggle_target(world: World, pos: Vector2, radius: float) -> Vect
 			continue
 		var epos: Vector2 = enemy.global_position
 		if elite_ref != Vector2.INF and epos.distance_to(elite_ref) < STRUGGLE_SAFE_ELITE * 0.7:
+			continue
+		if boss_ref != Vector2.INF and epos.distance_to(boss_ref) < STRUGGLE_SAFE_ELITE * 0.85:
 			continue
 		if _nearest_thorns_distance(world, epos, STRUGGLE_SAFE_THORNS + 20.0) <= STRUGGLE_SAFE_THORNS:
 			continue
@@ -799,7 +883,9 @@ func _query_enemies(world: World, pos: Vector2, radius: float) -> Array[EnemyBas
 func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 	var flee: Vector2 = Vector2.ZERO
 	var danger_radius: float = FLEE_RADIUS
-	if GameState.current_night >= 5:
+	if _is_calamity_night():
+		danger_radius = FLEE_RADIUS_CALAMITY
+	elif GameState.current_night >= 5:
 		danger_radius = FLEE_RADIUS_N5
 	elif GameState.current_night >= 4:
 		danger_radius = FLEE_RADIUS_N4
@@ -816,7 +902,9 @@ func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 		var weight: float = 1.0 - (dist / danger_radius)
 		weight = maxf(weight, 0.05)
 		weight *= 1.0 + float(enemy.danger) * 0.28
-		if enemy.is_elite or enemy.is_boss:
+		if enemy.is_boss:
+			weight *= BOSS_FLEE_WEIGHT
+		elif enemy.is_elite:
 			weight *= ELITE_FLEE_WEIGHT
 		if enemy.has_affix("thorns"):
 			weight *= THORNS_FLEE_WEIGHT
@@ -840,7 +928,7 @@ func _projectile_flee_vector(world: World, pos: Vector2) -> Vector2:
 	if world.enemy_projectile_pool == null:
 		return Vector2.ZERO
 	var flee: Vector2 = Vector2.ZERO
-	var look: float = 160.0
+	var look: float = PROJ_LOOK_CALAMITY if _is_calamity_night() else PROJ_LOOK
 	for node in world.enemy_projectile_pool.get_active():
 		var proj: EnemyProjectile = node as EnemyProjectile
 		if proj == null or not proj.visible:
@@ -856,7 +944,10 @@ func _projectile_flee_vector(world: World, pos: Vector2) -> Vector2:
 		if offset.dot(side) < 0.0:
 			side = -side
 		var urgency: float = 1.0 - (dist / look)
-		flee += (offset.normalized() * 0.55 + side.normalized() * 0.9) * urgency
+		# 天灾弹幕是主伤源之一：略提高侧移权重
+		var side_w: float = 1.15 if _is_calamity_night() else 0.9
+		var back_w: float = 0.7 if _is_calamity_night() else 0.55
+		flee += (offset.normalized() * back_w + side.normalized() * side_w) * urgency
 	return flee
 
 
