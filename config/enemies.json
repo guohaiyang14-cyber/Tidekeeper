@@ -34,6 +34,8 @@
       "note_budget_pace": "even=有经验预算按（夜长−slack）均匀进度释放；落后时 pressure/burst 追赶；进度超前用无掉落 floor 顶压；slack=夜末捡珠空窗；进昼未拾珠自动入账；redundancy=预算数量成长冗余。约束：夜1预算(base×redundancy)≥约2×min_active，避免 even 超前窗口被无掉落 floor 稀释升级",
       "ring_min": 140.0,
       "ring_extra": 160.0,
+      "opening_grace_sec": 2.5,
+      "note_opening_grace": "每夜开局缓冲：此前不刷杂兵/精英波；预算时钟从缓冲结束后起算（无开局无敌，避免污染 enter_night/挫败感机检）",
       "elite_offset_y": -200.0,
       "boss_offset_y": -220.0,
       "retry_delay": 0.1,

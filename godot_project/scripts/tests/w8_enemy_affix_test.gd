@@ -70,6 +70,11 @@ func _run_frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+func _opening_grace_frames() -> int:
+	var grace: float = float(ConfigLoader.get_enemy_spawn().get("opening_grace_sec", 0.0))
+	return int(ceil(grace * 60.0)) + 5
+
+
 func _clear() -> void:
 	spawner.stop()
 	spawner.clear_all()
@@ -394,7 +399,7 @@ func _test_calamity_night_affix() -> void:
 	print("[天灾夜全场词缀]")
 	_clear()
 	spawner.start_night(10)
-	await _run_frames(15)
+	await _run_frames(_opening_grace_frames() + 30)
 	var bonus: Array[String] = spawner.get_night_bonus_affixes()
 	_assert(bonus.size() == 1, "第10夜全场 +1 词缀 (%s)" % ",".join(bonus))
 	var with_bonus: int = 0

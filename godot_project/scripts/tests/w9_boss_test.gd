@@ -65,6 +65,11 @@ func _run_frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+func _opening_grace_frames() -> int:
+	var grace: float = float(ConfigLoader.get_enemy_spawn().get("opening_grace_sec", 0.0))
+	return int(ceil(grace * 60.0)) + 5
+
+
 func _clear() -> void:
 	spawner.stop()
 	spawner.clear_all()
@@ -260,13 +265,13 @@ func _test_event_fish_migration_elite_wave() -> void:
 	var want: int = EventSystem.get_elite_wave_count()
 	_assert(want == 3, "精英波数量=config 3")
 	spawner.start_night(3)
-	await _run_frames(2)
-	_assert(not EventSystem.has_elite_wave(), "start_night 后精英波已消费")
+	_assert(not EventSystem.has_elite_wave(), "start_night 后精英波已消费（缓冲内 pending）")
+	await _run_frames(_opening_grace_frames() + 5)
 	var elites: int = 0
 	for n in enemy_pool.get_active():
 		if n is EnemyBase and (n as EnemyBase).is_elite and not (n as EnemyBase).is_boss:
 			elites += 1
-	_assert(elites >= want, "刷出 ≥%d 只精英（实际 %d）" % [want, elites])
+	_assert(elites >= want, "缓冲结束后刷出 ≥%d 只精英（实际 %d）" % [want, elites])
 	_clear()
 
 

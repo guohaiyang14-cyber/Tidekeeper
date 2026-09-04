@@ -55,6 +55,11 @@ var _night_budget_total: int = 0
 var _budget_slack_sec: float = 5.0
 ## start_night 缓存的 metadata.spawn（避免每帧/每次刷怪反复查表）
 var _spawn_meta: Dictionary = {}
+## 开局缓冲（秒）：此前不刷杂兵/精英波；预算时钟从缓冲结束后起算
+var _opening_grace_sec: float = 0.0
+## 鱼群回游精英波：缓冲结束后再刷（避免开局贴脸）；缓存数量因 consume 会清零 EventSystem 计数
+var _pending_elite_wave: bool = false
+var _pending_elite_wave_count: int = 0
 
 # 当前夜可刷敌人定义缓存
 var _eligible: Array[Dictionary] = []
@@ -101,9 +106,12 @@ func start_night(night: int) -> void:
 	_night = night
 	_night_duration = _get_night_duration(night)
 	_spawn_meta = ConfigLoader.get_enemy_spawn()
+	_opening_grace_sec = maxf(0.0, float(_spawn_meta.get("opening_grace_sec", 0.0)))
 	_elapsed = 0.0
 	_spawn_timer = 0.0
 	_floor_refills_used = 0
+	_pending_elite_wave = false
+	_pending_elite_wave_count = 0
 	_remaining = _compute_count(night)
 	_night_budget_total = _remaining
 	_budget_slack_sec = maxf(0.0, float(_spawn_meta.get("budget_slack_sec", 5.0)))
@@ -115,18 +123,19 @@ func start_night(night: int) -> void:
 	_spawning = true
 	EvolutionSystem.on_night_start(night)
 	RefineSystem.on_night_start(night)
-	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s, pace=%s slack=%.1fs)" % [
+	print("[EnemySpawner] 第 %d 夜刷怪开始 (count=%d, 候选=%d, 夜词缀=%s, 夹击=%s, pace=%s slack=%.1fs grace=%.1fs)" % [
 		night, _night_budget_total, _eligible.size(), ",".join(_night_bonus_affixes), str(_pincer_mode),
-		String(_spawn_meta.get("budget_pace", "even")), _budget_slack_sec,
+		String(_spawn_meta.get("budget_pace", "even")), _budget_slack_sec, _opening_grace_sec,
 	])
-	# 精英 / Boss（开局立即登场；同样受 max_enemies 约束）
+	# 精英 / Boss 远距立即登场（不受开局缓冲影响；同样受 max_enemies 约束）
 	if night == 5:
 		_spawn_elite(night)
 	elif night in [10, 15, 20]:
 		_spawn_boss(night)
-	# 鱼群回游事件：本夜开局额外刷一波精英（§5.6）
+	# 鱼群回游：缓冲结束后再刷贴环精英波，避免开局包围（先缓存数量，consume 会清零 EventSystem）
 	if EventSystem.has_elite_wave():
-		_spawn_elite_wave()
+		_pending_elite_wave_count = EventSystem.get_elite_wave_count()
+		_pending_elite_wave = _pending_elite_wave_count > 0
 		EventSystem.consume_elite_wave()
 
 
@@ -154,6 +163,13 @@ func _process(delta: float) -> void:
 	if _elapsed >= _night_duration:
 		_spawning = false
 		return
+	# 开局缓冲：不刷杂兵；缓冲结束瞬间放出待刷精英波
+	if _elapsed < _opening_grace_sec:
+		return
+	if _pending_elite_wave:
+		_pending_elite_wave = false
+		_spawn_elite_wave(_pending_elite_wave_count)
+		_pending_elite_wave_count = 0
 	# 预算耗尽且同屏低于 floor：夹紧补刷计时，避免刚满刷一轮后等到 _current_interval 才回补
 	# （满清场会空 0.4~0.8s）。夹紧到 floor_refill_interval 后，缺怪时 0.15s 内即回补。
 	if _needs_floor_refill():
@@ -337,16 +353,17 @@ func _spawn_elite(night: int) -> void:
 
 
 ## 鱼群回游事件：本夜开局额外刷一波精英（§5.6；受 max_enemies 约束）
-func _spawn_elite_wave() -> void:
+## count：显式传入（缓冲延迟刷时 EventSystem 计数已 consume 清零）
+func _spawn_elite_wave(count: int = -1) -> void:
 	var rules: Dictionary = ConfigLoader.get_affix_rules()
 	var amin: int = int(rules.get("elite_affix_min", 2))
 	var amax: int = int(rules.get("elite_affix_max", 3))
 	if amax < amin:
 		amax = amin
-	var count: int = EventSystem.get_elite_wave_count()
-	if count <= 0:
+	var n: int = count if count >= 0 else EventSystem.get_elite_wave_count()
+	if n <= 0:
 		return
-	for _i in count:
+	for _i in n:
 		if not _can_spawn_more() or _eligible.is_empty():
 			break
 		var def: Dictionary = _pick_enemy_def()
@@ -469,15 +486,21 @@ func _budget_spawned() -> int:
 	return maxi(_night_budget_total - _remaining, 0)
 
 
-## 到 elapsed 时应已释放的有经验预算数（均匀曲线；开局即允许第 1 只）
+## 预算时钟：开局缓冲不计入，避免缓冲结束后一口气追赶成刷墙
+func _budget_elapsed(elapsed: float) -> float:
+	return maxf(0.0, elapsed - _opening_grace_sec)
+
+
+## 到 elapsed 时应已释放的有经验预算数（均匀曲线；缓冲结束后即允许第 1 只）
 func _expected_budget_spawned(elapsed: float) -> int:
 	if _night_budget_total <= 0:
 		return 0
+	var budget_t: float = _budget_elapsed(elapsed)
 	var usable: float = _budget_usable_duration()
-	if elapsed >= usable:
+	if budget_t >= usable:
 		return _night_budget_total
-	# ceil 比例：t=0+ 即为 1，铺满 usable 时到 total
-	var ratio: float = clampf(elapsed / usable, 0.0, 1.0)
+	# ceil 比例：缓冲刚结束即为 1，铺满 usable 时到 total
+	var ratio: float = clampf(budget_t / usable, 0.0, 1.0)
 	var due: int = int(ceil(float(_night_budget_total) * ratio - 1e-6))
 	return clampi(maxi(due, 1), 1, _night_budget_total)
 
@@ -515,9 +538,9 @@ func _compute_count(night: int) -> int:
 	return mini(maxi(count, 1), max_enemies)
 
 
-## 有经验预算的可用时长（夜长 − 夜末捡珠空窗）
+## 有经验预算的可用时长（夜长 − 开局缓冲 − 夜末捡珠空窗）
 func _budget_usable_duration() -> float:
-	return maxf(_night_duration - _budget_slack_sec, 1.0)
+	return maxf(_night_duration - _opening_grace_sec - _budget_slack_sec, 1.0)
 
 
 ## 刷怪间隔：even=追赶均匀曲线时的节拍；落后时压到 pressure
@@ -525,17 +548,18 @@ func _current_interval(elapsed: float) -> float:
 	var pace: String = String(_spawn_meta.get("budget_pace", "even"))
 	if pace != "even":
 		return _legacy_density_interval(elapsed)
+	var budget_t: float = _budget_elapsed(elapsed)
 	var usable: float = _budget_usable_duration()
 	var pressure: float = float(_spawn_meta.get("interval_pressure", 0.4))
 	# 可用时段结束仍有预算：快速刷完，把空窗留给捡珠
-	if elapsed >= usable and _remaining > 0:
+	if budget_t >= usable and _remaining > 0:
 		return pressure
 	if _remaining <= 0:
 		return float(_spawn_meta.get("interval_dense", 0.8))
 	# 落后于应刷进度：强制加压追赶（勿用 left/remaining 越落越慢）
 	if _budget_spawned() < _expected_budget_spawned(elapsed):
 		return pressure
-	var left_time: float = maxf(usable - elapsed, 0.05)
+	var left_time: float = maxf(usable - budget_t, 0.05)
 	var paced: float = left_time / float(maxi(_remaining, 1))
 	var max_i: float = float(_spawn_meta.get("interval_start", 2.0)) * 2.5
 	return clampf(paced, pressure * 0.5, max_i)

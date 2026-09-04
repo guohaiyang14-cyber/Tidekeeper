@@ -76,6 +76,12 @@ func _run_frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+## 开局缓冲对应帧数（@fixed-fps 60）+ 余量，供刷怪断言等待
+func _opening_grace_frames() -> int:
+	var grace: float = float(ConfigLoader.get_enemy_spawn().get("opening_grace_sec", 0.0))
+	return int(ceil(grace * 60.0)) + 5
+
+
 ## 击杀掉落回调（命名方法，避免 lambda 闭包捕获问题）
 func _on_test_enemy_died(en: EnemyBase) -> void:
 	pickup_system.spawn_exp_gem(en.global_position, en.base_exp)
@@ -257,7 +263,13 @@ func _test_self_destruct() -> void:
 func _test_spawn_loop_and_cap() -> void:
 	print("[2.2.3/2.2.4 潮汐刷怪 + 同屏上限]")
 	spawner.start_night(1)
-	await _run_frames(180)  # 3s（稀疏段）
+	# 开局缓冲内不应刷杂兵
+	var grace_sec: float = float(ConfigLoader.get_enemy_spawn().get("opening_grace_sec", 0.0))
+	if grace_sec > 0.0:
+		await _run_frames(maxi(int(floor(grace_sec * 60.0)) - 2, 1))
+		_assert(enemy_pool.active_count() == 0,
+			"开局缓冲内无杂兵 (active=%d)" % enemy_pool.active_count())
+	await _run_frames(180)  # 缓冲结束后再采 3s
 	var active: int = enemy_pool.active_count()
 	var cap: int = spawner.max_enemies
 	var within_cap: bool = active <= cap
@@ -285,7 +297,7 @@ func _test_quota_preserved_when_full() -> void:
 	_assert(enemy_pool.available_count() == 0, "对象池已填满 available=0")
 	spawner.start_night(1)
 	var rem0: int = spawner.get_remaining()
-	await _run_frames(30)
+	await _run_frames(_opening_grace_frames() + 30)
 	var rem1: int = spawner.get_remaining()
 	_assert(rem0 > 0 and rem1 == rem0, "池满时配额不变 (%d→%d)" % [rem0, rem1])
 	# 腾出一个名额后应能刷出并扣配额
