@@ -64,22 +64,39 @@ const GEM_SAFE_ENEMY: float = 80.0
 const GEM_SAFE_ELITE: float = 360.0
 const ELITE_FLEE_WEIGHT: float = 6.5
 const BOSS_FLEE_WEIGHT: float = 9.5
-const THORNS_FLEE_WEIGHT: float = 3.8
 const SWIFT_FLEE_WEIGHT: float = 2.4
 const CHAIN_FLEE_WEIGHT: float = 2.8
 const BURROW_FLEE_WEIGHT: float = 4.0
+## 自爆怪（爆炸贝）逃离权重：日志常见收尾死因
+const BOMB_FLEE_WEIGHT: float = 3.4
 ## 贴脸/突袭后锁定逃跑方向，避免轨道掉头又撞回去
 const PANIC_STICK_SEC: float = 1.15
 const PANIC_CONTACT_DIST: float = 52.0
 const BURROW_SCAN_RADIUS: float = 720.0
-const PROJ_LOOK: float = 180.0
-const PROJ_LOOK_CALAMITY: float = 300.0
+const PROJ_LOOK: float = 280.0
+const PROJ_LOOK_CALAMITY: float = 400.0
+## 弹幕逃离向量长度²超过此值：优先闪避（可触发短恐慌，避免捡箱/珠）
+const PROJ_DANGER_LEN_SQ: float = 0.42
+const PROJ_PANIC_LEN_SQ: float = 1.15
+const THORNS_FLEE_WEIGHT: float = 5.2
 ## 对齐 config/enemies.json → metadata.affix_rules.calamity_nights（Bot 不读表，改夜次须同步）
 const CALAMITY_NIGHTS: Array[int] = [10, 15, 20]
 ## 第 15 夜执政官（潮汐波光晕机制；与 bosses.json tide_archon.night 对齐）
 const ARCHON_NIGHT: int = 15
 ## 第 3 夜昼起囤减伤（N4 深潜者 / N5 精英前）
 const SURVIVAL_BIAS_FROM_NIGHT: int = 3
+## 三选一潮汐币启发式门槛（Debug Bot；非玩法数值表）
+const COINS_BROKE: int = 80
+const COINS_LOW: int = 100
+const COINS_MID: int = 250
+const COINS_OK: int = 450
+const COINS_RICH: int = 900
+const COINS_CALAMITY_WANT: int = 380
+const COINS_ARCHON_WANT: int = 450
+const COINS_EVO_WANT: int = 520
+## 危血 heal 须压过 _evolution_build_boost 上限（钥被动满级约 210）
+const HEAL_CRITICAL_SCORE: int = 220
+const HEAL_CRITICAL_HP_RATIO: float = 0.40
 
 const _BotCombatStats = preload("res://scripts/debug/bot_combat_stats.gd")
 
@@ -542,7 +559,13 @@ func _pick_upgrade_index(offers: Array) -> int:
 
 func _can_apply_offer(offer: Dictionary) -> bool:
 	var otype: String = str(offer.get("type", ""))
-	if otype == "tidecoins" or otype == "heal":
+	# 满血永不占升级位；潮汐币始终可选（由评分压低无需求时）
+	if otype == "heal":
+		return (
+			GameState.player_max_health > 0
+			and GameState.player_health < GameState.player_max_health
+		)
+	if otype == "tidecoins":
 		return true
 	var id: String = str(offer.get("id", ""))
 	if id == "":
@@ -559,11 +582,9 @@ func _can_apply_offer(offer: Dictionary) -> bool:
 func _offer_score(offer: Dictionary) -> int:
 	var otype: String = str(offer.get("type", ""))
 	if otype == "heal":
-		if GameState.player_health < GameState.player_max_health:
-			return 95
-		return 40
+		return _heal_offer_score()
 	if otype == "tidecoins":
-		return 70
+		return _tidecoins_offer_score()
 	var id: String = str(offer.get("id", ""))
 	# 进化路径优先于「生存期压低拾取/经验钥」；exp_sac 可能是信天翁钥被动
 	var evo_boost: int = _evolution_build_boost(id, otype)
@@ -579,6 +600,75 @@ func _offer_score(offer: Dictionary) -> int:
 			return 22
 		return 28 if _want_survival_bias() else 36
 	return _survival_item_score(id)
+
+
+## 残血才抬 heal；危血压过进化提权，轻伤远低于武器/减伤
+func _heal_offer_score() -> int:
+	if GameState.player_max_health <= 0:
+		return 0
+	var hp_ratio: float = float(GameState.player_health) / float(GameState.player_max_health)
+	if hp_ratio >= 0.999:
+		return 0
+	# 危血：必须高于 evo boost（≤210），否则会边濒死边凑进化
+	if hp_ratio < HEAL_CRITICAL_HP_RATIO:
+		return HEAL_CRITICAL_SCORE
+	if hp_ratio < 0.65:
+		return 86
+	if hp_ratio < 0.85:
+		return 58 if (_want_survival_bias() or _want_calamity_prep()) else 42
+	# 轻伤：仅天灾前略考虑，否则让位给 BD
+	if _want_calamity_prep():
+		return 36
+	return 18
+
+
+## 按钱袋与进化/天灾需求加权；不缺钱时远低于武器升级（原固定 70 会挤爆 BD）
+func _tidecoins_offer_score() -> int:
+	var coins: int = GameState.tidecoins
+	var need: bool = _bot_wants_more_coins()
+	if not need:
+		if coins >= COINS_RICH:
+			return 6
+		if coins >= COINS_OK:
+			return 14
+		return 24
+	if coins < COINS_LOW:
+		return 76
+	if coins < COINS_MID:
+		return 52
+	if coins < COINS_OK:
+		return 36
+	return 22
+
+
+## 破产 / 凑进化钥 / 天灾前囤回血消耗品时才积极要潮汐币
+func _bot_wants_more_coins() -> bool:
+	var coins: int = GameState.tidecoins
+	if coins < COINS_BROKE:
+		return true
+	if _want_calamity_prep() and coins < COINS_CALAMITY_WANT:
+		return true
+	if GameState.current_night + 1 == ARCHON_NIGHT and coins < COINS_ARCHON_WANT:
+		return true
+	for wid_v in GameState.weapon_slots:
+		var wid: String = String(wid_v)
+		if GameState.is_weapon_evolved(wid):
+			continue
+		var path: Dictionary = EvolutionSystem.evolution_path(wid)
+		if path.is_empty():
+			continue
+		var pid: String = String(path.get("passive_id", ""))
+		if pid == "":
+			continue
+		var wlv: int = GameState.get_weapon_level(wid)
+		var need_key: bool = pid not in GameState.passive_slots
+		var need_key_lv: bool = (
+			pid in GameState.passive_slots
+			and GameState.get_passive_level(pid) < GameState.max_passive_level
+		)
+		if wlv >= GameState.max_weapon_level - 1 and (need_key or need_key_lv) and coins < COINS_EVO_WANT:
+			return true
+	return false
 
 ## 教学期按「尚未拥有的 demo_weapons 数量」留空槽，保证夜2/3/4 展示能入槽
 func _weapon_slots_free_for_new() -> bool:
@@ -898,11 +988,13 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 	if GameState.is_struggling():
 		return _struggle_move_direction(world, pos, kite)
 
-	var flee: Vector2 = _enemy_flee_vector(world, pos) + _projectile_flee_vector(world, pos)
+	var proj_flee: Vector2 = _projectile_flee_vector(world, pos)
+	var flee: Vector2 = _enemy_flee_vector(world, pos) + proj_flee
 	var hp_ratio: float = 1.0
 	if GameState.player_max_health > 0:
 		hp_ratio = float(GameState.player_health) / float(GameState.player_max_health)
 	var calamity: bool = _is_calamity_night()
+	var proj_len_sq: float = proj_flee.length_squared()
 
 	# N15 执政官：必须待在灯塔光晕内，远距风筝会周期性吃潮汐波
 	if _is_archon_night():
@@ -910,8 +1002,12 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 
 	var nearest_contact: float = _nearest_enemy_distance(world, pos, PANIC_CONTACT_DIST + 40.0)
 	var burrow_threat: bool = _has_burrow_threat(world, pos, BURROW_SCAN_RADIUS)
-	# 贴脸或潜地威胁：锁定逃离方向，禁止掉头/捡珠（深潜者脚下浮现后须立刻离开接触半径）
-	if nearest_contact <= PANIC_CONTACT_DIST or burrow_threat:
+	# 贴脸、潜地或强弹幕：锁定逃离方向，禁止掉头/捡珠（深潜者脚下浮现后须立刻离开接触半径）
+	if (
+		nearest_contact <= PANIC_CONTACT_DIST
+		or burrow_threat
+		or proj_len_sq >= PROJ_PANIC_LEN_SQ
+	):
 		_arm_panic(flee, kite)
 
 	if _panic_timer > 0.0:
@@ -957,6 +1053,7 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 
 	# N4+ 有深潜者或贴身压力：放弃捡珠，切向风筝（保持移动吃掉突袭后的接触 CD）
 	var diver_pressure: bool = GameState.current_night >= 4 and _has_burrow_enemy(world, pos, BURROW_SCAN_RADIUS)
+	var proj_danger: bool = proj_len_sq >= PROJ_DANGER_LEN_SQ
 	var danger: bool = (
 		calamity
 		or boss_near
@@ -964,6 +1061,7 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 		or hp_ratio < DANGER_HP_RATIO
 		or elite_near
 		or diver_pressure
+		or proj_danger
 	)
 	if danger:
 		var away: Vector2 = flee.normalized() if flee.length_squared() > 0.0001 else _last_move_dir
@@ -973,6 +1071,9 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 			away = (away + (pos - boss_pos).normalized() * 3.2).normalized()
 		elif elite_near:
 			away = (away + (pos - elite_pos).normalized() * 2.4).normalized()
+		# 弹幕主导时：侧移权重更高（对齐 _projectile_flee 的 side 分量）
+		if proj_danger and proj_flee.length_squared() > 0.0001:
+			away = (away * 0.55 + proj_flee.normalized() * 0.85).normalized()
 		var tangent: Vector2 = Vector2(-away.y, away.x)
 		if kite.dot(tangent) < 0.0:
 			tangent = -tangent
@@ -990,6 +1091,9 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 			away_w += 1.6
 			# 深潜压力下少绕圈，优先直线拉开
 			tangent *= 0.45
+		if proj_danger:
+			away_w += 2.4
+			tangent *= 0.7
 		var combined: Vector2 = away * away_w + tangent * 2.6 + kite * 0.1
 		if combined.length_squared() < 0.01:
 			return away
@@ -1078,7 +1182,7 @@ func _archon_move_direction(
 	var combined: Vector2 = (
 		tangent * 3.2
 		+ away_boss * 5.0
-		+ flee * 1.35
+		+ flee * 2.15
 		+ radial_fix * 2.4
 		+ orbit_kite * 0.25
 	)
@@ -1439,7 +1543,9 @@ func _enemy_flee_vector(world: World, pos: Vector2) -> Vector2:
 		if enemy.has_affix("chain"):
 			weight *= CHAIN_FLEE_WEIGHT
 		if enemy.behavior_type == "self_destruct":
-			weight *= 2.1
+			weight *= BOMB_FLEE_WEIGHT
+			if dist <= 110.0:
+				weight *= 1.6
 		if enemy.behavior_type == "burrow_ambush":
 			weight *= BURROW_FLEE_WEIGHT
 			if enemy.is_burrowed():
@@ -1474,9 +1580,12 @@ func _projectile_flee_vector(world: World, pos: Vector2) -> Vector2:
 		if offset.dot(side) < 0.0:
 			side = -side
 		var urgency: float = 1.0 - (dist / look)
-		# 天灾弹幕是主伤源之一：略提高侧移权重
-		var side_w: float = 1.15 if _is_calamity_night() else 0.9
-		var back_w: float = 0.7 if _is_calamity_night() else 0.55
+		# 弹幕是局内第一承伤源：提高侧移/后撤，近距额外加压
+		var side_w: float = 1.55 if _is_calamity_night() else 1.25
+		var back_w: float = 0.95 if _is_calamity_night() else 0.75
+		if dist < 90.0:
+			side_w *= 1.35
+			back_w *= 1.25
 		flee += (offset.normalized() * back_w + side.normalized() * side_w) * urgency
 	return flee
 

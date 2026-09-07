@@ -63,7 +63,17 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
-	_finalize_run("aborted", {})
+	if _active:
+		_write_run_end_character_snapshot()
+		_finalize_run("aborted", {
+			"reason": "exit_tree",
+			"nights": GameState.current_night,
+			"level": GameState.player_level,
+			"build": _snapshot_build("end"),
+			"weapons": _snapshot_weapons(),
+		})
+	else:
+		_finalize_run("aborted", {})
 
 
 func _process(delta: float) -> void:
@@ -193,7 +203,14 @@ func _on_scene_changed() -> void:
 	# 离开 World（回选角 / 单测 / 其它场景）时收口未结束局
 	if _active and _current_world() == null:
 		var reason: String = "test_scene" if _should_skip_scene() else "scene_left"
-		_finalize_run("aborted", {"reason": reason})
+		_write_run_end_character_snapshot()
+		_finalize_run("aborted", {
+			"reason": reason,
+			"nights": GameState.current_night,
+			"level": GameState.player_level,
+			"build": _snapshot_build("end"),
+			"weapons": _snapshot_weapons(),
+		})
 	_try_bind_world_hooks()
 
 
@@ -248,6 +265,7 @@ func _on_game_over(reason: String) -> void:
 		return
 	_flush_combat_buffers()
 	var death: Dictionary = GameState.get_death_analysis()
+	_write_run_end_character_snapshot()
 	_finalize_run("death", {
 		"reason": reason,
 		"nights": GameState.current_night,
@@ -262,6 +280,7 @@ func _on_game_win() -> void:
 	if not _active:
 		return
 	_flush_combat_buffers()
+	_write_run_end_character_snapshot()
 	_finalize_run("win", {
 		"nights": GameState.current_night,
 		"level": GameState.player_level,
@@ -423,6 +442,7 @@ func _on_purchase_made(item: Dictionary) -> void:
 # ============================================================================
 
 func _begin_run(character: String, seed_value: int) -> void:
+	# 新局覆盖旧局：GameState 已是新角色，勿用当前态写旧局 run_end 快照
 	_finalize_run("aborted", {"reason": "superseded"})
 	_run_started_unix = int(Time.get_unix_time_from_system())
 	# use_space=false → YYYY-MM-DDTHH:MM:SS，再压成无空格文件名
@@ -487,6 +507,13 @@ func _finalize_run(outcome: String, summary: Dictionary) -> void:
 	_unregister_telemetry()
 	_run_id = ""
 	_run_path = ""
+
+
+## 角色终态单独落盘（HP/币）；BD 只嵌在 run end，避免与 snapshot 双写
+func _write_run_end_character_snapshot() -> void:
+	if not _active or not _cat("character"):
+		return
+	_write_event("character", _snapshot_character("run_end"))
 
 
 # ============================================================================

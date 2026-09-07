@@ -119,6 +119,13 @@ def analyze_run(row: Dict[str, Any], path: Path) -> Dict[str, Any]:
             death = data.get("death")
             if isinstance(death, dict):
                 sm["death"] = death
+            # run_end 内嵌 build/weapons 优先于夜初快照
+            end_build = data.get("build")
+            if isinstance(end_build, dict) and end_build:
+                last_build = end_build
+            end_weapons = data.get("weapons")
+            if isinstance(end_weapons, list) and end_weapons:
+                last_weapon = {"weapons": end_weapons}
         elif cat == "upgrade" and action == "pick":
             sm["upgrades_pick_n"] += 1
             sm["upgrades_pick"][_upgrade_id(data)] += 1
@@ -159,10 +166,18 @@ def analyze_run(row: Dict[str, Any], path: Path) -> Dict[str, Any]:
             sm["kills_by_id"][str(data.get("id", "?"))] += 1
         elif cat == "monster" and action == "death_agg":
             sm["kills_total"] += int(data.get("killed_total", 0) or 0)
-            by_id = data.get("by_id") or data.get("kills") or {}
-            if isinstance(by_id, dict):
-                for mid, n in by_id.items():
-                    sm["kills_by_id"][str(mid)] += int(n or 0)
+            # CombatLog 落盘为 by_enemy: [{id, killed, ...}]；优先之，避免与 by_id 双计
+            by_enemy = data.get("by_enemy")
+            if isinstance(by_enemy, list):
+                for row_e in by_enemy:
+                    if isinstance(row_e, dict):
+                        mid = str(row_e.get("id") or "?")
+                        sm["kills_by_id"][mid] += int(row_e.get("killed") or 0)
+            else:
+                by_id = data.get("by_id") or data.get("kills") or {}
+                if isinstance(by_id, dict):
+                    for mid, n in by_id.items():
+                        sm["kills_by_id"][str(mid)] += int(n or 0)
         elif cat == "event" and action == "armed":
             sm["events_armed"].append(f"N{data.get('for_night', '?')}:{data.get('id', '?')}")
         elif cat == "evolution":
@@ -388,7 +403,7 @@ def print_report(
         if kills:
             print()
             _print_top(
-                "## Kill samples by_id (completed; may be sparse if death_agg)",
+                "## Kill by_id (completed; from death_agg.by_enemy)",
                 kills,
                 top,
             )
@@ -579,7 +594,14 @@ def _self_test() -> int:
                 "cat": "monster",
                 "night": 1,
                 "t": 3.0,
-                "data": {"action": "death_agg", "killed_total": 12},
+                "data": {
+                    "action": "death_agg",
+                    "killed_total": 12,
+                    "by_enemy": [
+                        {"id": "small_goblin", "killed": 10, "tier": "normal"},
+                        {"id": "iron_crab", "killed": 2, "tier": "normal"},
+                    ],
+                },
             },
             {
                 "cat": "character",
@@ -594,10 +616,37 @@ def _self_test() -> int:
                 },
             },
             {
+                "cat": "character",
+                "night": 5,
+                "t": 49.0,
+                "data": {
+                    "action": "snapshot",
+                    "level": 5,
+                    "hp": 12,
+                    "max_hp": 100,
+                    "phase": "run_end",
+                    "coins": 40,
+                },
+            },
+            {
                 "cat": "run",
                 "night": 5,
                 "t": 50.0,
-                "data": {"action": "end", "outcome": "win", "level": 5},
+                "data": {
+                    "action": "end",
+                    "outcome": "win",
+                    "level": 5,
+                    "build": {
+                        "action": "snapshot",
+                        "phase": "end",
+                        "level": 5,
+                        "atk_m": 1.2,
+                        "dmg_m": 1.1,
+                        "weapons": [{"id": "harpoon", "lv": 3}],
+                        "passives": [{"id": "amulet", "lv": 2}],
+                    },
+                    "weapons": [{"id": "harpoon", "lv": 3}],
+                },
             },
         ]
         jsonl.write_text(
@@ -631,10 +680,15 @@ def _self_test() -> int:
         sm = analyze_run({"id": rid, "outcome": "win"}, jsonl)
         assert sm["outcome"] == "win"
         assert sm["level_end"] == 5
-        assert sm["final_char"].get("level") == 3
+        assert sm["final_char"].get("level") == 5
+        assert sm["final_char"].get("phase") == "run_end"
+        assert sm["final_char"].get("hp") == 12
+        assert sm["final_build"].get("atk_m") == 1.2
         assert sm["dmg_dealt_by_weapon"]["harpoon"] == 100
         assert sm["dmg_taken_by_src"]["enemy_projectile"] == 7
         assert sm["kills_total"] == 12
+        assert sm["kills_by_id"]["small_goblin"] == 10
+        assert sm["kills_by_id"]["iron_crab"] == 2
         assert sm["upgrades_pick"]["heal"] == 1
 
         filtered = filter_runs(
