@@ -55,6 +55,7 @@ func _ready() -> void:
 	await _test_coin_clear_no_salvage()  # 潮币 clear 不入账
 	await _test_offscreen_despawn()  # 屏外超 5s 回收经验珠/潮币
 	await _test_coin_pool_soft_expand()  # CoinPool 耗尽软扩容
+	await _test_coin_pool_hard_cap()  # CoinPool 软扩容硬顶
 
 	print("------------------------------------------------------------")
 	print("W2-W3 机检通过=%d 失败=%d" % [_passed, _failed])
@@ -678,6 +679,35 @@ func _test_coin_pool_soft_expand() -> void:
 	var extra: Node = coin_pool.acquire()
 	_assert(extra != null, "耗尽后仍可 acquire（软扩容）")
 	_assert(coin_pool.pool_size > size0, "pool_size 增大 (%d→%d)" % [size0, coin_pool.pool_size])
+	coin_pool.release_all()
+	pickup_system.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# CoinPool：软扩容硬顶（4×max_enemies，且不少于 1200）
+# ---------------------------------------------------------------------------
+func _test_coin_pool_hard_cap() -> void:
+	print("[CoinPool] 软扩容硬顶")
+	spawner.clear_all()
+	pickup_system.clear_all()
+	coin_pool.release_all()
+	var hard: int = coin_pool.pickup_soft_hard_cap(4, 1200)
+	var expect: int = maxi(coin_pool.difficulty_max_enemies() * 4, 1200)
+	_assert(hard == expect, "硬顶公式=%d（期望 %d）" % [hard, expect])
+	var guard: int = 0
+	while coin_pool.pool_size < hard and guard < 64:
+		guard += 1
+		if not coin_pool.soft_expand_toward(hard, 128):
+			break
+	_assert(coin_pool.pool_size == hard, "扩满至硬顶 (%d)" % coin_pool.pool_size)
+	_assert(not coin_pool.soft_expand_toward(hard, 128), "触顶后 soft_expand 返回 false")
+	while coin_pool.available_count() > 0:
+		var n: Node = coin_pool.acquire()
+		if n == null:
+			break
+	var blocked: Node = coin_pool.acquire()
+	_assert(blocked == null, "硬顶且空闲为 0 时 acquire 为 null")
 	coin_pool.release_all()
 	pickup_system.clear_all()
 	GameState.player_health = GameState.player_max_health

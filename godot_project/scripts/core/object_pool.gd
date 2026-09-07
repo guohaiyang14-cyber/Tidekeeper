@@ -17,9 +17,14 @@ extends Node
 ## 池是否已初始化
 var _initialized: bool = false
 
+## 耗尽报错限流（毫秒）；风暴清场时每帧数百次 push_error 会拖死控制台
+const EXHAUST_WARN_INTERVAL_MSEC: int = 3000
+
 # 内部数据
 var _pool: Array[Node] = []
 var _active: Array[Node] = []
+var _exhaust_warn_msec: int = -EXHAUST_WARN_INTERVAL_MSEC
+var _exhaust_suppressed: int = 0
 
 
 func _ready() -> void:
@@ -47,7 +52,7 @@ func _init_pool() -> void:
 func acquire() -> Node:
 	var node: Node = _find_inactive()
 	if node == null:
-		push_error("[%s] 池耗尽！active=%d/%d — 请增大 pool_size 或检查 release 逻辑" % [name, _active.size(), pool_size])
+		_warn_exhausted()
 		return null
 	_pool.erase(node)
 	_active.append(node)
@@ -58,6 +63,27 @@ func acquire() -> Node:
 	if node.has_method("_on_acquire"):
 		node._on_acquire()
 	return node
+
+
+## 限流耗尽告警：首条立即打，之后合并抑制次数
+func _warn_exhausted() -> void:
+	var now_msec: int = Time.get_ticks_msec()
+	if now_msec - _exhaust_warn_msec < EXHAUST_WARN_INTERVAL_MSEC:
+		_exhaust_suppressed += 1
+		return
+	var suppressed: int = _exhaust_suppressed
+	_exhaust_suppressed = 0
+	_exhaust_warn_msec = now_msec
+	if suppressed > 0:
+		push_error(
+			"[%s] 池耗尽！active=%d/%d（其间抑制 %d 次）— 请增大 pool_size / 硬顶或检查 release"
+			% [name, _active.size(), pool_size, suppressed]
+		)
+	else:
+		push_error(
+			"[%s] 池耗尽！active=%d/%d — 请增大 pool_size / 硬顶或检查 release 逻辑"
+			% [name, _active.size(), pool_size]
+		)
 
 
 ## 将节点归还池中（失活）；幂等——已归还 / 从未取出时直接返回（debug 仍告警便于抓泄漏）
@@ -120,3 +146,21 @@ func expand(extra: int) -> void:
 		_pool.append(node)
 	pool_size += extra
 	print("[%s] 对象池扩容 +%d (当前总容量 %d)" % [name, extra, pool_size])
+
+
+## difficulty.max_enemies（拾取池软扩容硬顶用）
+func difficulty_max_enemies() -> int:
+	return int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
+
+
+## 拾取类软扩容硬顶：max(max_enemies×mult, floor)；不随 pool_size 抬升以免无上限
+func pickup_soft_hard_cap(mult: int, floor_cap: int) -> int:
+	return maxi(difficulty_max_enemies() * mult, floor_cap)
+
+
+## 向 hard_cap 软扩容一块；已触顶返回 false（随后 acquire 走限流告警）
+func soft_expand_toward(hard_cap: int, chunk: int) -> bool:
+	if pool_size >= hard_cap or chunk <= 0:
+		return false
+	expand(mini(chunk, hard_cap - pool_size))
+	return true

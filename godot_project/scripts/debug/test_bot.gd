@@ -5,7 +5,9 @@
 # 红线：仅 debug 启动且非 headless/单测场景；不修改 GameState 数值逻辑。
 # 倍速：启用时 Engine.time_scale ∈ [2,10]（默认 4；--bot-speed=N / [ ] 调节）
 # 局外：每局随机/指定灯塔树初始状态（会话覆盖，不写存档）
-#       --bot-lighthouse=none|partial|full|random（默认 random；含 0 与全满）
+#       --bot-lighthouse=none|partial|full|random|cycle|sweep（默认 random）
+#       cycle=串行 none→partial→full 循环；sweep=扫完一轮后 quit
+#       --bot-runs-per-config=N（默认 1；每种配置连跑 N 局再切下一档）
 # ============================================================================
 extends Node
 
@@ -23,7 +25,10 @@ const BOT_SPEED_MAX: float = 10.0
 const BOT_SPEED_DEFAULT: float = 4.0
 
 ## 合法 --bot-lighthouse / TIDEKEEPER_BOT_LIGHTHOUSE 取值
-const LH_MODE_VALUES: Array[String] = ["none", "partial", "full", "random"]
+const LH_MODE_VALUES: Array[String] = ["none", "partial", "full", "random", "cycle", "sweep"]
+## 串行扫档顺序（cycle / sweep）
+const LH_SERIAL_PROFILES: Array[String] = ["none", "partial", "full"]
+const BOT_RUNS_PER_CONFIG_DEFAULT: int = 1
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
 # N15 执政官：潮汐波在灯塔光晕外受伤（bosses.json aura_radius）；远距风筝=吃波致死。
@@ -112,6 +117,13 @@ var _panic_dir: Vector2 = Vector2.RIGHT
 var _combat_stats: Variant = null
 ## 当前倍速（仅 _enabled 时写入 Engine.time_scale）
 var _speed_scale: float = BOT_SPEED_DEFAULT
+## 串行档：当前下标 / 本档已完赛局数 / 每档连跑数 / sweep 是否已扫完待退出
+var _serial_index: int = 0
+var _serial_runs_on_profile: int = 0
+var _runs_per_config: int = BOT_RUNS_PER_CONFIG_DEFAULT
+var _sweep_pending_quit: bool = false
+## 本局是否已推进串行（game_over/win 与结算页双入口幂等）
+var _serial_advanced_for_run: bool = false
 
 
 func _ready() -> void:
@@ -122,15 +134,26 @@ func _ready() -> void:
 		## TestBot 启停：用 add/remove，避免清掉 CombatLog 遥测
 		EnemyBase.add_combat_telemetry(self)
 		_speed_scale = _resolve_initial_speed()
+		_runs_per_config = _resolve_runs_per_config()
+		_serial_index = 0
+		_serial_runs_on_profile = 0
+		_sweep_pending_quit = false
+		_serial_advanced_for_run = false
 		_apply_speed_scale()
 		print(
 			"[TestBot] 已启用 — 自动模拟玩家 ×%.0f（[ / ] 调速 2~10；关闭：TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）"
 			% _speed_scale
 		)
+		var lh_mode: String = _resolve_lighthouse_mode()
 		print(
-			"[TestBot] 灯塔模式 mode=%s（--bot-lighthouse=none|partial|full|random）"
-			% _resolve_lighthouse_mode()
+			"[TestBot] 灯塔模式 mode=%s（--bot-lighthouse=none|partial|full|random|cycle|sweep）"
+			% lh_mode
 		)
+		if _is_serial_lighthouse_mode(lh_mode):
+			print(
+				"[TestBot] 串行扫档 order=none→partial→full runs_per_config=%d%s"
+				% [_runs_per_config, "（sweep 一轮后退出）" if lh_mode == "sweep" else "（cycle 循环）"]
+			)
 		get_tree().scene_changed.connect(_on_scene_changed)
 		GameState.night_started.connect(_on_night_started)
 		GameState.night_ended.connect(_on_night_ended)
@@ -199,15 +222,15 @@ func _on_night_ended(night: int) -> void:
 
 
 func _on_game_over_stats(_reason: String) -> void:
-	if _combat_stats == null:
-		return
-	_combat_stats.flush_open_night(_current_world())
+	if _combat_stats != null:
+		_combat_stats.flush_open_night(_current_world())
+	_note_serial_run_finished()
 
 
 func _on_game_win_stats() -> void:
-	if _combat_stats == null:
-		return
-	_combat_stats.flush_open_night(_current_world())
+	if _combat_stats != null:
+		_combat_stats.flush_open_night(_current_world())
+	_note_serial_run_finished()
 
 
 func _current_world() -> World:
@@ -359,11 +382,14 @@ func _pick_unlocked_character() -> String:
 	return fallback
 
 
-## 每局开局前：随机/指定灯塔树初始状态（会话覆盖，不写存档）
+## 每局开局前：随机/指定/串行灯塔树初始状态（会话覆盖，不写存档）
 func _apply_lighthouse_for_new_run() -> void:
+	_serial_advanced_for_run = false
 	var mode: String = _resolve_lighthouse_mode()
 	var profile: String = mode
-	if mode == "random":
+	if _is_serial_lighthouse_mode(mode):
+		profile = _current_serial_profile()
+	elif mode == "random":
 		# 等权：无升级 / 部分 / 全满
 		match RNG.randi_range(0, 2):
 			0:
@@ -380,17 +406,31 @@ func _apply_lighthouse_for_new_run() -> void:
 		if bool(purchased[nid]):
 			lit += 1
 	var total: int = ConfigLoader.get_all_lighthouse_nodes().size()
-	print(
-		"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d"
-		% [
-			profile,
-			int(depths.get("vigil", 0)),
-			int(depths.get("edge", 0)),
-			int(depths.get("tide", 0)),
-			lit,
-			total,
-		]
-	)
+	var vigil: int = int(depths.get("vigil", 0))
+	var edge: int = int(depths.get("edge", 0))
+	var tide: int = int(depths.get("tide", 0))
+	if _is_serial_lighthouse_mode(mode):
+		print(
+			"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d | serial=%d/%d run=%d/%d mode=%s"
+			% [
+				profile,
+				vigil,
+				edge,
+				tide,
+				lit,
+				total,
+				_serial_index + 1,
+				LH_SERIAL_PROFILES.size(),
+				_serial_runs_on_profile + 1,
+				_runs_per_config,
+				mode,
+			]
+		)
+	else:
+		print(
+			"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d"
+			% [profile, vigil, edge, tide, lit, total]
+		)
 
 
 func _resolve_lighthouse_mode() -> String:
@@ -423,6 +463,89 @@ func _parse_bot_lighthouse_arg() -> String:
 			push_warning("[TestBot] 非法 --bot-lighthouse %s，回落 random" % next_raw)
 			return ""
 	return ""
+
+
+func _is_serial_lighthouse_mode(mode: String) -> bool:
+	return mode == "cycle" or mode == "sweep"
+
+
+func _current_serial_profile() -> String:
+	if LH_SERIAL_PROFILES.is_empty():
+		return "none"
+	var idx: int = clampi(_serial_index, 0, LH_SERIAL_PROFILES.size() - 1)
+	return LH_SERIAL_PROFILES[idx]
+
+
+## 一局结束后推进串行档（幂等：game_over/win 与结算页只计一次）
+func _note_serial_run_finished() -> void:
+	if not _enabled or _serial_advanced_for_run:
+		return
+	var mode: String = _resolve_lighthouse_mode()
+	if not _is_serial_lighthouse_mode(mode):
+		return
+	_serial_advanced_for_run = true
+	_advance_serial_after_run(mode)
+	if _sweep_pending_quit:
+		# 结算页缺失时也能退出；有结算页则 _tick_result 也会走到 quit
+		call_deferred("_quit_after_sweep_if_pending")
+
+
+func _quit_after_sweep_if_pending() -> void:
+	if not _sweep_pending_quit:
+		return
+	print("[TestBot] 串行 sweep 完成（none→partial→full ×%d），退出" % _runs_per_config)
+	if get_tree() != null:
+		get_tree().paused = false
+		get_tree().quit()
+
+
+## 一局结束后推进串行档；sweep 在最后一档跑满后置位退出
+func _advance_serial_after_run(mode: String) -> void:
+	_serial_runs_on_profile += 1
+	if _serial_runs_on_profile < _runs_per_config:
+		return
+	_serial_runs_on_profile = 0
+	var next_index: int = _serial_index + 1
+	if next_index >= LH_SERIAL_PROFILES.size():
+		if mode == "sweep":
+			_sweep_pending_quit = true
+			return
+		next_index = 0
+	_serial_index = next_index
+	print(
+		"[TestBot] 串行切换 → profile=%s (%d/%d)"
+		% [_current_serial_profile(), _serial_index + 1, LH_SERIAL_PROFILES.size()]
+	)
+
+
+func _resolve_runs_per_config() -> int:
+	var from_cli: int = _parse_bot_runs_per_config_arg()
+	if from_cli > 0:
+		return from_cli
+	if OS.has_environment("TIDEKEEPER_BOT_RUNS_PER_CONFIG"):
+		var env_raw: String = OS.get_environment("TIDEKEEPER_BOT_RUNS_PER_CONFIG").strip_edges()
+		if env_raw.is_valid_int():
+			return maxi(1, env_raw.to_int())
+	return BOT_RUNS_PER_CONFIG_DEFAULT
+
+
+func _parse_bot_runs_per_config_arg() -> int:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for i in args.size():
+		var arg: String = args[i]
+		if arg.begins_with("--bot-runs-per-config="):
+			var raw: String = arg.substr("--bot-runs-per-config=".length()).strip_edges()
+			if raw.is_valid_int():
+				return maxi(1, raw.to_int())
+			push_warning("[TestBot] 非法 --bot-runs-per-config=%s，回落 %d" % [raw, BOT_RUNS_PER_CONFIG_DEFAULT])
+			return -1
+		if arg == "--bot-runs-per-config" and i + 1 < args.size():
+			var next_raw: String = String(args[i + 1]).strip_edges()
+			if next_raw.is_valid_int():
+				return maxi(1, next_raw.to_int())
+			push_warning("[TestBot] 非法 --bot-runs-per-config %s，回落 %d" % [next_raw, BOT_RUNS_PER_CONFIG_DEFAULT])
+			return -1
+	return -1
 
 
 ## 配置分支 id 列表（稳定顺序，便于日志）
@@ -519,6 +642,11 @@ func _tick_world(world: World, delta: float) -> void:
 func _tick_result(_world: World, delta: float) -> void:
 	_action_timer -= delta
 	if _action_timer > 0.0:
+		return
+	# 正常路径：game_over/win 已推进；此处兜底（信号未到仍可推进）
+	_note_serial_run_finished()
+	if _sweep_pending_quit:
+		_quit_after_sweep_if_pending()
 		return
 	print("[TestBot] 结算页 → 重开")
 	_apply_lighthouse_for_new_run()

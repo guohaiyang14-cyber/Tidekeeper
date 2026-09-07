@@ -66,12 +66,14 @@ pool_size = 200
 [node name="PickupPool" type="Node" parent="."]
 script = ExtResource("7_pickup_pool")
 scene = ExtResource("10_exp_gem")
-pool_size = 350
+; 预分配对齐偏高水位；软扩容硬顶≈4×max_enemies（见 CoinPool/PickupPool）
+pool_size = 700
 
 [node name="CoinPool" type="Node" parent="."]
 script = ExtResource("17_coin_pool")
 scene = ExtResource("18_coin")
-pool_size = 350
+; 预分配对齐偏高水位；软扩容硬顶≈4×max_enemies（见 CoinPool/PickupPool）
+pool_size = 700
 
 [node name="ChestPool" type="Node" parent="."]
 script = ExtResource("28_chest_pool")

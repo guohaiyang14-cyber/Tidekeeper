@@ -1,19 +1,22 @@
 # ============================================================================
 # PickupPool — 经验珠对象池（潮币走 CoinPool）
-# 容量：下限对齐 difficulty.max_enemies；耗尽时软扩容至 2×max_enemies（珠可堆积超过同屏敌）
+# 容量：下限对齐 difficulty.max_enemies；耗尽时软扩容至 4×max_enemies（AOE 清场未拾可堆很高）
 # ============================================================================
 class_name PickupPool
 extends ObjectPool
 
-## 耗尽时单次扩容块
-const _EXPAND_CHUNK: int = 64
+## 耗尽时单次扩容块（AOE 击杀峰值需较快追上）
+const _EXPAND_CHUNK: int = 128
+## 相对 max_enemies 的硬顶倍率（原 2× 在风暴清场 + Bot×4 下不够）
+const _HARD_CAP_MULT: int = 4
+const _HARD_CAP_FLOOR: int = 1200
 
 
 func _ready() -> void:
 	if pool_size <= 0:
 		pool_size = 150
 	# 击杀掉珠后敌可补刷，场上未拾珠可逼近/超过同屏上限；下限对齐 max_enemies
-	pool_size = maxi(pool_size, _max_enemies_cap())
+	pool_size = maxi(pool_size, difficulty_max_enemies())
 	super._ready()
 
 
@@ -23,13 +26,6 @@ func acquire() -> Node:
 	return super.acquire()
 
 
-func _max_enemies_cap() -> int:
-	return int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
-
-
-## 软扩容：硬顶 2×max_enemies，避免风筝拖尾时静默丢珠
+## 软扩容：硬顶 4×max_enemies（且不少于 1200）
 func _try_expand_for_gems() -> void:
-	var hard_cap: int = maxi(_max_enemies_cap() * 2, pool_size)
-	if pool_size >= hard_cap:
-		return
-	expand(mini(_EXPAND_CHUNK, hard_cap - pool_size))
+	soft_expand_toward(pickup_soft_hard_cap(_HARD_CAP_MULT, _HARD_CAP_FLOOR), _EXPAND_CHUNK)
