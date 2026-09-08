@@ -303,22 +303,40 @@ func _test_affix_teleport() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 荆棘：近战反伤、远程不反
+# 荆棘：近战反伤、远程不反；ratio/cap 读 config（B5 校准）
 # ---------------------------------------------------------------------------
 func _test_affix_thorns() -> void:
 	print("[词缀 荆棘]")
 	_clear()
+	var th: Dictionary = ConfigLoader.get_affix("thorns")
+	var ratio: float = float(th.get("melee_reflect_ratio", 0.15))
+	var cap: int = int(th.get("melee_reflect_cap", 10))
+	_assert(abs(ratio - 0.15) < 0.001, "thorns.melee_reflect_ratio=0.15（B5）")
+	_assert(cap == 10, "thorns.melee_reflect_cap=10（B5）")
+
 	GameState.player_health = 100
 	var e: EnemyBase = _spawn("small_goblin", Vector2(600.0, 0.0), 1)
 	e.apply_affixes(["thorns"])
 	# 隔离荆棘机制：显式抬血，避免难度缩放（如教学夜减半）使小水鬼被首击打死，
 	# 导致第二次近战命中在 _dead 守卫处提前返回、thorns 永不触发。
-	e.health = 100
-	e.max_health = 100
+	e.health = 500
+	e.max_health = 500
 	e.take_damage(10, false)
 	_assert(GameState.player_health == 100, "远程命中不触发荆棘")
+
+	# 10×0.15 → round 1.5=2
 	e.take_damage(10, true)
-	_assert(GameState.player_health < 100, "近战命中触发荆棘反伤 (hp=%d)" % GameState.player_health)
+	_assert(GameState.player_health == 98, "近战 10 反伤 = round(10×0.15)=2 → hp=98")
+
+	# 100×0.15=15 → cap 10
+	GameState.player_health = 100
+	e.take_damage(100, true)
+	_assert(GameState.player_health == 90, "近战 100 反伤触顶 cap=10 → hp=90")
+
+	# 200×0.15=30 → 仍 cap 10
+	GameState.player_health = 100
+	e.take_damage(200, true)
+	_assert(GameState.player_health == 90, "近战 200 反伤仍受 cap=10 → hp=90")
 	_clear()
 
 

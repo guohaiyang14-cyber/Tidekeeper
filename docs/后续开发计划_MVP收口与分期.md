@@ -49,7 +49,7 @@
 | B2 | **属性软上限对齐 GDD §6.9** | **已完成**：`passives.json soft_caps` + `PassiveSystem.apply_soft_cap` / 减伤公式；机检 `w12`/`w15w16` | 维持；数值再校时只调表 |
 | B3 | **宝箱奖励表** | **已完成**：按稀有度 `alternatives` + `refine_essence`；`pickup_integration_test` 分测 | 维持；可再调权重/数额 |
 | B4 | **美术 / 音效** | 程序化占位；无正式资源 | 最小可替换包（敌人/武器/UI/关键 SFX） |
-| B5 | **数值校准** | W20 任务表有 DPS/血量微调 | 结合 CombatLog + 真人通关率 |
+| B5 | **数值校准** | **荆棘已校**：ratio 0.15 + 单次 cap 10（CombatLog：近战局 thorns 可主导死因）；其余 DPS/血量仍可按通关率微调 | 结合 CombatLog + 真人通关率；词缀验收态不变 |
 
 ### 2.3 建议周序
 

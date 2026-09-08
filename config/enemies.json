@@ -284,7 +284,9 @@
       "name": "荆棘",
       "effect": "近战攻击者受伤",
       "counter": "远程武器",
-      "melee_reflect_ratio": 0.3
+      "melee_reflect_ratio": 0.15,
+      "melee_reflect_cap": 10,
+      "note": "B5 校准：原 0.3 无顶；CombatLog 近战局 last_hit 易被荆棘主导。cap≤0 表示不封顶"
     },
     "swift": {
       "name": "迅捷光环",

@@ -73,8 +73,11 @@ static func on_damaged(enemy: EnemyBase, amount: int, is_melee: bool) -> void:
 		enemy.affix_state["regen_t"] = 0.0
 	if is_melee and enemy.has_affix("thorns"):
 		var th: Dictionary = ConfigLoader.get_affix("thorns")
-		var ratio: float = float(th.get("melee_reflect_ratio", 0.3))
+		var ratio: float = float(th.get("melee_reflect_ratio", 0.15))
 		var reflect: int = maxi(1, int(round(float(amount) * ratio)))
+		var cap: int = int(th.get("melee_reflect_cap", 10))
+		if cap > 0:
+			reflect = mini(cap, reflect)
 		GameState.damage_player(reflect, "affix_thorns")
 	if enemy.has_affix("chain"):
 		_try_chain_bind(enemy)
