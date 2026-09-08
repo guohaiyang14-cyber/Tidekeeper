@@ -46,8 +46,8 @@
 | ID | 项 | 现状 | 建议 |
 |----|----|------|------|
 | B1 | **MultiMesh 合批** | SKILL/README 要求；工程内尚无 `MultiMesh` | A1 不达标则优先；达标可降优先级或降标至 250 敌 |
-| B2 | **属性软上限对齐 GDD §6.9** | 暴击/范围等与文档有偏差（代码注释已标明） | 数值校准时对齐，或回写文档说明 MVP 口径 |
-| B3 | **宝箱奖励表** | `config/pickups.json` 标「占位」 | 按稀有度补完整物品表（潮币/治疗/进化等） |
+| B2 | **属性软上限对齐 GDD §6.9** | **已完成**：`passives.json soft_caps` + `PassiveSystem.apply_soft_cap` / 减伤公式；机检 `w12`/`w15w16` | 维持；数值再校时只调表 |
+| B3 | **宝箱奖励表** | **已完成**：按稀有度 `alternatives` + `refine_essence`；`pickup_integration_test` 分测 | 维持；可再调权重/数额 |
 | B4 | **美术 / 音效** | 程序化占位；无正式资源 | 最小可替换包（敌人/武器/UI/关键 SFX） |
 | B5 | **数值校准** | W20 任务表有 DPS/血量微调 | 结合 CombatLog + 真人通关率 |
 

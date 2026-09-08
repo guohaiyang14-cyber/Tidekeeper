@@ -124,9 +124,13 @@ func _test_characters() -> void:
 	_assert(abs(MetaSystem.get_area_mult() - 1.05) < 0.001, "守望者范围 ×1.05")
 	_assert(abs(MetaSystem.get_move_speed_mult() - 1.05) < 0.001, "守望者移速 ×1.05")
 	_assert(abs(MetaSystem.get_exp_mult() - 1.0) < 0.001, "守望者经验 ×1.0（不触碰 w1 经验断言）")
+	_assert(abs(PassiveSystem.get_attack_speed_mult() - 1.05) < 0.001, "PassiveSystem 攻速同乘区含 Meta")
+	_assert(abs(PassiveSystem.get_area_mult() - 1.05) < 0.001, "PassiveSystem 范围同乘区含 Meta")
 	MetaSystem.set_active_character("blacksmith")
 	_assert(abs(MetaSystem.get_area_mult() - 1.30) < 0.001, "铁匠范围 ×1.30")
 	_assert(abs(MetaSystem.get_attack_speed_mult() - 0.85) < 0.001, "铁匠攻速 ×0.85")
+	_assert(abs(PassiveSystem.get_area_mult() - 1.30) < 0.001, "PassiveSystem 范围含铁匠 Meta")
+	_assert(abs(PassiveSystem.get_attack_speed_mult() - 0.85) < 0.001, "PassiveSystem 攻速含铁匠 Meta")
 	MetaSystem.set_active_character("stargazer")
 	_assert(abs(MetaSystem.get_damage_mult() - 0.90) < 0.001, "星象师伤害 ×0.90")
 	_assert(MetaSystem.get_extra_projectiles() == 1, "星象师弹道 +1")
@@ -206,12 +210,12 @@ func _test_lighthouse_and_settlement() -> void:
 	GameState.player_health = GameState.player_max_health
 	_assert(RestSystem.try_apply_night_regen() == 0, "满血 regen 不加")
 
-	# W16-g 灯塔减伤只经 PassiveSystem 叠一次（vigil_2 = 5%）
-	_assert(abs(PassiveSystem.get_damage_reduction() - 0.05) < 0.001, "灯塔减伤 5% 已计入 PassiveSystem")
+	# W16-g 灯塔减伤只经 PassiveSystem 叠一次（vigil_2 = 5 点；GDD §6.9 公式：1-1/1.1 ≈ 0.0909）
+	_assert(abs(PassiveSystem.get_damage_reduction() - 0.0909) < 0.001, "灯塔减伤 ≈9.09% 已计入 PassiveSystem（GDD 公式 5 点）")
 	GameState.is_over = false
 	GameState.player_health = 100
 	GameState.damage_player(20)
-	_assert(GameState.player_health == 81, "减伤只叠一次：100 - 20×0.95 = 81")
+	_assert(GameState.player_health == 82, "减伤只叠一次：100 - 20×0.909 → round(18.18)=18 → 82（GDD 公式）")
 
 	# W16-h 事件星尘并入局终结算
 	MetaSystem.reset_progress()

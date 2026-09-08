@@ -196,9 +196,9 @@ func end_night() -> void:
 
 
 ## 增加经验（自动处理升级；E(level) = 本级升下一级所需）
-## 应用被动通用经验桶（W12）+ 事件经验倍率（W14）：实际获得 = amount × 被动倍率 × 事件倍率
+## 应用被动+角色&灯塔经验（W12/W15 经 PassiveSystem 软上限）× 事件经验倍率（W14）
 func add_exp(amount: int) -> void:
-	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult() * MetaSystem.get_exp_mult()))
+	var gained: int = int(round(float(amount) * PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult()))
 	player_exp += gained
 	exp_gained.emit(gained, player_exp)
 	# 人物无等级硬顶：E(n) 表内查表、表外同公式外推

@@ -564,15 +564,15 @@ func _snapshot_build(phase: String) -> Dictionary:
 		"passives": passives,
 		"dmg_m": snappedf(PassiveSystem.get_damage_mult() * MetaSystem.get_damage_mult(), 0.01),
 		"atk_m": snappedf(
-			PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult() * MetaSystem.get_attack_speed_mult(),
+			PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult(),
 			0.01
 		),
 		"dr": snappedf(PassiveSystem.get_damage_reduction(), 0.01),
 		"crit": snappedf(PassiveSystem.get_crit_chance(), 0.01),
-		"area_m": snappedf(PassiveSystem.get_area_mult() * MetaSystem.get_area_mult(), 0.01),
+		"area_m": snappedf(PassiveSystem.get_area_mult(), 0.01),
 		"cd_r": snappedf(PassiveSystem.get_cd_reduction(), 0.01),
 		"exp_m": snappedf(
-			PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult() * MetaSystem.get_exp_mult(),
+			PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult(),
 			0.01
 		),
 	}

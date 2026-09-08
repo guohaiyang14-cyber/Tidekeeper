@@ -278,12 +278,12 @@ func _print_player_snapshot(night: int, world: World) -> void:
 			move,
 			pickup,
 			PassiveSystem.get_damage_mult() * MetaSystem.get_damage_mult(),
-			PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult() * MetaSystem.get_attack_speed_mult(),
+			PassiveSystem.get_attack_speed_mult() * EventSystem.get_attack_speed_mult(),
 			PassiveSystem.get_damage_reduction(),
 			PassiveSystem.get_crit_chance(),
-			PassiveSystem.get_area_mult() * MetaSystem.get_area_mult(),
+			PassiveSystem.get_area_mult(),
 			PassiveSystem.get_cd_reduction(),
-			PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult() * MetaSystem.get_exp_mult(),
+			PassiveSystem.get_exp_mult() * EventSystem.get_exp_mult(),
 			_player_spd_px,
 		]
 	)
@@ -291,7 +291,7 @@ func _print_player_snapshot(night: int, world: World) -> void:
 
 func _print_bonus_snapshot(night: int) -> void:
 	print(
-		"[TestBot] STAT night=%d phase=start kind=bonus dmg_pass=%.2f dmg_meta=%.2f atk_pass=%.2f atk_meta=%.2f atk_evt=%.2f area_pass=%.2f area_meta=%.2f dr=%.2f crit=%.2f cd_r=%.2f"
+		"[TestBot] STAT night=%d phase=start kind=bonus dmg_pass=%.2f dmg_meta=%.2f atk_zone=%.2f atk_meta=%.2f atk_evt=%.2f area_zone=%.2f area_meta=%.2f dr=%.2f crit=%.2f cd_r=%.2f"
 		% [
 			night,
 			PassiveSystem.get_damage_mult(),

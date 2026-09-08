@@ -337,12 +337,16 @@ func spawn_night_chests(lighthouse_pos: Vector2) -> int:
 	return spawned
 
 
-## 测试 / 调试：在指定位置刷一只固定稀有度宝箱（不清场、不滚数量）
+## 测试 / 调试：在指定位置刷一只固定稀有度宝箱（不清场、不滚数量、不消耗稀有度 RNG）
 func spawn_chest_at(pos: Vector2, rarity: Chest.Rarity) -> Chest:
-	var chest: Chest = _spawn_chest(pos)
+	if _chest_pool == null:
+		return null
+	var chest: Chest = _chest_pool.acquire() as Chest
 	if chest == null:
 		return null
+	chest.global_position = pos
 	chest.set_rarity(rarity)
+	_active_chests.append(chest)
 	return chest
 
 
@@ -386,6 +390,16 @@ func _open_chest(chest: Chest, index: int) -> void:
 	var reward: Dictionary = {}
 	if rarity < _chest_rewards.size() and _chest_rewards[rarity] is Dictionary:
 		reward = _chest_rewards[rarity]
+	# alternatives 支持：同一稀有度多个奖励随机选一（GDD §9.3「1 件随机稀有度物品」）
+	if reward.has("alternatives") and reward["alternatives"] is Array:
+		var alts: Array = reward["alternatives"]
+		if alts.size() > 0:
+			var picked: Variant = alts[RNG.randi_range(0, alts.size() - 1)]
+			if picked is Dictionary:
+				reward = picked as Dictionary
+			else:
+				push_warning("[PickupSystem] alternatives 项非 Dictionary，回退潮币")
+				reward = {"kind": "tidecoins", "amount": 15}
 	var kind: String = str(reward.get("kind", "tidecoins"))
 	var amount: int = int(reward.get("amount", 10))
 	var granted_kind: String = kind
@@ -412,6 +426,14 @@ func _open_chest(chest: Chest, index: int) -> void:
 			var got: int = EvolutionSystem.grant_items(amount, true, true)
 			if got > 0:
 				granted_amount = got
+			else:
+				granted_kind = "tidecoins"
+				granted_amount = int(reward.get("fallback_tidecoins", 40))
+				GameState.add_tidecoins(granted_amount)
+		"refine_essence":
+			var got_refine: int = RefineSystem.grant_essence(amount)
+			if got_refine > 0:
+				granted_amount = got_refine
 			else:
 				granted_kind = "tidecoins"
 				granted_amount = int(reward.get("fallback_tidecoins", 40))
@@ -505,16 +527,50 @@ func _load_config() -> void:
 	_load_chest_config()
 
 
+## 与 pickups.json.chest.rewards 对齐的内置默认表（缺表/长度错误时回退）
+func _default_chest_rewards() -> Array:
+	return [
+		{"kind": "tidecoins", "amount": 15},
+		{"alternatives": [
+			{"kind": "tidecoins", "amount": 35},
+			{"kind": "heal", "amount": 20}
+		]},
+		{"alternatives": [
+			{"kind": "tidecoins", "amount": 60},
+			{"kind": "heal", "amount": 35},
+			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 55}
+		]},
+		{"alternatives": [
+			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 80},
+			{"kind": "refine_essence", "amount": 2, "fallback_tidecoins": 70},
+			{"kind": "heal", "amount": 50}
+		]},
+	]
+
+
+## 测试用：临时覆盖 4 档稀有度奖励表
+func set_chest_rewards_for_test(rewards: Array) -> void:
+	if rewards.size() != 4:
+		push_warning("[PickupSystem] set_chest_rewards_for_test 长度应为 4，忽略")
+		return
+	_chest_rewards = rewards
+
+
+## 测试用：从 config 重载宝箱表（撤销 set_chest_rewards_for_test）
+func reload_chest_config_for_test() -> void:
+	_load_chest_config()
+
+
+## 测试用：立即按触碰半径开箱（不经 _process，避免其它系统污染 RNG）
+func force_open_chests_at_for_test(player_pos: Vector2) -> void:
+	_process_chests(player_pos)
+
+
 func _load_chest_config() -> void:
 	var cfg: Dictionary = ConfigLoader.get_chest_config()
 	if cfg.is_empty():
 		push_warning("[PickupSystem] pickups.json.chest 缺失，使用内置回退值")
-		_chest_rewards = [
-			{"kind": "tidecoins", "amount": 12},
-			{"kind": "tidecoins", "amount": 28},
-			{"kind": "heal", "amount": 25},
-			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 40},
-		]
+		_chest_rewards = _default_chest_rewards()
 		return
 	_chest_touch_radius = float(cfg.get("touch_radius", _chest_touch_radius))
 	_chest_ring_min = float(cfg.get("ring_radius_min", _chest_ring_min))
@@ -527,12 +583,7 @@ func _load_chest_config() -> void:
 		_chest_rewards = []
 	if _chest_rewards.size() != 4:
 		push_warning("[PickupSystem] chest.rewards 长度应为 4，回退默认奖励表")
-		_chest_rewards = [
-			{"kind": "tidecoins", "amount": 12},
-			{"kind": "tidecoins", "amount": 28},
-			{"kind": "heal", "amount": 25},
-			{"kind": "evolution", "amount": 1, "fallback_tidecoins": 40},
-		]
+		_chest_rewards = _default_chest_rewards()
 	var names_raw: Variant = cfg.get("rarity_names", _chest_rarity_names)
 	if names_raw is Array:
 		_chest_rarity_names.clear()

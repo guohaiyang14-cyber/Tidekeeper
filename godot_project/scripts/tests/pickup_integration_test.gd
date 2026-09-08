@@ -114,7 +114,7 @@ func _test_spawn_and_collect() -> void:
 	GameState.player_exp = 0
 	while UpgradeManager.is_presenting():
 		UpgradeManager.skip()
-	_player.set_move_speed_mult(Player.MOVE_SPEED_SOFT_CAP)
+	_player.set_move_speed_mult(Player.move_speed_soft_cap())
 	var chase_origin: Vector2 = Vector2(400, 300)
 	_player.global_position = chase_origin
 	var chase_gem: ExpGem = _pickup_system.spawn_exp_gem(chase_origin + Vector2(45, 0), 1)
@@ -173,6 +173,7 @@ func _test_spawn_and_collect() -> void:
 	var coins_before: int = GameState.tidecoins
 	var hp_before: int = GameState.player_health
 	var evo_before: int = GameState.evolution_items
+	var essence_before: int = GameState.refine_essence
 	var chest_pos: Array[Vector2] = [Vector2.ZERO]
 	_assert(_pickup_system.try_nearest_chest_position(_player.global_position, chest_pos, 2000.0), "能查到宝箱坐标")
 	_player.global_position = chest_pos[0]
@@ -183,8 +184,9 @@ func _test_spawn_and_collect() -> void:
 		GameState.tidecoins > coins_before
 		or GameState.player_health > hp_before
 		or GameState.evolution_items > evo_before
+		or GameState.refine_essence > essence_before
 	)
-	_assert(gained, "开箱发放了潮币/回血/进化道具之一")
+	_assert(gained, "开箱发放了潮币/回血/进化道具/淬炼精华之一")
 
 	# 潮汐反转：get_chest_mult 消费端可刷出 > per_night_max 的箱数
 	_pickup_system.clear_all()
@@ -219,7 +221,7 @@ func _test_spawn_and_collect() -> void:
 		var ring_dist: float = lighthouse.distance_to(cpos[0])
 		_assert(ring_dist >= 180.0 - 0.5 and ring_dist <= 220.0 + 0.5, "箱距灯塔在外环 180~220（实际=%.1f）" % ring_dist)
 
-	# 史诗箱 + 软上限 → 潮币回退
+	# 史诗箱：分测 evolution / refine_essence / heal（固定奖励表，避开 alternatives RNG）
 	_pickup_system.clear_all()
 	# 开局已有鱼叉；升至满级以满足 has_evolvable_owned
 	while GameState.get_weapon_level("harpoon") < GameState.max_weapon_level:
@@ -228,16 +230,94 @@ func _test_spawn_and_collect() -> void:
 	_assert(EvolutionSystem.has_evolvable_owned(), "满级鱼叉视为可进化持有")
 	var soft: int = int(ConfigLoader.get_evolution_rules().get("soft_cap_unused_items", 2))
 	GameState.evolution_items = soft
-	var coins0: int = GameState.tidecoins
 	var evo0: int = GameState.evolution_items
-	var epic: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
-	_assert(epic != null, "可生成史诗箱")
-	_player.global_position = epic.global_position
-	for _i2 in 3:
+
+	# A) evolution + 软上限 → 回退潮币，进化道具不增
+	_pickup_system.set_chest_rewards_for_test([
+		{"kind": "tidecoins", "amount": 15},
+		{"kind": "tidecoins", "amount": 35},
+		{"kind": "tidecoins", "amount": 60},
+		{"kind": "evolution", "amount": 1, "fallback_tidecoins": 80},
+	])
+	var coins_a: int = GameState.tidecoins
+	var epic_a: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
+	_assert(epic_a != null, "evolution 分支可生成史诗箱")
+	_player.global_position = epic_a.global_position
+	for _ia in 3:
 		await get_tree().process_frame
-	_assert(_pickup_system.active_chest_count() == 0, "史诗箱已开启")
+	_assert(_pickup_system.active_chest_count() == 0, "evolution 分支史诗箱已开启")
 	_assert(GameState.evolution_items == evo0, "软上限下进化道具未增加")
-	_assert(GameState.tidecoins > coins0, "软上限下史诗箱回退潮币")
+	_assert(GameState.tidecoins == coins_a + 80, "evolution 软上限回退潮币 80")
+
+	# B) refine_essence → 授精华
+	_pickup_system.clear_all()
+	_pickup_system.set_chest_rewards_for_test([
+		{"kind": "tidecoins", "amount": 15},
+		{"kind": "tidecoins", "amount": 35},
+		{"kind": "tidecoins", "amount": 60},
+		{"kind": "refine_essence", "amount": 2, "fallback_tidecoins": 70},
+	])
+	var essence0: int = GameState.refine_essence
+	var epic_b: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
+	_assert(epic_b != null, "refine_essence 分支可生成史诗箱")
+	_player.global_position = epic_b.global_position
+	for _ib in 3:
+		await get_tree().process_frame
+	_assert(_pickup_system.active_chest_count() == 0, "refine_essence 分支史诗箱已开启")
+	_assert(GameState.refine_essence == essence0 + 2, "史诗箱发放淬炼精华 ×2")
+
+	# C) heal → 回复生命（先扣血避免满血回退潮币）
+	_pickup_system.clear_all()
+	_pickup_system.set_chest_rewards_for_test([
+		{"kind": "tidecoins", "amount": 15},
+		{"kind": "tidecoins", "amount": 35},
+		{"kind": "tidecoins", "amount": 60},
+		{"kind": "heal", "amount": 50},
+	])
+	GameState.player_health = mini(GameState.player_max_health, 40)
+	var hp0: int = GameState.player_health
+	var coins_c: int = GameState.tidecoins
+	var epic_c: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
+	_assert(epic_c != null, "heal 分支可生成史诗箱")
+	_player.global_position = epic_c.global_position
+	for _ic in 3:
+		await get_tree().process_frame
+	_assert(_pickup_system.active_chest_count() == 0, "heal 分支史诗箱已开启")
+	_assert(GameState.player_health > hp0, "heal 分支回复生命")
+	_assert(GameState.tidecoins == coins_c, "有效治疗时不回退潮币")
+
+	# 恢复 config 奖励表，避免污染后续用例
+	_pickup_system.reload_chest_config_for_test()
+
+	# alternatives 随机路径：刷箱不耗 RNG；同种子预抽期望下标后立即开箱（避免 process_frame 污染 RNG）
+	_pickup_system.clear_all()
+	_pickup_system.set_chest_rewards_for_test([
+		{"kind": "tidecoins", "amount": 15},
+		{"kind": "tidecoins", "amount": 35},
+		{"kind": "tidecoins", "amount": 60},
+		{"alternatives": [
+			{"kind": "tidecoins", "amount": 99},
+			{"kind": "heal", "amount": 25},
+		]},
+	])
+	GameState.player_health = mini(GameState.player_max_health, 40)
+	var hp_alt0: int = GameState.player_health
+	var coins_alt0: int = GameState.tidecoins
+	var epic_alt: Chest = _pickup_system.spawn_chest_at(_player.global_position, Chest.Rarity.EPIC)
+	_assert(epic_alt != null, "alternatives 路径可生成史诗箱")
+	_player.global_position = epic_alt.global_position
+	RNG.set_seed(1)
+	var expect_alt: int = RNG.randi_range(0, 1)
+	RNG.set_seed(1)
+	_pickup_system.force_open_chests_at_for_test(_player.global_position)
+	_assert(_pickup_system.active_chest_count() == 0, "alternatives 路径史诗箱已开启")
+	if expect_alt == 0:
+		_assert(GameState.tidecoins == coins_alt0 + 99, "alternatives[0] tidecoins×99")
+		_assert(GameState.player_health == hp_alt0, "未抽到 heal")
+	else:
+		_assert(GameState.player_health == hp_alt0 + 25, "alternatives[1] heal×25")
+		_assert(GameState.tidecoins == coins_alt0, "未抽到 tidecoins")
+	_pickup_system.reload_chest_config_for_test()
 
 	# 挣扎中开箱：不发奖、不转潮币（第5夜，避开首夜保护）
 	_pickup_system.clear_all()

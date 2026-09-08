@@ -16,11 +16,13 @@ class_name Player
 ## 基础拾取半径（§5.2：经验珠自动吸附范围，夜明珠被动可扩大；运行时由 pickups.json 覆盖）
 @export var base_pickup_radius: float = 60.0
 
-## 移速加成软上限（§5.2：+60%）
-const MOVE_SPEED_SOFT_CAP: float = 1.6
-
 ## 单位→像素换算（§5.2：1 单位 = 60 像素，W2 调校）
 const UNIT_TO_PIXEL: float = 60.0
+
+
+## 移速软上限阈值（GDD §6.9 / passives.json soft_caps.move_speed；缺省 +60%）
+static func move_speed_soft_cap() -> float:
+	return PassiveSystem.get_soft_cap_threshold("move_speed", 1.6)
 
 # 运行时
 var _move_speed_mult: float = 1.0
@@ -133,14 +135,15 @@ func _handle_movement() -> void:
 	move_and_slide()
 
 
-## 设置移速加成（受软上限约束，§5.2）
+## 设置移速加成（原始倍率；与角色&灯塔同乘区加算后在 _effective_move_mult 软衰减）
 func set_move_speed_mult(mult: float) -> void:
-	_move_speed_mult = minf(mult, MOVE_SPEED_SOFT_CAP)
+	_move_speed_mult = mult
 
 
-## 局内移速倍率：被动/其它加成受软上限，再乘事件移速（灯塔共鸣 0.80 为惩罚，独立于软上限）× 角色&灯塔移速（W15-W16）
+## 局内移速倍率：局内加成 + 角色&灯塔同乘区加算后软上限，再乘事件移速（灯塔共鸣 0.80 为惩罚，独立于软上限）
 func _effective_move_mult() -> float:
-	return minf(_move_speed_mult, MOVE_SPEED_SOFT_CAP) * EventSystem.get_move_speed_mult() * MetaSystem.get_move_speed_mult()
+	var raw: float = _move_speed_mult + (MetaSystem.get_move_speed_mult() - 1.0)
+	return PassiveSystem.apply_soft_cap(raw, "move_speed") * EventSystem.get_move_speed_mult()
 
 
 ## 获取当前移速（像素/秒）

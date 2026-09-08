@@ -436,6 +436,11 @@ func get_crit_damage_mult() -> float:
 	return float(passives.get("metadata", {}).get("crit_damage_mult", 1.8))
 
 
+## 被动配置元数据（含 soft_caps、shop 等；GDD §6.9 属性软上限）
+func get_passives_metadata() -> Dictionary:
+	return passives.get("metadata", {})
+
+
 # ============================================================================
 # W15-W16 局外进度配置查询接口
 # ============================================================================

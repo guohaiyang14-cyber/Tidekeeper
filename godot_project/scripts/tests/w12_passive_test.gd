@@ -33,6 +33,7 @@ func _ready() -> void:
 	_test_slot_cap()
 	_test_level_cap()
 	_test_remove_frees()
+	_test_soft_caps()
 	print("------------------------------------------------------------")
 	print("W12 机检通过=%d 失败=%d" % [_passed, _failed])
 	print("============================================================")
@@ -100,7 +101,7 @@ func _test_aggregate() -> void:
 	_assert(abs(PassiveSystem.get_damage_mult() - 1.42) < 0.001, "lamp_core L3 + humus L3 伤害倍率 1.42")
 	_reset_run()
 	_own_to_level("amulet", 5)
-	_assert(abs(PassiveSystem.get_damage_reduction() - 0.30) < 0.001, "amulet L5 减伤 0.30")
+	_assert(abs(PassiveSystem.get_damage_reduction() - 0.375) < 0.001, "amulet L5 减伤 0.375（GDD §6.9 公式：30 点 → 1-1/1.6）")
 
 
 func _test_damage_applies() -> void:
@@ -152,7 +153,7 @@ func _test_damage_reduction() -> void:
 	GameState.player_health = 100
 	_own_to_level("amulet", 5)
 	GameState.damage_player(10)
-	_assert(GameState.player_health == 93, "减伤30%：100 - 10×0.7 = 93")
+	_assert(GameState.player_health == 94, "减伤37.5%：100 - 10×0.625 → round(6.25)=6 → 94（GDD §6.9 公式）")
 	# 无被动对照
 	_reset_run()
 	GameState.is_over = false
@@ -257,3 +258,35 @@ func _test_remove_frees() -> void:
 	_assert(GameState.passive_slot_usage() == 5, "移除后剩 5 槽")
 	_assert(GameState.can_add_passive(), "移除后槽有空位")
 	_assert(GameState.add_passive("humus") == true, "移除后可再入槽")
+
+
+# ---------------------------------------------------------------------------
+# GDD §6.9 软上限验证：阈值以下不衰减、阈值以上 50% 效率
+# ---------------------------------------------------------------------------
+func _test_soft_caps() -> void:
+	print("[软上限 apply_soft_cap GDD §6.9]")
+	# 攻速：阈值 2.5，效率 0.5
+	_assert(abs(PassiveSystem.apply_soft_cap(2.0, "attack_speed") - 2.0) < 0.001, "攻速 < 阈值(2.5) 不衰减 → 2.0")
+	_assert(abs(PassiveSystem.apply_soft_cap(3.0, "attack_speed") - 2.75) < 0.001, "攻速 > 阈值 50% 衰减 → 2.5 + 0.5×0.5 = 2.75")
+	_assert(abs(PassiveSystem.apply_soft_cap(4.0, "attack_speed") - 3.25) < 0.001, "攻速 远超阈值 → 2.5 + 1.5×0.5 = 3.25")
+	# 移速：阈值 1.6，效率 0.5
+	_assert(abs(PassiveSystem.apply_soft_cap(1.5, "move_speed") - 1.5) < 0.001, "移速 < 阈值(1.6) 不衰减 → 1.5")
+	_assert(abs(PassiveSystem.apply_soft_cap(2.0, "move_speed") - 1.8) < 0.001, "移速 > 阈值 50% 衰减 → 1.6 + 0.4×0.5 = 1.8")
+	# 范围：阈值 2.2，效率 0.5
+	_assert(abs(PassiveSystem.apply_soft_cap(2.0, "area") - 2.0) < 0.001, "范围 < 阈值(2.2) 不衰减 → 2.0")
+	_assert(abs(PassiveSystem.apply_soft_cap(3.0, "area") - 2.6) < 0.001, "范围 > 阈值 50% 衰减 → 2.2 + 0.8×0.5 = 2.6")
+	# 暴击率：阈值 0.6，效率 0.5
+	_assert(abs(PassiveSystem.apply_soft_cap(0.5, "crit_chance") - 0.5) < 0.001, "暴击 < 阈值(0.6) 不衰减 → 0.5")
+	_assert(abs(PassiveSystem.apply_soft_cap(0.8, "crit_chance") - 0.7) < 0.001, "暴击 > 阈值 50% 衰减 → 0.6 + 0.2×0.5 = 0.7")
+	# 经验：阈值 3.0，效率 0.5
+	_assert(abs(PassiveSystem.apply_soft_cap(2.5, "exp") - 2.5) < 0.001, "经验 < 阈值(3.0) 不衰减 → 2.5")
+	_assert(abs(PassiveSystem.apply_soft_cap(4.0, "exp") - 3.5) < 0.001, "经验 > 阈值 50% 衰减 → 3.0 + 1.0×0.5 = 3.5")
+	# 未知 key 应原样返回（容错）
+	_assert(abs(PassiveSystem.apply_soft_cap(5.0, "nonexistent") - 5.0) < 0.001, "未知 key 原样返回 → 5.0")
+	# 阈值读取与 apply 同源
+	_assert(abs(PassiveSystem.get_soft_cap_threshold("move_speed") - 1.6) < 0.001, "get_soft_cap_threshold(move_speed)=1.6")
+	_assert(abs(Player.move_speed_soft_cap() - 1.6) < 0.001, "Player.move_speed_soft_cap 读 config")
+	_assert(abs(PassiveSystem.get_soft_cap_threshold("missing", 9.0) - 9.0) < 0.001, "未知 key 阈值回退 default")
+	# 暴击：软衰减后硬顶 ≤1.0（apply  alone 可达 >1，get_crit_chance 钳制）
+	_assert(PassiveSystem.apply_soft_cap(2.0, "crit_chance") > 1.0, "极高暴击软衰减后仍可 >1.0")
+	_assert(PassiveSystem.get_crit_chance() <= 1.0, "get_crit_chance 硬顶 ≤1.0")
