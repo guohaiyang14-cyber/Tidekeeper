@@ -50,6 +50,15 @@ var _attract_snap_time: float = 0.1
 var _scatter_range: float = 12.0
 ## 连续不在显示区内超过此时长则回收（不入账）；经验珠与潮币共用
 var _offscreen_despawn_sec: float = 5.0
+## 池压（相对 hard_cap）：全图强制吸附阈值；屏外加速阈值（须更低，否则与全图吸互斥）
+var _pressure_attract_ratio: float = 0.75
+var _pressure_offscreen_ratio: float = 0.5
+var _pressure_offscreen_sec: float = 2.0
+## 触顶生成失败时强制入账最远掉落的批量（腾槽，防静默丢经验/币）
+var _pressure_relief_batch: int = 48
+## 腾槽日志限流（毫秒）
+const _RELIEF_LOG_INTERVAL_MSEC: int = 5000
+var _relief_log_msec: int = -_RELIEF_LOG_INTERVAL_MSEC
 var _quality_weights: Array[float] = [65.0, 25.0, 8.0, 2.0]
 var _quality_exp_mult: Array[float] = [1.0, 2.0, 5.0, 10.0]
 
@@ -118,6 +127,8 @@ func _process(delta: float) -> void:
 
 
 func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float, view_rect: Rect2) -> void:
+	var force_attract: bool = _should_force_attract(_pool, _active_gems.size())
+	var offscreen_sec: float = _effective_offscreen_sec(_pool, _active_gems.size())
 	# 倒序遍历以便安全删除已收集的珠子
 	var i: int = _active_gems.size() - 1
 	while i >= 0:
@@ -136,8 +147,8 @@ func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float, view
 			var new_dist: float = gem.global_position.distance_to(player_pos)
 			if new_dist <= _collect_radius:
 				_collect(gem, i)
-		elif dist <= pickup_radius:
-			# 进入拾取半径：近身直接入账，稍远则快速吸附（同帧可收）
+		elif dist <= pickup_radius or force_attract:
+			# 进入拾取半径，或硬顶附近/空闲耗尽时全图强制吸附
 			gem.clear_offscreen_time()
 			if dist <= _collect_radius:
 				_collect(gem, i)
@@ -146,7 +157,7 @@ func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float, view
 				gem.update_attract(player_pos, delta)
 				if gem.global_position.distance_to(player_pos) <= _collect_radius:
 					_collect(gem, i)
-		elif gem.tick_offscreen(delta, view_rect.has_point(gem.global_position), _offscreen_despawn_sec):
+		elif gem.tick_offscreen(delta, view_rect.has_point(gem.global_position), offscreen_sec):
 			_despawn_gem(gem, i)
 		i -= 1
 
@@ -187,6 +198,9 @@ func spawn_coin(pos: Vector2, amount: int) -> Coin:
 		return null
 	var coin: Coin = _coin_pool.acquire() as Coin
 	if coin == null:
+		_force_collect_farthest_coins(_pressure_relief_batch)
+		coin = _coin_pool.acquire() as Coin
+	if coin == null:
 		return null
 	coin.global_position = pos
 	coin.value = amount
@@ -196,6 +210,8 @@ func spawn_coin(pos: Vector2, amount: int) -> Coin:
 
 ## 潮币每帧更新（吸引 + 收集 → 入账）
 func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float, view_rect: Rect2) -> void:
+	var force_attract: bool = _should_force_attract(_coin_pool, _active_coins.size())
+	var offscreen_sec: float = _effective_offscreen_sec(_coin_pool, _active_coins.size())
 	var i: int = _active_coins.size() - 1
 	while i >= 0:
 		var coin: Coin = _active_coins[i]
@@ -209,7 +225,7 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float, vie
 			coin.update_attract(player_pos, delta)
 			if coin.global_position.distance_to(player_pos) <= _collect_radius:
 				_collect_coin(coin, i)
-		elif dist <= pickup_radius:
+		elif dist <= pickup_radius or force_attract:
 			coin.clear_offscreen_time()
 			if dist <= _collect_radius:
 				_collect_coin(coin, i)
@@ -218,7 +234,7 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float, vie
 				coin.update_attract(player_pos, delta)
 				if coin.global_position.distance_to(player_pos) <= _collect_radius:
 					_collect_coin(coin, i)
-		elif coin.tick_offscreen(delta, view_rect.has_point(coin.global_position), _offscreen_despawn_sec):
+		elif coin.tick_offscreen(delta, view_rect.has_point(coin.global_position), offscreen_sec):
 			_despawn_coin(coin, i)
 		i -= 1
 
@@ -464,6 +480,13 @@ func _load_config() -> void:
 		_attract_snap_time = maxf(0.05, float(cfg.get("attract_snap_time", _attract_snap_time)))
 		_scatter_range = float(cfg.get("scatter_range", _scatter_range))
 		_offscreen_despawn_sec = maxf(0.1, float(cfg.get("offscreen_despawn_sec", _offscreen_despawn_sec)))
+		_pressure_attract_ratio = clampf(float(cfg.get("pool_pressure_attract_ratio", _pressure_attract_ratio)), 0.1, 1.0)
+		_pressure_offscreen_ratio = clampf(float(cfg.get("pool_pressure_offscreen_ratio", _pressure_offscreen_ratio)), 0.1, 1.0)
+		# 屏外加速阈值须低于全图吸，否则缩短超时永远走不到
+		if _pressure_offscreen_ratio >= _pressure_attract_ratio:
+			_pressure_offscreen_ratio = maxf(0.1, _pressure_attract_ratio * 0.67)
+		_pressure_offscreen_sec = maxf(0.1, float(cfg.get("pool_pressure_offscreen_sec", _pressure_offscreen_sec)))
+		_pressure_relief_batch = maxi(1, int(cfg.get("pool_pressure_relief_batch", _pressure_relief_batch)))
 		_quality_weights = _to_float_array(cfg.get("quality_weights", _quality_weights), _quality_weights)
 		_quality_exp_mult = _to_float_array(cfg.get("quality_exp_mult", _quality_exp_mult), _quality_exp_mult)
 		# 品质数组长度必须与 Quality 枚举（4）一致，否则 _roll_quality 索引越界
@@ -549,12 +572,92 @@ func _spawn_gem(pos: Vector2, exp_value: int, quality: ExpGem.Quality) -> ExpGem
 		return null
 	var gem: ExpGem = _pool.acquire() as ExpGem
 	if gem == null:
+		_force_collect_farthest_gems(_pressure_relief_batch)
+		gem = _pool.acquire() as ExpGem
+	if gem == null:
 		return null
 	gem.global_position = pos
 	gem.exp_value = exp_value
 	gem.set_quality(quality)
 	_active_gems.append(gem)
 	return gem
+
+
+## 活跃数相对硬顶的占用比（不用预分配 pool_size，避免 700×0.75 过早全图吸）
+func _pool_occupancy(pool: ObjectPool, active: int) -> float:
+	if pool == null:
+		return 0.0
+	var cap: int = maxi(pool.pickup_hard_cap(), 1)
+	return float(active) / float(cap)
+
+
+## 全图强制吸附：仅硬顶已满且空闲耗尽，或活跃占用达 attract_ratio
+## （预分配抽干仍可 soft_expand，不得真空）
+func _should_force_attract(pool: ObjectPool, active: int) -> bool:
+	if pool == null:
+		return false
+	if _pool_occupancy(pool, active) >= _pressure_attract_ratio:
+		return true
+	var hard: int = pool.pickup_hard_cap()
+	return pool.pool_size >= hard and pool.available_count() <= 0
+
+
+## 近硬顶但未全图吸时缩短屏外超时，加速腾槽（不入账）
+func _effective_offscreen_sec(pool: ObjectPool, active: int) -> float:
+	if pool != null and _pool_occupancy(pool, active) >= _pressure_offscreen_ratio:
+		return minf(_offscreen_despawn_sec, _pressure_offscreen_sec)
+	return _offscreen_despawn_sec
+
+
+## 触顶时强制入账最远经验珠，腾出对象池槽位
+func _force_collect_farthest_gems(count: int) -> int:
+	if count <= 0 or _active_gems.is_empty() or _pool == null:
+		return 0
+	var origin: Vector2 = _player.global_position if _player != null else Vector2.ZERO
+	var freed: int = 0
+	while freed < count and not _active_gems.is_empty():
+		var best_i: int = 0
+		var best_d: float = -1.0
+		for i in _active_gems.size():
+			var d: float = _active_gems[i].global_position.distance_squared_to(origin)
+			if d > best_d:
+				best_d = d
+				best_i = i
+		_collect(_active_gems[best_i], best_i)
+		freed += 1
+	_log_pressure_relief("gem", freed, _active_gems.size())
+	return freed
+
+
+## 触顶时强制入账最远潮币，腾出对象池槽位
+func _force_collect_farthest_coins(count: int) -> int:
+	if count <= 0 or _active_coins.is_empty() or _coin_pool == null:
+		return 0
+	var origin: Vector2 = _player.global_position if _player != null else Vector2.ZERO
+	var freed: int = 0
+	while freed < count and not _active_coins.is_empty():
+		var best_i: int = 0
+		var best_d: float = -1.0
+		for i in _active_coins.size():
+			var d: float = _active_coins[i].global_position.distance_squared_to(origin)
+			if d > best_d:
+				best_d = d
+				best_i = i
+		_collect_coin(_active_coins[best_i], best_i)
+		freed += 1
+	_log_pressure_relief("coin", freed, _active_coins.size())
+	return freed
+
+
+## 腾槽入账限流日志（工程兜底，非常规收益）
+func _log_pressure_relief(kind: String, freed: int, active_left: int) -> void:
+	if freed <= 0:
+		return
+	var now_msec: int = Time.get_ticks_msec()
+	if now_msec - _relief_log_msec < _RELIEF_LOG_INTERVAL_MSEC:
+		return
+	_relief_log_msec = now_msec
+	print("[PickupSystem] 池压腾槽入账 kind=%s freed=%d active_left=%d（硬顶兜底）" % [kind, freed, active_left])
 
 
 ## 随机滚动品质（确定性 RNG，权重见 pickups.json）

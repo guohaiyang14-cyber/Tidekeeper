@@ -56,6 +56,10 @@ func _ready() -> void:
 	await _test_offscreen_despawn()  # 屏外超 5s 回收经验珠/潮币
 	await _test_coin_pool_soft_expand()  # CoinPool 耗尽软扩容
 	await _test_coin_pool_hard_cap()  # CoinPool 软扩容硬顶
+	await _test_pickup_pool_pressure_relief()  # 触顶强制入账腾槽
+	await _test_pickup_pool_prealloc_no_vacuum()  # 预分配抽干不真空（须在扩容测之前）
+	await _test_pickup_pool_pressure_attract()  # 占用达 attract_ratio 全图吸
+	await _test_pickup_pool_pressure_offscreen()  # 近硬顶缩短屏外超时
 
 	print("------------------------------------------------------------")
 	print("W2-W3 机检通过=%d 失败=%d" % [_passed, _failed])
@@ -76,6 +80,16 @@ func _assert(cond: bool, label: String) -> void:
 func _run_frames(n: int) -> void:
 	for i in n:
 		await get_tree().process_frame
+
+
+## 升级三选一会 pause 树；拾取池压测前必须抽干，否则 _process 不跑
+func _drain_upgrades_and_unpause() -> void:
+	var guard: int = 0
+	while guard < 64 and (UpgradeManager.is_presenting() or UpgradeManager.pending_count() > 0):
+		guard += 1
+		UpgradeManager.skip()
+	if get_tree() != null:
+		get_tree().paused = false
 
 
 ## 开局缓冲对应帧数（@fixed-fps 60）+ 余量，供刷怪断言等待
@@ -685,18 +699,21 @@ func _test_coin_pool_soft_expand() -> void:
 
 
 # ---------------------------------------------------------------------------
-# CoinPool：软扩容硬顶（4×max_enemies，且不少于 1200）
+# CoinPool：软扩容硬顶（6×max_enemies，且不少于 2100）
 # ---------------------------------------------------------------------------
 func _test_coin_pool_hard_cap() -> void:
 	print("[CoinPool] 软扩容硬顶")
 	spawner.clear_all()
 	pickup_system.clear_all()
 	coin_pool.release_all()
-	var hard: int = coin_pool.pickup_soft_hard_cap(4, 1200)
-	var expect: int = maxi(coin_pool.difficulty_max_enemies() * 4, 1200)
+	var hard: int = coin_pool.pickup_hard_cap()
+	var expect: int = maxi(
+		coin_pool.difficulty_max_enemies() * ObjectPool.PICKUP_HARD_CAP_MULT,
+		ObjectPool.PICKUP_HARD_CAP_FLOOR
+	)
 	_assert(hard == expect, "硬顶公式=%d（期望 %d）" % [hard, expect])
 	var guard: int = 0
-	while coin_pool.pool_size < hard and guard < 64:
+	while coin_pool.pool_size < hard and guard < 128:
 		guard += 1
 		if not coin_pool.soft_expand_toward(hard, 128):
 			break
@@ -710,4 +727,158 @@ func _test_coin_pool_hard_cap() -> void:
 	_assert(blocked == null, "硬顶且空闲为 0 时 acquire 为 null")
 	coin_pool.release_all()
 	pickup_system.clear_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 触顶后 spawn 走强制入账腾槽（不静默丢潮币）
+# ---------------------------------------------------------------------------
+func _test_pickup_pool_pressure_relief() -> void:
+	print("[PickupSystem] 池压强制入账腾槽")
+	_drain_upgrades_and_unpause()
+	spawner.clear_all()
+	pickup_system.clear_all()
+	coin_pool.release_all()
+	GameState.tidecoins = 0
+	var hard: int = coin_pool.pickup_hard_cap()
+	var guard: int = 0
+	while coin_pool.pool_size < hard and guard < 128:
+		guard += 1
+		if not coin_pool.soft_expand_toward(hard, 128):
+			break
+	_assert(coin_pool.pool_size == hard, "扩满硬顶=%d" % hard)
+	# 经 PickupSystem 占满（远点，避免同帧吸入）
+	var far: Vector2 = player.global_position + Vector2(4000.0, 0.0)
+	var filled: int = 0
+	while filled < hard:
+		var c: Coin = pickup_system.spawn_coin(far + Vector2(float(filled % 80), float(filled / 80)), 1)
+		if c == null:
+			break
+		filled += 1
+	_assert(filled == hard, "经系统占满硬顶 (%d)" % filled)
+	_assert(pickup_system.active_coin_count() == hard, "活跃币=%d" % hard)
+	_assert(coin_pool.available_count() == 0, "池空闲=0")
+	var coins_before: int = GameState.tidecoins
+	var extra: Coin = pickup_system.spawn_coin(far + Vector2(0.0, -40.0), 7)
+	_assert(extra != null, "触顶后仍可 spawn（强制入账腾槽）")
+	_assert(GameState.tidecoins > coins_before, "腾槽入账潮币 (%d→%d)" % [coins_before, GameState.tidecoins])
+	_assert(pickup_system.active_coin_count() <= hard, "活跃不超过硬顶")
+	_drain_upgrades_and_unpause()
+	pickup_system.clear_all()
+	coin_pool.release_all()
+	GameState.tidecoins = 0
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 活跃达 hard_cap×attract_ratio 时全图强制吸附；预分配抽干不得真空
+# ---------------------------------------------------------------------------
+func _test_pickup_pool_pressure_attract() -> void:
+	print("[PickupSystem] 池压全图强制吸附")
+	_drain_upgrades_and_unpause()
+	spawner.clear_all()
+	pickup_system.clear_all()
+	pickup_pool.release_all()
+	var exp0: int = GameState.player_exp
+	var hard: int = pickup_pool.pickup_hard_cap()
+	var need: int = int(ceil(float(hard) * 0.75))
+	# 扩到 need+余量，保持 available>0（证明不是靠 available==0）
+	var guard: int = 0
+	while pickup_pool.pool_size < need + 8 and guard < 128:
+		guard += 1
+		if not pickup_pool.soft_expand_toward(hard, 128):
+			break
+	var far: Vector2 = player.global_position + Vector2(2500.0, 0.0)
+	var spawned: int = 0
+	while spawned < need:
+		var g: ExpGem = pickup_system.spawn_exp_gem(far + Vector2(float(spawned % 40) * 8.0, 0.0), 1)
+		if g == null:
+			break
+		spawned += 1
+	_assert(spawned == need, "铺满 attract 压力线 (%d)" % spawned)
+	_assert(pickup_pool.available_count() > 0, "仍有空闲（靠占用比触发）")
+	await _run_frames(120)
+	_assert(
+		GameState.player_exp > exp0 or pickup_system.active_gem_count() < need,
+		"占用达 attract_ratio 后入账或活跃下降 (exp %d→%d active=%d/%d)" % [
+			exp0, GameState.player_exp, pickup_system.active_gem_count(), need
+		]
+	)
+	_drain_upgrades_and_unpause()
+	pickup_system.clear_all()
+	pickup_pool.release_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 预分配抽干但未触硬顶：不得全图吸（只应 soft_expand）
+# ---------------------------------------------------------------------------
+func _test_pickup_pool_prealloc_no_vacuum() -> void:
+	print("[PickupSystem] 预分配抽干不真空")
+	_drain_upgrades_and_unpause()
+	spawner.clear_all()
+	pickup_system.clear_all()
+	pickup_pool.release_all()
+	var hard: int = pickup_pool.pickup_hard_cap()
+	_assert(pickup_pool.pool_size < hard, "预分配尚未触硬顶 (%d < %d)" % [pickup_pool.pool_size, hard])
+	var need: int = pickup_pool.available_count()
+	var far: Vector2 = player.global_position + Vector2(2500.0, 0.0)
+	var spawned: int = 0
+	while spawned < need:
+		var g: ExpGem = pickup_system.spawn_exp_gem(far + Vector2(float(spawned % 40) * 8.0, 0.0), 1)
+		if g == null:
+			break
+		spawned += 1
+	_assert(spawned == need, "抽干预分配 (%d)" % spawned)
+	_assert(pickup_pool.available_count() == 0, "空闲=0")
+	_assert(float(spawned) / float(hard) < 0.75, "占用低于 attract_ratio")
+	var active0: int = pickup_system.active_gem_count()
+	var exp0: int = GameState.player_exp
+	await _run_frames(30)
+	_assert(pickup_system.active_gem_count() == active0, "预分配抽干后珠仍在场 (active=%d)" % pickup_system.active_gem_count())
+	_assert(GameState.player_exp == exp0, "预分配抽干不入账")
+	_drain_upgrades_and_unpause()
+	pickup_system.clear_all()
+	pickup_pool.release_all()
+	GameState.player_health = GameState.player_max_health
+
+
+# ---------------------------------------------------------------------------
+# 近硬顶占用时缩短屏外超时（未开全图吸也能回收，不入账）
+# ---------------------------------------------------------------------------
+func _test_pickup_pool_pressure_offscreen() -> void:
+	print("[PickupSystem] 池压缩短屏外超时")
+	_drain_upgrades_and_unpause()
+	spawner.clear_all()
+	pickup_system.clear_all()
+	pickup_pool.release_all()
+	var exp0: int = GameState.player_exp
+	# 占满硬顶×offscreen_ratio，但低于 attract_ratio，且保持 available>0
+	var hard: int = pickup_pool.pickup_hard_cap()
+	var need: int = int(ceil(float(hard) * 0.5))
+	_assert(need < int(ceil(float(hard) * 0.75)), "屏外阈值低于全图吸阈值")
+	# 先扩到至少 need+1，保证填完后仍有空闲（不全图吸）
+	var guard: int = 0
+	while pickup_pool.pool_size < need + 8 and guard < 128:
+		guard += 1
+		if not pickup_pool.soft_expand_toward(hard, 128):
+			break
+	pickup_system.set_test_view_rect(Rect2(player.global_position - Vector2(80, 80), Vector2(160, 160)), true)
+	var far: Vector2 = player.global_position + Vector2(2000.0, 0.0)
+	var spawned: int = 0
+	while spawned < need:
+		var g: ExpGem = pickup_system.spawn_exp_gem(far + Vector2(float(spawned % 40) * 8.0, 0.0), 1)
+		if g == null:
+			break
+		spawned += 1
+	_assert(spawned == need, "铺满屏外压力线 (%d)" % spawned)
+	_assert(pickup_pool.available_count() > 0, "仍有空闲 → 不全图吸")
+	_assert(not get_tree().paused, "树未暂停（否则屏外计时不走）")
+	# 压力屏外 2s；正常 5s。等 2.5s 应回收且不入账
+	await _run_frames(150)
+	_assert(pickup_system.active_gem_count() == 0, "2.5s 内屏外已回收 (left=%d)" % pickup_system.active_gem_count())
+	_assert(GameState.player_exp == exp0, "缩短屏外回收不入账")
+	pickup_system.set_test_view_rect(Rect2(), false)
+	pickup_system.clear_all()
+	pickup_pool.release_all()
 	GameState.player_health = GameState.player_max_health

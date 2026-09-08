@@ -153,9 +153,19 @@ func difficulty_max_enemies() -> int:
 	return int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
 
 
+## 拾取池默认硬顶（CoinPool / PickupPool 共用，避免双份漂移）
+const PICKUP_HARD_CAP_MULT: int = 6
+const PICKUP_HARD_CAP_FLOOR: int = 2100
+
+
 ## 拾取类软扩容硬顶：max(max_enemies×mult, floor)；不随 pool_size 抬升以免无上限
 func pickup_soft_hard_cap(mult: int, floor_cap: int) -> int:
 	return maxi(difficulty_max_enemies() * mult, floor_cap)
+
+
+## 当前拾取池软扩容硬顶（仅 CoinPool / PickupPool 语义；其它池勿当通用上限）
+func pickup_hard_cap() -> int:
+	return pickup_soft_hard_cap(PICKUP_HARD_CAP_MULT, PICKUP_HARD_CAP_FLOOR)
 
 
 ## 向 hard_cap 软扩容一块；已触顶返回 false（随后 acquire 走限流告警）
