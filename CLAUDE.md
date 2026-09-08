@@ -5,6 +5,7 @@
 | 任务 | 阅读 |
 |------|------|
 | 功能开发 / 场景 / 配置 | [`tools/SKILL.md`](tools/SKILL.md) |
+| 新功能同步机器人覆盖 | [`tools/SKILL_testbot-coverage.md`](tools/SKILL_testbot-coverage.md)（与功能同一交付） |
 | 重构文档 | [`tools/SKILL_refactor-docs.md`](tools/SKILL_refactor-docs.md) |
 | 重构代码 | [`tools/SKILL_refactor-code.md`](tools/SKILL_refactor-code.md) |
 | 代码审查 | [`tools/SKILL_code-review.md`](tools/SKILL_code-review.md) |

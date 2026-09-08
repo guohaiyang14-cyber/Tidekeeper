@@ -3,6 +3,7 @@
 开始任务前按类型阅读 tools/ 下 skill：
 
 - 功能开发 → tools/SKILL.md（tidekeeper-godot-dev）
+- 新功能同步 TestBot → tools/SKILL_testbot-coverage.md（tidekeeper-testbot-coverage）
 - 重构文档 → tools/SKILL_refactor-docs.md（tidekeeper-refactor-docs）
 - 重构代码 → tools/SKILL_refactor-code.md（tidekeeper-refactor-code）
 - 代码审查 → tools/SKILL_code-review.md（tidekeeper-code-review）

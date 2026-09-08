@@ -5,18 +5,20 @@
 ## 开始任务前
 
 1. **功能开发** → 阅读 [`tools/SKILL.md`](tools/SKILL.md)（`tidekeeper-godot-dev`）
-2. **重构文档** → 阅读 [`tools/SKILL_refactor-docs.md`](tools/SKILL_refactor-docs.md)
-3. **重构代码** → 阅读 [`tools/SKILL_refactor-code.md`](tools/SKILL_refactor-code.md)（仍须遵守主 Skill 红线）
-4. **代码审查** → 阅读 [`tools/SKILL_code-review.md`](tools/SKILL_code-review.md)
-5. 设计口径：`docs/《潮汐守夜人》游戏设计文档.md`（v0.3.6）
-6. 周任务：`docs/单人开发任务拆分表_20周.md`（历史基线）
-7. 收口与分期：`docs/后续开发计划_MVP收口与分期.md`；进度快照：`docs/开发进度总览.md`
+2. **新功能 / 改局内行为** → 同步阅读 [`tools/SKILL_testbot-coverage.md`](tools/SKILL_testbot-coverage.md)（`tidekeeper-testbot-coverage`），补 TestBot ACCEPT
+3. **重构文档** → 阅读 [`tools/SKILL_refactor-docs.md`](tools/SKILL_refactor-docs.md)
+4. **重构代码** → 阅读 [`tools/SKILL_refactor-code.md`](tools/SKILL_refactor-code.md)（仍须遵守主 Skill 红线）
+5. **代码审查** → 阅读 [`tools/SKILL_code-review.md`](tools/SKILL_code-review.md)
+6. 设计口径：`docs/《潮汐守夜人》游戏设计文档.md`（v0.3.6）
+7. 周任务：`docs/单人开发任务拆分表_20周.md`（历史基线）
+8. 收口与分期：`docs/后续开发计划_MVP收口与分期.md`；进度快照：`docs/开发进度总览.md`
 
 ## Skill 一览
 
 | name | 源文件 | 触发 |
 |------|--------|------|
 | `tidekeeper-godot-dev` | `tools/SKILL.md` | 写 GDScript / 场景 / 系统 / 配置 |
+| `tidekeeper-testbot-coverage` | `tools/SKILL_testbot-coverage.md` | 新功能同步 TestBot / ACCEPT / bot-suite |
 | `tidekeeper-refactor-docs` | `tools/SKILL_refactor-docs.md` | 重构文档、对齐口径、消矛盾 |
 | `tidekeeper-refactor-code` | `tools/SKILL_refactor-code.md` | 重构代码、抽模块、行为守恒整理 |
 | `tidekeeper-code-review` | `tools/SKILL_code-review.md` | code review / 审 diff / 查红线 |

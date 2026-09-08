@@ -2,7 +2,8 @@
 
 > **版本**：v1.1  
 > **日期**：2026-09-08  
-> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.6+ · [`开发进度总览.md`](开发进度总览.md) · `AGENTS.md`
+> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.6+ · [`开发进度总览.md`](开发进度总览.md) · `AGENTS.md`  
+> **Skill**：新功能同步 Bot → [`tools/SKILL_testbot-coverage.md`](../tools/SKILL_testbot-coverage.md)（`tidekeeper-testbot-coverage`）
 
 ---
 

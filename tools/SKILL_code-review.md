@@ -50,6 +50,7 @@ Task Progress:
 - `GameState` 开局未 `start_new_run`；昼夜时长偏离 45/60/90/120
 - 对象池 `acquire` 未重置状态 / `release` 未失活
 - 场景树与 SKILL §2.2 严重偏离且无说明
+- **新局内功能无 TestBot ACCEPT / checklist 同步**（见 `tools/SKILL_testbot-coverage.md`；纯 UI/美术/Profiler 须标 N/A）
 
 ### 4.3 P2 可维护性 / 性能
 
@@ -104,9 +105,11 @@ Task Progress:
 | 审查问题 | `tidekeeper-code-review`（默认只报告） |
 | 按审查结果改结构 | **本 skill** |
 | 写新功能 | `tidekeeper-godot-dev` |
+| 新功能同步 Bot | `tidekeeper-testbot-coverage` |
 | 文档口径 | `tidekeeper-refactor-docs` |
 
 ## 八、关联
 
 - 主约定：`tools/SKILL.md`
+- TestBot 覆盖：`tools/SKILL_testbot-coverage.md`
 - 重构：`tools/SKILL_refactor-code.md`

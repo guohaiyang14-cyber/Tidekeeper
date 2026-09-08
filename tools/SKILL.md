@@ -22,6 +22,7 @@ description: "Godot 4 + GDScript dev assistant for Tidekeeper roguelite. Invoke 
 | Skill | 源文件 | 用途 |
 |-------|--------|------|
 | `tidekeeper-godot-dev` | `tools/SKILL.md` | **主开发约定**（写功能必读） |
+| `tidekeeper-testbot-coverage` | `tools/SKILL_testbot-coverage.md` | **新功能同步 TestBot ACCEPT 覆盖**（写功能必伴随） |
 | `tidekeeper-refactor-docs` | `tools/SKILL_refactor-docs.md` | 重构 / 对齐文档 |
 | `tidekeeper-refactor-code` | `tools/SKILL_refactor-code.md` | 重构代码（行为守恒） |
 | `tidekeeper-code-review` | `tools/SKILL_code-review.md` | 代码审查（默认只报告） |
@@ -204,13 +205,25 @@ var damage: int = 12  # 鱼叉枪伤害
 
 ## 七、agent 协作分工
 
+### 7.0 新功能完成定义（强制伴随 TestBot）
+
+落地可机读的局内新行为时，**同一交付**必须同步 Debug TestBot 覆盖，流程见 [`tools/SKILL_testbot-coverage.md`](SKILL_testbot-coverage.md)：
+
+1. 对照 / 补齐 `docs/原型验证验收清单.md` 编号
+2. `test_bot.gd` 增加 ACCEPT 证据（无 suite 不污染日志）
+3. `bot_suite.gd` checklist + `tools/check_bot_acceptance.py` 标签
+4. 更新 `docs/TestBot验收任务.md` 覆盖矩阵
+5. 交付说明写清：TestBot id / suite / 证据，或 **N/A（原因）**
+
+专项机检（`scenes/tests/`）与 Bot ACCEPT **互补**：机检管公式与边界，Bot 管局内真实路径。纯 UI / 美术 / Profiler / 手感可标 N/A。
+
 ### 7.1 委托 agent（高效）
 
 - 配置表 JSON 生成（武器/敌人/Boss 数据）
 - 脚手架代码（对象池、空间哈希、RNG 单例）
 - 行为类武器/敌人实现
 - Bug 定位+修复
-- 单元测试用例
+- 单元测试用例 **+ TestBot ACCEPT 同步**
 - 文档更新
 
 ### 7.2 人工主导（不委托）
@@ -248,6 +261,7 @@ var damage: int = 12  # 鱼叉枪伤害
 | 时长控制 | `docs/单局时长控制策略.md` |
 | 每周任务 | `docs/单人开发任务拆分表_20周.md` |
 | 原型验收 | `docs/原型验证验收清单.md` |
+| TestBot 套件 / ACCEPT | `docs/TestBot验收任务.md` + `tools/SKILL_testbot-coverage.md` |
 
 ## 十、代码生成模板
 
