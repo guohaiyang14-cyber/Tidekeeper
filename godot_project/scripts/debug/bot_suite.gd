@@ -174,12 +174,17 @@ static func suite_runs_per_config_if_unset(suite_n: int) -> int:
 	return maxi(1, suite_n)
 
 
-static func emit_accept(id: String, status: String, detail: String = "") -> void:
+static func format_accept_line(id: String, status: String, detail: String = "") -> String:
 	var safe_status: String = status if status in ["pass", "fail", "skip", "info"] else "info"
 	if detail.strip_edges() == "":
-		print("[TestBot] ACCEPT id=%s status=%s" % [id, safe_status])
-	else:
-		print("[TestBot] ACCEPT id=%s status=%s detail=%s" % [id, safe_status, detail.replace(" ", "_")])
+		return "[TestBot] ACCEPT id=%s status=%s" % [id, safe_status]
+	return "[TestBot] ACCEPT id=%s status=%s detail=%s" % [id, safe_status, detail.replace(" ", "_")]
+
+
+static func emit_accept(id: String, status: String, detail: String = "") -> String:
+	var line: String = format_accept_line(id, status, detail)
+	print(line)
+	return line
 
 
 static func expected_night_duration(night: int) -> float:

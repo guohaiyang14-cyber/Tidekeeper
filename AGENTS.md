@@ -69,6 +69,7 @@
   - `sweep`：同上扫完一轮后自动 `quit`
   - `--bot-runs-per-config=N` / `TIDEKEEPER_BOT_RUNS_PER_CONFIG`：每档连跑 N 局再切（默认 1）
 - 关闭机器人：`TIDEKEEPER_NO_TEST_BOT=1` 或 `--no-test-bot`
+- **详细 STAT**：落盘 `user://bot_logs/session_*.log`（控制台仅摘要）；查看 `python tools/view_bot_runs.py` / `--latest 10 --detail`
 
 ## 战斗日志（CombatLog）
 

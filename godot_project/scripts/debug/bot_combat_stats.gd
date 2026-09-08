@@ -2,7 +2,8 @@
 # BotCombatStats — TestBot 按夜战斗统计（Debug）
 # 职责：玩家属性/加成快照、武器造成伤害、敌人属性与存活时间（击杀+夜末未击杀）
 #       刷怪/死亡相对玩家距离（诊断「屏内怪少、追不上机器人」）
-# 落盘：仅 print 结构化 [TestBot] STAT 行，供 tools/view_bot_runs.py 解析
+# 落盘：结构化 [TestBot] STAT 行经 set_line_sink 写入 BotFileLog（不刷控制台）
+# 解析：tools/view_bot_runs.py 读 user://bot_logs/session_*.log
 # ============================================================================
 class_name BotCombatStats
 extends RefCounted
@@ -34,6 +35,19 @@ var _death_near_screen: int = 0
 var _spawn_dist_sum: float = 0.0
 var _spawn_dist_n: int = 0
 var _player_spd_px: float = 0.0
+## (String) -> void；未设置时回退 print（单测/无 BotFileLog）
+var _line_sink: Callable = Callable()
+
+
+func set_line_sink(sink: Callable) -> void:
+	_line_sink = sink
+
+
+func _emit_line(line: String) -> void:
+	if _line_sink.is_valid():
+		_line_sink.call(line)
+	else:
+		print(line)
 
 
 func reset_run() -> void:
@@ -142,7 +156,7 @@ func _maybe_log_spawn_sample(enemy: EnemyBase, spawn_dist: float) -> void:
 	if enemy.target != null and is_instance_valid(enemy.target):
 		player_pos = enemy.target.global_position
 	var tier: String = _enemy_tier(enemy)
-	print(
+	_emit_line(
 		"[TestBot] STAT night=%d phase=spawn kind=pos id=%s tier=%s affix=%s pos=(%.0f,%.0f) player=(%.0f,%.0f) dist=%.0f spd=%.0f player_spd=%.0f"
 		% [
 			_night,
@@ -267,7 +281,7 @@ func _print_player_snapshot(night: int, world: World) -> void:
 			# get_current_speed 为像素/秒；单位移速 = px / UNIT_TO_PIXEL
 			move = player.get_current_speed() / Player.UNIT_TO_PIXEL
 			pickup = player.get_pickup_radius()
-	print(
+	_emit_line(
 		"[TestBot] STAT night=%d phase=start hp=%d/%d lv=%d coins=%d move=%.2f pickup=%.1f dmg_m=%.2f atk_m=%.2f dr=%.2f crit=%.2f area_m=%.2f cd_r=%.2f exp_m=%.2f player_spd_px=%.0f"
 		% [
 			night,
@@ -290,7 +304,7 @@ func _print_player_snapshot(night: int, world: World) -> void:
 
 
 func _print_bonus_snapshot(night: int) -> void:
-	print(
+	_emit_line(
 		"[TestBot] STAT night=%d phase=start kind=bonus dmg_pass=%.2f dmg_meta=%.2f atk_zone=%.2f atk_meta=%.2f atk_evt=%.2f area_zone=%.2f area_meta=%.2f dr=%.2f crit=%.2f cd_r=%.2f"
 		% [
 			night,
@@ -315,7 +329,7 @@ func _print_weapon_sheet(night: int, world: World) -> void:
 	if weapons.is_empty():
 		for wid in GameState.weapon_slots:
 			var id: String = String(wid)
-			print(
+			_emit_line(
 				"[TestBot] STAT night=%d phase=start kind=weapon id=%s lv=%d dmg=-1 evo=%d refine=%d rate=-1"
 				% [
 					night, id, GameState.get_weapon_level(id),
@@ -327,7 +341,7 @@ func _print_weapon_sheet(night: int, world: World) -> void:
 	for w in weapons:
 		if w == null or w.weapon_id == "":
 			continue
-		print(
+		_emit_line(
 			"[TestBot] STAT night=%d phase=start kind=weapon id=%s lv=%d dmg=%d evo=%d refine=%d rate=%.2f"
 			% [
 				night,
@@ -344,7 +358,7 @@ func _print_weapon_sheet(night: int, world: World) -> void:
 func _print_passive_sheet(night: int) -> void:
 	for pid in GameState.passive_slots:
 		var id: String = String(pid)
-		print(
+		_emit_line(
 			"[TestBot] STAT night=%d phase=start kind=passive id=%s lv=%d"
 			% [night, id, GameState.get_passive_level(id)]
 		)
@@ -385,12 +399,12 @@ func _print_proximity_snapshot(night: int, world: World) -> void:
 				"spd": enemy.move_speed,
 			})
 	var avg_d: float = (dist_sum / float(n_total)) if n_total > 0 else 0.0
-	print(
+	_emit_line(
 		"[TestBot] STAT night=%d phase=end kind=proximity active=%d near_contact=%d near_screen=%d avg_dist=%.0f player=(%.0f,%.0f) player_spd=%.0f"
 		% [night, n_total, n_contact, n_screen, avg_d, origin.x, origin.y, _player_spd_px]
 	)
 	for s in samples:
-		print(
+		_emit_line(
 			"[TestBot] STAT night=%d phase=end kind=alive_pos id=%s tier=%s pos=(%.0f,%.0f) dist=%.0f spd=%.0f"
 			% [night, String(s["id"]), String(s["tier"]), float(s["x"]), float(s["y"]), float(s["dist"]), float(s["spd"])]
 		)
@@ -408,7 +422,7 @@ func _print_end_report(night: int) -> void:
 		var hits: int = int(row.get("hits", 0))
 		dealt_total += dealt
 		hits_total += hits
-		print(
+		_emit_line(
 			"[TestBot] STAT night=%d phase=end kind=weapon id=%s dealt=%d hits=%d"
 			% [night, wid, dealt, hits]
 		)
@@ -430,7 +444,7 @@ func _print_end_report(night: int) -> void:
 		var avg_dd: float = (float(row.get("ddist_sum", 0.0)) / float(dn)) if dn > 0 else -1.0
 		var min_dd: float = float(row.get("ddist_min", -1.0)) if dn > 0 else -1.0
 		var avg_sd: float = (float(row.get("sdist_sum", 0.0)) / float(sn)) if sn > 0 else -1.0
-		print(
+		_emit_line(
 			"[TestBot] STAT night=%d phase=end kind=enemy id=%s tier=%s affix=%s killed=%d unkilled=%d avg_alive_k=%.1f avg_alive_u=%.1f avg_maxhp=%d avg_spd=%.0f avg_cdmg=%d avg_ddist=%.0f min_ddist=%.0f avg_sdist=%.0f"
 			% [
 				night,
@@ -452,7 +466,7 @@ func _print_end_report(night: int) -> void:
 	var avg_death: float = (_death_dist_sum / float(_death_dist_n)) if _death_dist_n > 0 else -1.0
 	var avg_spawn: float = (_spawn_dist_sum / float(_spawn_dist_n)) if _spawn_dist_n > 0 else -1.0
 	var min_death: float = _death_dist_min if _death_dist_n > 0 else -1.0
-	print(
+	_emit_line(
 		"[TestBot] STAT night=%d phase=end kind=summary dealt_total=%d hits_total=%d kills=%d unkilled=%d avg_death_dist=%.0f min_death_dist=%.0f death_near_contact=%d death_near_screen=%d avg_spawn_dist=%.0f player_spd=%.0f"
 		% [
 			night, dealt_total, hits_total, kills, unkilled,

@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 # ============================================================================
-# view_bot_runs.py — 从 Godot 日志解析 TestBot 自动试玩局次
+# view_bot_runs.py — 从 Bot 会话日志 / Godot 日志解析 TestBot 自动试玩局次
 #
-# 默认只读最新 godot.log（避免轮转切片把同一局算成多次「进行中」）。
+# 默认优先读最新 user://bot_logs/session_*.log（STAT 落盘，不刷控制台）；
+# 若无 bot 会话则回退 godot.log。
 # 以「出现 [TestBot] 行」区分机器人局与 headless 单测。
 #
 # 用法：
 #   python tools/view_bot_runs.py
 #   python tools/view_bot_runs.py --latest 10 --detail
 #   python tools/view_bot_runs.py --all-logs
-#   python tools/view_bot_runs.py --log path/to/godot.log
+#   python tools/view_bot_runs.py --log path/to/session_*.log
 #   python tools/view_bot_runs.py --json
 #   python tools/view_bot_runs.py --self-test
 #   view_bot_runs.bat --latest 5 --detail
 #
-# 伤害组成依赖 GameState.trigger_game_over 打印的：
+# 伤害组成依赖：
 #   [GameState] 伤害组成: total=… last=… amt=… | src=dmg …
-# 按夜战斗统计依赖 TestBot 打印的：
+# 按夜战斗统计依赖 TestBot 落盘的：
 #   [TestBot] STAT night=N phase=start|end ...
 # ============================================================================
 from __future__ import annotations
@@ -144,6 +145,7 @@ class BotRun:
 
 
 def default_log_dirs() -> List[Path]:
+    """Godot 引擎 logs/ 目录（godot.log）。"""
     dirs: List[Path] = []
     appdata = os.environ.get("APPDATA")
     if appdata:
@@ -158,6 +160,26 @@ def default_log_dirs() -> List[Path]:
         / "app_userdata"
         / APP_NAME
         / "logs"
+    )
+    return dirs
+
+
+def default_bot_log_dirs() -> List[Path]:
+    """TestBot STAT 会话目录（user://bot_logs/）。"""
+    dirs: List[Path] = []
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        dirs.append(Path(appdata) / "Godot" / "app_userdata" / APP_NAME / "bot_logs")
+    home = Path.home()
+    dirs.append(home / ".local" / "share" / "godot" / "app_userdata" / APP_NAME / "bot_logs")
+    dirs.append(
+        home
+        / "Library"
+        / "Application Support"
+        / "Godot"
+        / "app_userdata"
+        / APP_NAME
+        / "bot_logs"
     )
     return dirs
 
@@ -178,6 +200,14 @@ def _unique_sorted(paths: Iterable[Path]) -> List[Path]:
     return found
 
 
+def list_bot_session_logs() -> List[Path]:
+    candidates: List[Path] = []
+    for d in default_bot_log_dirs():
+        if d.is_dir():
+            candidates.extend(d.glob("session_*.log"))
+    return _unique_sorted(candidates)
+
+
 def list_userdata_logs() -> List[Path]:
     candidates: List[Path] = []
     for d in default_log_dirs():
@@ -187,7 +217,12 @@ def list_userdata_logs() -> List[Path]:
 
 
 def pick_default_logs(all_logs: bool) -> List[Path]:
-    """默认只取当前 godot.log（或 mtime 最新一份）；--all-logs 取全部。"""
+    """优先 bot_logs/session_*.log；否则回退 godot.log。"""
+    bot_sessions = list_bot_session_logs()
+    if bot_sessions:
+        if all_logs:
+            return bot_sessions
+        return [bot_sessions[-1]]
     found = list_userdata_logs()
     if not found:
         return []
@@ -206,6 +241,7 @@ def resolve_log_args(log_args: Sequence[str], all_logs: bool) -> List[Path]:
     for raw in log_args:
         p = Path(raw)
         if p.is_dir():
+            paths.extend(p.glob("session_*.log"))
             paths.extend(p.glob("godot*.log"))
         elif p.is_file():
             paths.append(p)
@@ -214,7 +250,6 @@ def resolve_log_args(log_args: Sequence[str], all_logs: bool) -> List[Path]:
     paths = _unique_sorted(paths)
     if all_logs or len(paths) <= 1:
         return paths
-    # 显式多文件且未要求 all-logs：仍全部使用，但后续会 dedupe
     return paths
 
 
@@ -844,18 +879,18 @@ def run_self_test() -> int:
 
 def main() -> int:
     configure_stdio()
-    ap = argparse.ArgumentParser(description="查看 TestBot 自动试玩局次记录（解析 Godot 日志）")
+    ap = argparse.ArgumentParser(description="查看 TestBot 自动试玩局次（优先 bot_logs/session_*.log）")
     ap.add_argument(
         "--log",
         action="append",
         default=[],
         metavar="PATH",
-        help="指定日志文件或目录（目录仅匹配 godot*.log）；可多次",
+        help="指定日志文件或目录（目录匹配 session_*.log / godot*.log）；可多次",
     )
     ap.add_argument(
         "--all-logs",
         action="store_true",
-        help="读取 userdata 下全部 godot*.log（默认只读当前 godot.log）并去重轮转截断局",
+        help="读取全部 bot session（或无 session 时全部 godot*.log）并去重",
     )
     ap.add_argument("--latest", type=int, default=0, metavar="N", help="只显示最近 N 局（0=全部）")
     ap.add_argument("--detail", action="store_true", help="展开购买/融合/精炼/按夜战斗统计")
@@ -868,8 +903,11 @@ def main() -> int:
 
     paths = resolve_log_args(args.log, args.all_logs)
     if not paths:
-        print("未找到日志。可显式传入：python tools/view_bot_runs.py --log <godot.log>", file=sys.stderr)
-        print("默认目录：", file=sys.stderr)
+        print("未找到日志。可显式传入：python tools/view_bot_runs.py --log <session_*.log>", file=sys.stderr)
+        print("bot_logs 目录：", file=sys.stderr)
+        for d in default_bot_log_dirs():
+            print(f"  {d}", file=sys.stderr)
+        print("godot.log 目录：", file=sys.stderr)
         for d in default_log_dirs():
             print(f"  {d}", file=sys.stderr)
         return 1

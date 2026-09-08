@@ -111,6 +111,7 @@ const HEAL_CRITICAL_SCORE: int = 220
 const HEAL_CRITICAL_HP_RATIO: float = 0.40
 
 const _BotCombatStats = preload("res://scripts/debug/bot_combat_stats.gd")
+const _BotFileLog = preload("res://scripts/debug/bot_file_log.gd")
 const _BotSuite = preload("res://scripts/debug/bot_suite.gd")
 
 var _enabled: bool = false
@@ -123,6 +124,8 @@ var _panic_timer: float = 0.0
 var _panic_dir: Vector2 = Vector2.RIGHT
 ## BotCombatStats（preload.new）；不写 class_name 注解以免 autoload 启动时类型未注册
 var _combat_stats: Variant = null
+## 详细 STAT / 局次行落盘（控制台只打摘要）
+var _file_log: Variant = null
 ## 当前倍速（仅 _enabled 时写入 Engine.time_scale）
 var _speed_scale: float = BOT_SPEED_DEFAULT
 ## 串行档：当前下标 / 本档已完赛局数 / 每档连跑数 / sweep 是否已扫完待退出
@@ -189,7 +192,11 @@ func _ready() -> void:
 	_enabled = _compute_enabled()
 	if _enabled:
 		process_mode = Node.PROCESS_MODE_ALWAYS
+		_file_log = _BotFileLog.new()
+		var log_path: String = _file_log.open_session()
 		_combat_stats = _BotCombatStats.new()
+		if log_path != "":
+			_combat_stats.set_line_sink(Callable(_file_log, "write_line"))
 		## TestBot 启停：用 add/remove，避免清掉 CombatLog 遥测
 		EnemyBase.add_combat_telemetry(self)
 		_apply_suite_config()
@@ -214,12 +221,14 @@ func _ready() -> void:
 		_apply_speed_scale()
 		if _suite_name != "" and not GameState.player_damaged.is_connected(_on_player_damaged_accept):
 			GameState.player_damaged.connect(_on_player_damaged_accept)
-		print(
+		_bot_say(
 			"[TestBot] 已启用 — 自动模拟玩家 ×%.0f（[ / ] 调速 2~10；关闭：TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）"
 			% _speed_scale
 		)
+		if log_path != "":
+			_bot_say("[TestBot] 详细 STAT 落盘 %s（控制台仅摘要；查看：python tools/view_bot_runs.py）" % log_path)
 		if _suite_name != "":
-			print(
+			_bot_say(
 				"[TestBot] 验收套件 suite=%s character=%s difficulty=%s max_night=%d max_runs=%d unlock_all=%s checklist=%s"
 				% [
 					_suite_name,
@@ -232,16 +241,17 @@ func _ready() -> void:
 				]
 			)
 		var lh_mode: String = _resolve_lighthouse_mode()
-		print(
+		_bot_say(
 			"[TestBot] 灯塔模式 mode=%s（--bot-lighthouse=none|partial|full|random|cycle|sweep）"
 			% lh_mode
 		)
 		if _is_serial_lighthouse_mode(lh_mode):
-			print(
+			_bot_say(
 				"[TestBot] 串行扫档 order=none→partial→full runs_per_config=%d%s"
 				% [_runs_per_config, "（sweep 一轮后退出）" if lh_mode == "sweep" else "（cycle 循环）"]
 			)
 		get_tree().scene_changed.connect(_on_scene_changed)
+		GameState.run_started.connect(_on_run_started_log)
 		GameState.night_started.connect(_on_night_started)
 		GameState.night_ended.connect(_on_night_ended)
 		GameState.game_over.connect(_on_game_over_stats)
@@ -258,12 +268,39 @@ func _exit_tree() -> void:
 	EnemyBase.remove_combat_telemetry(self)
 	if GameState.player_damaged.is_connected(_on_player_damaged_accept):
 		GameState.player_damaged.disconnect(_on_player_damaged_accept)
+	if GameState.run_started.is_connected(_on_run_started_log):
+		GameState.run_started.disconnect(_on_run_started_log)
 	_disconnect_chest_hook()
 	if _enabled:
 		MetaSystem.clear_lighthouse_override()
 		MetaSystem.clear_unlock_all_characters_override()
 		_print_accept_summary()
+		if _file_log != null:
+			_file_log.close()
+			_file_log = null
 
+
+## 里程碑：落盘 + 控制台；详细 STAT 仅走 BotCombatStats → 文件
+func _bot_say(line: String, to_console: bool = true) -> void:
+	if _file_log != null and _file_log.is_open():
+		if to_console:
+			_file_log.write_line_console(line)
+		else:
+			_file_log.write_line(line)
+	elif to_console:
+		print(line)
+
+
+## 仅落盘（供 view_bot_runs 自洽解析；不刷屏）
+func _bot_file_only(line: String) -> void:
+	_bot_say(line, false)
+
+
+func _on_run_started_log(character: String, seed_value: int) -> void:
+	_bot_file_only(
+		"[GameState] 新局开始: character=%s seed=%d max_hp=%d"
+		% [character, seed_value, GameState.player_max_health]
+	)
 
 func is_active() -> bool:
 	return _enabled
@@ -299,8 +336,9 @@ func _on_night_started(night: int) -> void:
 	_panic_timer = 0.0
 	_enemy_sample_timer = 0.0
 	_run_peak_night = maxi(_run_peak_night, night)
+	_bot_file_only("[GameState] 进入第 %d 夜" % night)
 	if night == ARCHON_NIGHT:
-		print(
+		_bot_say(
 			"[TestBot] N%d 执政官策略：贴灯塔光晕内环绕（aura=%.0f）"
 			% [night, _lighthouse_aura_radius()]
 		)
@@ -314,6 +352,7 @@ func _on_night_ended(night: int) -> void:
 	_run_peak_night = maxi(_run_peak_night, night)
 	if _combat_stats != null:
 		_combat_stats.end_night(night, _current_world())
+	_flush_bot_file()
 	if _suite_name != "":
 		_accept_sample_enemies(_current_world())
 	_accept_on_night_end(night)
@@ -322,9 +361,12 @@ func _on_night_ended(night: int) -> void:
 		_action_timer = MAX_NIGHT_CUTOFF_DELAY
 
 
-func _on_game_over_stats(_reason: String) -> void:
+func _on_game_over_stats(reason: String) -> void:
 	if _combat_stats != null:
 		_combat_stats.flush_open_night(_current_world())
+	_bot_file_only("[GameState] 游戏结束: %s (已存活 %d 夜)" % [reason, GameState.current_night])
+	_bot_file_damage_composition()
+	_flush_bot_file()
 	_note_serial_run_finished()
 	_finalize_run_outcome(false)
 
@@ -332,11 +374,24 @@ func _on_game_over_stats(_reason: String) -> void:
 func _on_game_win_stats() -> void:
 	if _combat_stats != null:
 		_combat_stats.flush_open_night(_current_world())
+	_bot_file_only("[GameState] 通关！20 夜全部完成")
+	_bot_file_only("[World] 通关")
+	_flush_bot_file()
 	_note_serial_run_finished()
 	_wins += 1
 	_record_accept("2.5.3", "pass", "win_n20")
 	_record_accept("4.10.1", "pass", "full_clear_proxy")
 	_finalize_run_outcome(true)
+
+
+## 镜像 GameState 全量伤害组成行，写入 bot 文件供 view_bot_runs
+func _bot_file_damage_composition() -> void:
+	_bot_file_only(GameState.format_damage_composition_line())
+
+
+func _flush_bot_file() -> void:
+	if _file_log != null and _file_log.is_open():
+		_file_log.flush()
 
 
 func _current_world() -> World:
@@ -403,7 +458,7 @@ func _set_speed_scale(value: float) -> void:
 		return
 	_speed_scale = clamped
 	_apply_speed_scale()
-	print("[TestBot] 倍速 ×%.0f（[ / ] 调节，--bot-speed=N）" % _speed_scale)
+	_bot_say("[TestBot] 倍速 ×%.0f（[ / ] 调节，--bot-speed=N）" % _speed_scale)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -475,7 +530,7 @@ func _tick_character_select(delta: float) -> void:
 	MetaSystem.set_active_character(char_id)
 	_apply_lighthouse_for_new_run()
 	_emit_run_start_accepts(char_id)
-	print(
+	_bot_say(
 		"[TestBot] 选择角色 %s 难度=%s 并开始游戏"
 		% [char_id, DifficultySystem.get_tier()]
 	)
@@ -565,7 +620,7 @@ func _apply_lighthouse_for_new_run() -> void:
 	var edge: int = int(depths.get("edge", 0))
 	var tide: int = int(depths.get("tide", 0))
 	if _is_serial_lighthouse_mode(mode):
-		print(
+		_bot_say(
 			"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d | serial=%d/%d run=%d/%d mode=%s"
 			% [
 				profile,
@@ -582,7 +637,7 @@ func _apply_lighthouse_for_new_run() -> void:
 			]
 		)
 	else:
-		print(
+		_bot_say(
 			"[TestBot] 灯塔初始 profile=%s vigil=%d edge=%d tide=%d lit=%d/%d"
 			% [profile, vigil, edge, tide, lit, total]
 		)
@@ -650,7 +705,7 @@ func _note_serial_run_finished() -> void:
 func _quit_after_sweep_if_pending() -> void:
 	if not _sweep_pending_quit:
 		return
-	print("[TestBot] 串行 sweep 完成（none→partial→full ×%d），退出" % _runs_per_config)
+	_bot_say("[TestBot] 串行 sweep 完成（none→partial→full ×%d），退出" % _runs_per_config)
 	_print_accept_summary()
 	if get_tree() != null:
 		get_tree().paused = false
@@ -670,7 +725,7 @@ func _advance_serial_after_run(mode: String) -> void:
 			return
 		next_index = 0
 	_serial_index = next_index
-	print(
+	_bot_say(
 		"[TestBot] 串行切换 → profile=%s (%d/%d)"
 		% [_current_serial_profile(), _serial_index + 1, LH_SERIAL_PROFILES.size()]
 	)
@@ -814,7 +869,7 @@ func _tick_result(_world: World, delta: float) -> void:
 	if _should_quit_after_runs():
 		_quit_bot_suite("max_runs")
 		return
-	print("[TestBot] 结算页 → 重开")
+	_bot_say("[TestBot] 结算页 → 重开")
 	_begin_next_bot_run()
 
 
@@ -992,7 +1047,7 @@ func _tick_day_shop(world: World, delta: float) -> void:
 		return
 	if world.shop_ui != null and world.shop_ui.visible:
 		_try_shop_actions(world)
-		print("[TestBot] 跳过抉择之昼 → 下一夜")
+		_bot_file_only("[TestBot] 跳过抉择之昼 → 下一夜")
 		if world.day_phase_ui != null:
 			world.day_phase_ui.exit_day()
 		world.shop_ui.close()
@@ -1059,7 +1114,7 @@ func _bot_free_slots_for_evolution_keys(world: World) -> void:
 	for i in mini(slots_needed, victims.size()):
 		var refund: int = GameState.reroll_passive(victims[i])
 		if refund > 0:
-			print("[TestBot] 为进化钥腾位，重铸被动 %s（退 %d）" % [victims[i], refund])
+			_bot_file_only("[TestBot] 为进化钥腾位，重铸被动 %s（退 %d）" % [victims[i], refund])
 
 
 ## 按存活/进化分买到没钱或没货（教学留槽仍由 _should_buy_shop_item 约束）
@@ -1085,7 +1140,7 @@ func _bot_buy_shop_items(world: World) -> void:
 		if best_score < 0:
 			break
 		if world.shop_manager.buy(best):
-			print("[TestBot] 购买 %s" % best.get("name", "?"))
+			_bot_file_only("[TestBot] 购买 %s" % best.get("name", "?"))
 		else:
 			var fail_key: String = _shop_item_key(best)
 			if fail_key == "":
@@ -1103,7 +1158,7 @@ func _bot_fuse_ready_weapons() -> void:
 		var fused_any: bool = false
 		for wid in ready:
 			if EvolutionSystem.fuse(wid):
-				print("[TestBot] 融合武器 %s → %s" % [wid, GameState.get_evolved_name(wid)])
+				_bot_file_only("[TestBot] 融合武器 %s → %s" % [wid, GameState.get_evolved_name(wid)])
 				fused_any = true
 		if not fused_any:
 			break
@@ -1113,7 +1168,7 @@ func _bot_fuse_ready_weapons() -> void:
 func _bot_refine_ready_weapons() -> void:
 	for wid in RefineSystem.list_ready():
 		if RefineSystem.refine(wid) > 0:
-			print("[TestBot] 精炼武器 %s" % wid)
+			_bot_file_only("[TestBot] 精炼武器 %s" % wid)
 			_refine_clicked = true
 			_record_accept("4.2.8", "pass", "refine=%s" % wid)
 
@@ -1943,7 +1998,8 @@ func _record_accept(id: String, status: String, detail: String = "") -> void:
 	if status != "fail" and String(_accept_last_emit.get(id, "")) == emit_key:
 		return
 	_accept_last_emit[id] = emit_key
-	_BotSuite.emit_accept(id, status, detail)
+	var line: String = _BotSuite.emit_accept(id, status, detail)
+	_bot_file_only(line)
 	match status:
 		"pass":
 			_accept_pass[id] = true
@@ -2047,7 +2103,7 @@ func _finalize_run_outcome(is_win: bool) -> void:
 		_record_accept("4.2.8", "skip", "no_refine_this_run")
 	_accept_emit_feature_progress()
 	_accept_finalize_feature_skips(peak)
-	print(
+	_bot_say(
 		"[TestBot] 局次完成 #%d win=%s peak_night=%d suite=%s script_err=%d peak_enemies=%d affix_kinds=%d thorns_hits=%d chests=%d"
 		% [
 			_completed_runs,
@@ -2061,6 +2117,7 @@ func _finalize_run_outcome(is_win: bool) -> void:
 			_chest_kinds_seen.size(),
 		]
 	)
+	_flush_bot_file()
 	if _should_quit_after_runs() and not _sweep_pending_quit:
 		call_deferred("_quit_bot_suite", "max_runs")
 
@@ -2321,7 +2378,7 @@ func _tick_max_night_cutoff(delta: float) -> void:
 	if _sweep_pending_quit:
 		_quit_after_sweep_if_pending()
 		return
-	print("[TestBot] 夜上限 N%d 截断 → 重开" % _max_night)
+	_bot_say("[TestBot] 夜上限 N%d 截断 → 重开" % _max_night)
 	_begin_next_bot_run()
 
 
@@ -2337,7 +2394,7 @@ func _begin_next_bot_run() -> void:
 	MetaSystem.set_active_character(char_id)
 	_apply_lighthouse_for_new_run()
 	_emit_run_start_accepts(char_id)
-	print(
+	_bot_say(
 		"[TestBot] 下一局角色 %s 难度=%s"
 		% [char_id, DifficultySystem.get_tier()]
 	)
@@ -2403,7 +2460,7 @@ func _poll_script_errors() -> void:
 
 func _quit_bot_suite(reason: String) -> void:
 	_poll_script_errors()
-	print(
+	_bot_say(
 		"[TestBot] 套件结束 reason=%s completed_runs=%d wins=%d script_err=%d"
 		% [reason, _completed_runs, _wins, _script_error_count]
 	)
@@ -2424,11 +2481,12 @@ func _print_accept_summary() -> void:
 	_reconcile_accept_5_2()
 	# 仅在汇总时从 pass 打回 fail 才补打一行，避免噪音
 	if prev_pass_52 and _accept_fail.has("5.2"):
-		_BotSuite.emit_accept(
+		var reconcile_line: String = _BotSuite.emit_accept(
 			"5.2",
 			"fail",
 			"reconcile runs_ge8=%d script_err=%d" % [_runs_reached_n8, _script_error_count]
 		)
+		_bot_file_only(reconcile_line)
 	var pass_ids: Array[String] = []
 	for k in _accept_pass.keys():
 		pass_ids.append(String(k))
@@ -2441,7 +2499,7 @@ func _print_accept_summary() -> void:
 	for cid in _suite_checklist:
 		if not _accept_pass.has(cid) and not _accept_fail.has(cid):
 			skip_ids.append(cid)
-	print(
+	_bot_say(
 		"[TestBot] ACCEPT_SUMMARY suite=%s runs=%d wins=%d ge8=%d ge10=%d script_err=%d pass=%s fail=%s skip=%s"
 		% [
 			_suite_name if _suite_name != "" else "-",

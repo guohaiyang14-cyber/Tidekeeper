@@ -710,6 +710,11 @@ func trigger_game_over(reason: String = "death") -> void:
 func _log_damage_composition() -> void:
 	if not OS.is_debug_build() and not OS.has_feature("editor"):
 		return
+	print(format_damage_composition_line())
+
+
+## 全量伤害组成行（与控制台 print 同语义；供 TestBot bot_logs 镜像）
+func format_damage_composition_line() -> String:
 	var a: Dictionary = get_death_analysis()
 	var ranked: Array = []
 	for src in _damage_taken.keys():
@@ -719,7 +724,7 @@ func _log_damage_composition() -> void:
 	for entry in ranked:
 		parts.append("%s=%d" % [String(entry["source"]), int(entry["damage"])])
 	var body: String = " ".join(parts) if not parts.is_empty() else "(none)"
-	print(
+	return (
 		"[GameState] 伤害组成: total=%d last=%s amt=%d | %s"
 		% [int(a.get("total_damage", 0)), String(a.get("last_hit_source", "")), int(a.get("last_hit_amount", 0)), body]
 	)

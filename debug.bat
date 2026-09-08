@@ -64,7 +64,8 @@ echo            --bot-character= / --bot-difficulty= / --bot-max-night= / --bot-
 echo   灯塔:    默认每局 random；--bot-lighthouse=full 固定
 echo   串行:    --bot-lighthouse=cycle 循环 none→partial→full
 echo            --bot-lighthouse=sweep 扫一轮后退出；--bot-runs-per-config=N 每档连跑
-echo   汇总:    python tools/check_bot_acceptance.py
+echo   STAT:    落盘 user://bot_logs/session_*.log（控制台仅摘要）
+echo   汇总:    python tools/view_bot_runs.py  /  python tools/check_bot_acceptance.py
 echo.
 
 "%GODOT_BIN%" --path "%PROJECT%" --debug %BOT_FLAG% %*
