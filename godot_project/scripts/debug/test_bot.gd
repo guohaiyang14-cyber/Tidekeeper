@@ -163,6 +163,26 @@ var _duration_checked: Dictionary = {}
 var _log_scan_offset: int = 0
 var _script_error_count: int = 0
 var _log_scan_path: String = ""
+## 近期功能 ACCEPT：软上限 / 词缀 / 荆棘 / 宝箱 / 同屏峰值（会话级）
+var _soft_caps_checked: bool = false
+var _affix_cfg_checked: bool = false
+var _affix_cfg_ok: bool = false
+var _elite_affix_checked: bool = false
+var _chest_hooked_world: World = null
+var _peak_enemies: int = 0
+var _seen_affix_ids: Dictionary = {}
+var _thorns_hits: int = 0
+var _thorns_hit_max: int = 0
+var _chest_kinds_seen: Dictionary = {}
+var _enemy_sample_timer: float = 0.0
+## 最近一次已打印的 ACCEPT（id → "status|detail"），同内容不重打
+var _accept_last_emit: Dictionary = {}
+## 同屏峰值 ACCEPT 下限底数（再与 max_enemies/4 取较大）
+const ACCEPT_ENEMY_PEAK_FLOOR: int = 100
+## 敌人/词缀采样间隔（秒，游戏时间）
+const ACCEPT_ENEMY_SAMPLE_INTERVAL: float = 0.5
+## 宝箱开箱视为有效奖励的 kind（对齐 pickups.json.chest.rewards）
+const ACCEPT_CHEST_KINDS: Array[String] = ["tidecoins", "heal", "evolution", "refine_essence"]
 
 
 func _ready() -> void:
@@ -180,8 +200,20 @@ func _ready() -> void:
 		_sweep_pending_quit = false
 		_serial_advanced_for_run = false
 		_summary_printed = false
+		_soft_caps_checked = false
+		_affix_cfg_checked = false
+		_affix_cfg_ok = false
+		_elite_affix_checked = false
+		_peak_enemies = 0
+		_seen_affix_ids.clear()
+		_thorns_hits = 0
+		_thorns_hit_max = 0
+		_chest_kinds_seen.clear()
+		_accept_last_emit.clear()
 		_init_script_error_scan()
 		_apply_speed_scale()
+		if _suite_name != "" and not GameState.player_damaged.is_connected(_on_player_damaged_accept):
+			GameState.player_damaged.connect(_on_player_damaged_accept)
 		print(
 			"[TestBot] 已启用 — 自动模拟玩家 ×%.0f（[ / ] 调速 2~10；关闭：TIDEKEEPER_NO_TEST_BOT=1 或 --no-test-bot）"
 			% _speed_scale
@@ -224,6 +256,9 @@ func _exit_tree() -> void:
 	if Engine.time_scale != 1.0:
 		Engine.time_scale = 1.0
 	EnemyBase.remove_combat_telemetry(self)
+	if GameState.player_damaged.is_connected(_on_player_damaged_accept):
+		GameState.player_damaged.disconnect(_on_player_damaged_accept)
+	_disconnect_chest_hook()
 	if _enabled:
 		MetaSystem.clear_lighthouse_override()
 		MetaSystem.clear_unlock_all_characters_override()
@@ -262,6 +297,7 @@ func note_enemy_spawn(enemy: EnemyBase) -> void:
 
 func _on_night_started(night: int) -> void:
 	_panic_timer = 0.0
+	_enemy_sample_timer = 0.0
 	_run_peak_night = maxi(_run_peak_night, night)
 	if night == ARCHON_NIGHT:
 		print(
@@ -278,6 +314,8 @@ func _on_night_ended(night: int) -> void:
 	_run_peak_night = maxi(_run_peak_night, night)
 	if _combat_stats != null:
 		_combat_stats.end_night(night, _current_world())
+	if _suite_name != "":
+		_accept_sample_enemies(_current_world())
 	_accept_on_night_end(night)
 	if _max_night > 0 and night >= _max_night:
 		_cutoff_restart_pending = true
@@ -482,6 +520,7 @@ func _prepare_new_run_meta() -> void:
 	_cutoff_restart_pending = false
 	_run_outcome_recorded = false
 	_serial_advanced_for_run = false
+	_elite_affix_checked = false
 	if _unlock_all_chars:
 		MetaSystem.set_unlock_all_characters_override(true)
 	_apply_run_difficulty()
@@ -1223,6 +1262,12 @@ func _survival_item_score(id: String) -> int:
 
 
 func _tick_night_movement(world: World, delta: float) -> void:
+	if _suite_name != "":
+		_ensure_chest_hook(world)
+		_enemy_sample_timer -= delta
+		if _enemy_sample_timer <= 0.0:
+			_enemy_sample_timer = ACCEPT_ENEMY_SAMPLE_INTERVAL
+			_accept_sample_enemies(world)
 	var player: Player = world.player as Player
 	# 锁链改为减速后仍可走位；仅缺玩家时停手
 	if player == null:
@@ -1893,6 +1938,11 @@ func _record_accept(id: String, status: String, detail: String = "") -> void:
 	# 无验收套件时不打 ACCEPT，避免自由 Debug 跑污染日志
 	if _suite_name == "":
 		return
+	var emit_key: String = "%s|%s" % [status, detail]
+	# 同 status+detail 不重打（fail 仍允许覆盖：key 不同才会到此）
+	if status != "fail" and String(_accept_last_emit.get(id, "")) == emit_key:
+		return
+	_accept_last_emit[id] = emit_key
 	_BotSuite.emit_accept(id, status, detail)
 	match status:
 		"pass":
@@ -1919,7 +1969,10 @@ func _reconcile_accept_5_2() -> void:
 
 
 func _accept_on_night_start(night: int) -> void:
+	_accept_soft_caps_once()
+	_accept_affix_config_once()
 	var world: World = _current_world()
+	_ensure_chest_hook(world)
 	var expected: float = _BotSuite.expected_night_duration(night)
 	var actual: float = expected
 	if world != null and world.day_night != null:
@@ -1956,6 +2009,7 @@ func _accept_on_night_start(night: int) -> void:
 			"pass" if is_equal_approx(want, got) else "fail",
 			"base=%.2f expect=%.2f" % [got, want]
 		)
+	_accept_affix_night_rules(night, world)
 
 
 func _accept_on_night_end(night: int) -> void:
@@ -1964,6 +2018,7 @@ func _accept_on_night_end(night: int) -> void:
 		_record_accept("1.1.1", "pass", "cleared_n=%d" % night)
 	if night >= 8:
 		_record_accept("3.3", "pass", "cleared_n=%d" % night)
+	_accept_emit_feature_progress()
 
 
 func _finalize_run_outcome(is_win: bool) -> void:
@@ -1990,18 +2045,262 @@ func _finalize_run_outcome(is_win: bool) -> void:
 			)
 	if not _refine_clicked and _suite_name in ["acceptance", "full", "meta"]:
 		_record_accept("4.2.8", "skip", "no_refine_this_run")
+	_accept_emit_feature_progress()
+	_accept_finalize_feature_skips(peak)
 	print(
-		"[TestBot] 局次完成 #%d win=%s peak_night=%d suite=%s script_err=%d"
+		"[TestBot] 局次完成 #%d win=%s peak_night=%d suite=%s script_err=%d peak_enemies=%d affix_kinds=%d thorns_hits=%d chests=%d"
 		% [
 			_completed_runs,
 			str(is_win),
 			peak,
 			_suite_name if _suite_name != "" else "-",
 			_script_error_count,
+			_peak_enemies,
+			_seen_affix_ids.size(),
+			_thorns_hits,
+			_chest_kinds_seen.size(),
 		]
 	)
 	if _should_quit_after_runs() and not _sweep_pending_quit:
 		call_deferred("_quit_bot_suite", "max_runs")
+
+
+## 会话级：软上限公式自检（对齐 GDD §6.9 / B2）
+func _accept_soft_caps_once() -> void:
+	if _soft_caps_checked:
+		return
+	_soft_caps_checked = true
+	var caps_raw: Variant = ConfigLoader.get_passives_metadata().get("soft_caps", {})
+	var caps: Dictionary = caps_raw if caps_raw is Dictionary else {}
+	var as_raw: Variant = caps.get("attack_speed", {})
+	var as_cfg: Dictionary = as_raw if as_raw is Dictionary else {}
+	var thr_as: float = float(as_cfg.get("threshold", -1.0))
+	var eff_as: float = float(as_cfg.get("efficiency", 0.5))
+	var thr_ms: float = PassiveSystem.get_soft_cap_threshold("move_speed", -1.0)
+	var thr_exp: float = PassiveSystem.get_soft_cap_threshold("exp", -1.0)
+	var thr_ok: bool = thr_as > 0.0 and thr_ms > 0.0 and thr_exp > 0.0 and not caps.is_empty()
+	var soft_as: float = PassiveSystem.apply_soft_cap(3.0, "attack_speed")
+	var expect_as: float = thr_as + (3.0 - thr_as) * eff_as
+	var formula_ok: bool = thr_ok and is_equal_approx(soft_as, expect_as)
+	var below: float = PassiveSystem.apply_soft_cap(thr_as, "attack_speed")
+	var below_ok: bool = is_equal_approx(below, thr_as)
+	var dr: float = PassiveSystem.get_damage_reduction()
+	var dr_raw: Variant = caps.get("damage_reduction", {})
+	var dr_cfg: Dictionary = dr_raw if dr_raw is Dictionary else {}
+	var dr_cap: float = float(dr_cfg.get("cap", 0.70))
+	var dr_ok: bool = dr <= dr_cap + 0.0001
+	var ok: bool = formula_ok and below_ok and dr_ok
+	_record_accept(
+		"4.3.12",
+		"pass" if ok else "fail",
+		"as_thr=%.2f soft3=%.2f dr=%.3f" % [thr_as, soft_as, dr]
+	)
+
+
+## 会话级：6 词缀表齐全 + 荆棘键存在（精确 ratio/cap 留给 w8 机检）
+func _accept_affix_config_once() -> void:
+	if _affix_cfg_checked:
+		return
+	_affix_cfg_checked = true
+	var expected_ids: Array[String] = ["split", "teleport", "thorns", "swift", "regen", "chain"]
+	var missing: Array[String] = []
+	for id in expected_ids:
+		if ConfigLoader.get_affix(id).is_empty():
+			missing.append(id)
+	var th: Dictionary = ConfigLoader.get_affix("thorns")
+	var ratio: float = float(th.get("melee_reflect_ratio", -1.0))
+	var cap: int = int(th.get("melee_reflect_cap", -1))
+	var thorns_ok: bool = ratio > 0.0 and cap > 0
+	_affix_cfg_ok = missing.is_empty() and thorns_ok
+	if not _affix_cfg_ok:
+		_record_accept(
+			"2.4.2",
+			"fail",
+			"cfg_bad missing=%s ratio=%.2f cap=%d" % [
+				"-".join(missing) if not missing.is_empty() else "-",
+				ratio,
+				cap,
+			]
+		)
+
+
+## 夜开始：教学无全场词缀 / 天灾全场+1（fail 不被后续 pass 抹掉）
+func _accept_affix_night_rules(night: int, world: World) -> void:
+	if world == null or world.enemy_spawner == null:
+		return
+	var rules: Dictionary = ConfigLoader.get_affix_rules()
+	var teaching: int = int(rules.get("teaching_nights_no_affix", 4))
+	var bonus: Array[String] = world.enemy_spawner.get_night_bonus_affixes()
+	if night <= teaching:
+		_record_accept_keep_fail(
+			"2.4.3",
+			"pass" if bonus.is_empty() else "fail",
+			"teach_n=%d bonus=%d" % [night, bonus.size()]
+		)
+		return
+	var calamity_nights: Variant = rules.get("calamity_nights", [10, 15, 20])
+	var is_calamity: bool = false
+	if calamity_nights is Array:
+		for v in calamity_nights:
+			if int(v) == night:
+				is_calamity = true
+				break
+	if is_calamity:
+		var want: int = int(rules.get("calamity_bonus_affixes", 1))
+		var ok: bool = bonus.size() == want
+		_record_accept_keep_fail(
+			"2.4.3",
+			"pass" if ok else "fail",
+			"calamity_n=%d bonus=%d expect=%d" % [night, bonus.size(), want]
+		)
+
+
+## 夜中采样：同屏峰值 + 场上词缀种类；精英夜校验 2~3 词缀
+func _accept_sample_enemies(world: World) -> void:
+	if _suite_name == "" or world == null or world.enemy_pool == null:
+		return
+	var active: Array = world.enemy_pool.get_active()
+	_peak_enemies = maxi(_peak_enemies, active.size())
+	var rules: Dictionary = ConfigLoader.get_affix_rules()
+	var amin: int = int(rules.get("elite_affix_min", 2))
+	var amax: int = int(rules.get("elite_affix_max", 3))
+	for n in active:
+		if not (n is EnemyBase):
+			continue
+		var enemy: EnemyBase = n as EnemyBase
+		if enemy.is_dead():
+			continue
+		for aid in enemy.affix_ids:
+			var sid: String = String(aid)
+			if sid != "":
+				_seen_affix_ids[sid] = true
+		if enemy.is_elite and not _elite_affix_checked:
+			_elite_affix_checked = true
+			var n_aff: int = enemy.affix_ids.size()
+			var ok_elite: bool = n_aff >= amin and n_aff <= amax
+			_record_accept_keep_fail(
+				"2.4.3",
+				"pass" if ok_elite else "fail",
+				"elite_affix=%d expect=%d..%d" % [n_aff, amin, amax]
+			)
+
+
+## pass 不覆盖既有 fail（词缀夜规等多探针项）；fail 仍可打回
+func _record_accept_keep_fail(id: String, status: String, detail: String = "") -> void:
+	if status == "pass" and _accept_fail.has(id):
+		return
+	_record_accept(id, status, detail)
+
+
+func _on_player_damaged_accept(_amount: int) -> void:
+	if _suite_name == "":
+		return
+	if GameState.get_last_hit_source() != "affix_thorns":
+		return
+	var hit: int = GameState.get_last_hit_amount()
+	_thorns_hits += 1
+	_thorns_hit_max = maxi(_thorns_hit_max, hit)
+	var cap: int = int(ConfigLoader.get_affix("thorns").get("melee_reflect_cap", 10))
+	# applied 已含减伤，仍不得高于 raw cap
+	var ok: bool = hit <= cap
+	_record_accept(
+		"2.4.2",
+		"pass" if ok else "fail",
+		"thorns_hit=%d max=%d cap=%d" % [hit, _thorns_hit_max, cap]
+	)
+
+
+func _ensure_chest_hook(world: World) -> void:
+	if _suite_name == "" or world == null or world.pickup_system == null:
+		return
+	if _chest_hooked_world == world:
+		return
+	_disconnect_chest_hook()
+	if not world.pickup_system.chest_opened.is_connected(_on_chest_opened_accept):
+		world.pickup_system.chest_opened.connect(_on_chest_opened_accept)
+	_chest_hooked_world = world
+
+
+func _disconnect_chest_hook() -> void:
+	if _chest_hooked_world != null and is_instance_valid(_chest_hooked_world):
+		var ps: PickupSystem = _chest_hooked_world.pickup_system
+		if ps != null and ps.chest_opened.is_connected(_on_chest_opened_accept):
+			ps.chest_opened.disconnect(_on_chest_opened_accept)
+	_chest_hooked_world = null
+
+
+func _on_chest_opened_accept(kind: String, amount: int, rarity_name: String) -> void:
+	if _suite_name == "":
+		return
+	var k: String = kind if kind != "" else "unknown"
+	_chest_kinds_seen[k] = int(_chest_kinds_seen.get(k, 0)) + 1
+	if k not in ACCEPT_CHEST_KINDS:
+		return
+	_record_accept(
+		"4.5.4",
+		"pass",
+		"kind=%s amount=%d rarity=%s" % [k, amount, rarity_name]
+	)
+
+
+## 同屏峰值门槛：max(底数, max_enemies/4)
+func _enemy_peak_min() -> int:
+	var cap: int = int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
+	return maxi(ACCEPT_ENEMY_PEAK_FLOOR, int(cap / 4))
+
+
+## 有证据即打 pass（可多次覆盖为更新 detail；不覆盖既有 fail；同 detail 由 _record_accept 去重）
+func _accept_emit_feature_progress() -> void:
+	if _seen_affix_ids.size() > 0 and not _accept_fail.has("2.4.2"):
+		var ids: Array[String] = []
+		for k in _seen_affix_ids.keys():
+			ids.append(String(k))
+		ids.sort()
+		var detail: String = "seen=%s" % ",".join(ids)
+		if _thorns_hits > 0:
+			detail += "_thorns_max=%d" % _thorns_hit_max
+		_record_accept("2.4.2", "pass", detail)
+	var peak_min: int = _enemy_peak_min()
+	if _peak_enemies >= peak_min and not _accept_fail.has("4.9.1"):
+		var cap: int = int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
+		_record_accept(
+			"4.9.1",
+			"pass",
+			"peak=%d min=%d max_enemies=%d" % [_peak_enemies, peak_min, cap]
+		)
+
+
+## 局末：未触发项 skip（不覆盖已有 pass/fail）
+func _accept_finalize_feature_skips(peak_night: int) -> void:
+	if not _accept_pass.has("4.5.4") and not _accept_fail.has("4.5.4"):
+		if _chest_kinds_seen.is_empty():
+			_record_accept("4.5.4", "skip", "no_chest_opened")
+		else:
+			var kinds: Array[String] = []
+			for k in _chest_kinds_seen.keys():
+				kinds.append(String(k))
+			kinds.sort()
+			_record_accept("4.5.4", "skip", "no_known_kind=%s" % ",".join(kinds))
+	var peak_min: int = _enemy_peak_min()
+	if not _accept_pass.has("4.9.1") and not _accept_fail.has("4.9.1"):
+		if peak_night >= 8:
+			_record_accept(
+				"4.9.1",
+				"skip",
+				"peak=%d_below_min=%d" % [_peak_enemies, peak_min]
+			)
+		else:
+			_record_accept("4.9.1", "skip", "peak_night=%d" % peak_night)
+	# 2.4.2：仅场上词缀 / 荆棘命中可 pass；配置自检 alone → skip（避免假绿）
+	if not _accept_pass.has("2.4.2") and not _accept_fail.has("2.4.2"):
+		if _affix_cfg_ok:
+			_record_accept("2.4.2", "skip", "cfg_ok_no_field_sample")
+		else:
+			_record_accept("2.4.2", "skip", "no_affix_evidence")
+	elif _thorns_hits <= 0 and _accept_pass.has("2.4.2"):
+		_record_accept("2.4.2", "info", "thorns_hits=0")
+	if not _accept_pass.has("2.4.3") and not _accept_fail.has("2.4.3"):
+		_record_accept("2.4.3", "skip", "no_rule_sample")
 
 
 func _tick_max_night_cutoff(delta: float) -> void:

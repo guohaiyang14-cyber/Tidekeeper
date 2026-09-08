@@ -23,7 +23,10 @@ const SUITE_DEFAULTS: Dictionary = {
 		"max_runs": 3,
 		"unlock_all": false,
 		"runs_per_config": 1,
-		"checklist": ["1.1.1", "1.1.2", "1.2.3", "3.3", "5.2"],
+		"checklist": [
+			"1.1.1", "1.1.2", "1.2.3", "3.3", "5.2",
+			"2.4.2", "2.4.3", "4.3.12", "4.5.4", "4.9.1",
+		],
 	},
 	"crash": {
 		"character": "watcher",
@@ -33,7 +36,7 @@ const SUITE_DEFAULTS: Dictionary = {
 		"max_runs": 3,
 		"unlock_all": false,
 		"runs_per_config": 1,
-		"checklist": ["5.2", "3.3"],
+		"checklist": ["5.2", "3.3", "2.4.2", "4.3.12"],
 	},
 	"full": {
 		"character": "watcher",
@@ -43,7 +46,10 @@ const SUITE_DEFAULTS: Dictionary = {
 		"max_runs": 5,
 		"unlock_all": false,
 		"runs_per_config": 1,
-		"checklist": ["1.1.1", "1.1.2", "3.3", "2.5.3", "4.10.1", "5.2"],
+		"checklist": [
+			"1.1.1", "1.1.2", "3.3", "2.5.3", "4.10.1", "5.2",
+			"2.4.2", "2.4.3", "4.3.12", "4.5.4", "4.9.1",
+		],
 	},
 	"meta": {
 		"character": "cycle",
@@ -53,7 +59,7 @@ const SUITE_DEFAULTS: Dictionary = {
 		"max_runs": 9,
 		"unlock_all": true,
 		"runs_per_config": 1,
-		"checklist": ["4.6.1", "4.6.3", "4.6.5", "4.8.1", "1.2.3"],
+		"checklist": ["4.6.1", "4.6.3", "4.6.5", "4.8.1", "1.2.3", "4.3.12"],
 	},
 	"acceptance": {
 		"character": "watcher",
@@ -66,6 +72,7 @@ const SUITE_DEFAULTS: Dictionary = {
 		"checklist": [
 			"1.1.1", "1.1.2", "1.2.1", "1.2.3", "3.3", "5.2",
 			"4.5.2", "4.5.3", "4.2.8", "2.5.3",
+			"2.4.2", "2.4.3", "4.3.12", "4.5.4", "4.9.1",
 		],
 	},
 }

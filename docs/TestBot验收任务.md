@@ -1,8 +1,8 @@
 # TestBot 验收任务（对齐原型验证验收清单）
 
-> **版本**：v1.0  
+> **版本**：v1.1  
 > **日期**：2026-09-08  
-> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.5+ · [`开发进度总览.md`](开发进度总览.md) · `AGENTS.md`
+> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.6+ · [`开发进度总览.md`](开发进度总览.md) · `AGENTS.md`
 
 ---
 
@@ -22,10 +22,10 @@
 
 | suite | 默认角色 | 难度 | 灯塔 | max_night | max_runs | 主要清单 id |
 |-------|----------|------|------|-----------|----------|-------------|
-| `smoke` | watcher | lighthouse | none | 10 | 3 | 1.1.1 / 1.1.2 / 1.2.3 / 3.3 / 5.2 |
-| `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 |
-| `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 |
-| `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1（解锁覆盖） |
+| `smoke` | watcher | lighthouse | none | 10 | 3 | 1.1.1 / 1.1.2 / 1.2.3 / 3.3 / 5.2 / **2.4.2·2.4.3 / 4.3.12 / 4.5.4 / 4.9.1** |
+| `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 / 2.4.2 / 4.3.12 |
+| `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 |
+| `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.3.12 |
 | `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 |
 
 显式 CLI / 环境变量 **覆盖** suite 默认值。
@@ -101,7 +101,12 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 1.2.1 移速 | `base_move_speed` vs config | 全部 | 手感 |
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
 | 1.2.4 灯塔碰撞 | — | — | 试玩 |
+| 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
+| 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |
+| 4.3.12 软上限 | `soft_caps` 公式自检 + 减伤 ≤cap | smoke+ | — |
+| 4.5.4 宝箱奖励 | `chest_opened` 且 kind∈{tidecoins,heal,evolution,refine_essence} | smoke / full / acceptance | UI；分支表见 pickup 机检 |
+| 4.9.1 同屏峰值 | 活跃敌峰值 ≥ max(100, max_enemies/4) | smoke / full / acceptance | 5.1 帧率 |
 | 5.2 连续 3 局无崩 | ≥3 局 peak≥8 **且** 本会话 `godot.log` 无新增 `SCRIPT ERROR`/`Error at:`；`fail` 可覆盖先前 `pass`；汇总前重算 | crash / acceptance | 硬崩溃仍可能来不及写日志；日志轮转时只重锚定 EOF、不重扫文件头 |
 | 4.5.2 N15 排除反转 | 事件 id | full / acceptance | — |
 | 4.5.3 夹击 | spawner.is_pincer_mode | full / acceptance | — |
