@@ -54,6 +54,13 @@
 ## Debug / TestBot
 
 - `debug.bat`：Debug + TestBot；默认倍速 **×4**（范围 2~10）
+- **验收套件**（对齐 [`docs/TestBot验收任务.md`](docs/TestBot验收任务.md) / 原型验证验收清单）：
+  - 一键：`debug_acceptance.bat`（`--bot-suite=acceptance`）
+  - `--bot-suite=smoke|crash|full|meta|acceptance` 或 `TIDEKEEPER_BOT_SUITE`
+  - `--bot-character=watcher|blacksmith|stargazer|cycle|random`
+  - `--bot-difficulty=lighthouse|watcher|cycle`（`watcher`=守夜人档）
+  - `--bot-max-night=N` / `--bot-max-runs=N`（截断夜次 / 满局退出）
+  - 日志：`[TestBot] ACCEPT id=… status=pass|fail|skip`；汇总 `python tools/check_bot_acceptance.py`
 - 调速：`debug.bat --bot-speed=8`，或环境变量 `TIDEKEEPER_BOT_SPEED`，或游戏内 `[` / `]`
 - 灯塔初始：每局随机（无升级 / 部分 / 全满）；`--bot-lighthouse=none|partial|full|random|cycle|sweep` 或 `TIDEKEEPER_BOT_LIGHTHOUSE`（会话覆盖，不写存档）
   - `cycle`：进程内串行 `none→partial→full` 循环

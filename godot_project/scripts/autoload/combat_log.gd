@@ -598,7 +598,11 @@ func _sample_movement() -> void:
 func _log_map_refresh(night: int) -> void:
 	if not _active or not _cat("map"):
 		return
+	# 与 EnemySpawner 一致：天灾夹击夜 OR 事件潮汐反转（勿只记事件，否则 N15 误报 false）
 	var pincer: bool = EventSystem.is_event_pincer()
+	var world: World = _current_world()
+	if world != null and world.enemy_spawner != null:
+		pincer = world.enemy_spawner.is_pincer_mode()
 	var active_event: String = EventSystem.get_active_event_id()
 	var candidate_n: int = _count_active_enemies()
 	_write_event("map", {

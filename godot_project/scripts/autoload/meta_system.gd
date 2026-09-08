@@ -23,6 +23,8 @@ var _lh_effects_cache: Dictionary = {}
 var _lh_effects_dirty: bool = true
 ## Debug/TestBot 会话覆盖：非 null 时 is_node_purchased / 效果聚合读此表，不落盘
 var _lighthouse_override: Variant = null
+## Debug/TestBot：为 true 时 is_character_unlocked 对配置内角色一律视为已解锁（不写存档）
+var _unlock_all_characters_override: bool = false
 
 
 ## 标记一局正式开始（World._ready 调用）：此后角色/灯塔特性倍率才生效
@@ -65,11 +67,26 @@ func set_active_character(id: String) -> void:
 # 角色解锁
 # ============================================================================
 
+## Debug/TestBot：会话内解锁全部配置角色（meta suite；不写存档）
+func set_unlock_all_characters_override(enabled: bool) -> void:
+	_unlock_all_characters_override = enabled
+
+
+func clear_unlock_all_characters_override() -> void:
+	_unlock_all_characters_override = false
+
+
+func has_unlock_all_characters_override() -> bool:
+	return _unlock_all_characters_override
+
+
 ## 角色是否已解锁（解锁条件：always / 累计 runs 局 / 通关 night 夜）
 func is_character_unlocked(id: String) -> bool:
 	var data: Dictionary = ConfigLoader.get_character(id)
 	if data.is_empty():
 		return false
+	if _unlock_all_characters_override:
+		return true
 	var unlock: Dictionary = data.get("unlock", {})
 	match String(unlock.get("type", "always")):
 		"always":
