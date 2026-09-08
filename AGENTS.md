@@ -9,7 +9,8 @@
 3. **重构代码** → 阅读 [`tools/SKILL_refactor-code.md`](tools/SKILL_refactor-code.md)（仍须遵守主 Skill 红线）
 4. **代码审查** → 阅读 [`tools/SKILL_code-review.md`](tools/SKILL_code-review.md)
 5. 设计口径：`docs/《潮汐守夜人》游戏设计文档.md`（v0.3.6）
-6. 周任务：`docs/单人开发任务拆分表_20周.md`
+6. 周任务：`docs/单人开发任务拆分表_20周.md`（历史基线）
+7. 收口与分期：`docs/后续开发计划_MVP收口与分期.md`；进度快照：`docs/开发进度总览.md`
 
 ## Skill 一览
 
