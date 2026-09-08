@@ -301,22 +301,26 @@ func _test_quota_preserved_when_full() -> void:
 	spawner.clear_all()
 	GameState.player_health = GameState.player_max_health
 	var def: Dictionary = ConfigLoader.get_enemy("small_goblin")
-	# 用远距小水鬼填满对象池（避免残留行为在原点接触/自爆）
+	# 填满同屏上限（非整池）：EnemyPool 含 headroom 供分裂，刷怪受 max_enemies 约束
 	var fill_i: int = 0
-	while enemy_pool.available_count() > 0:
+	var cap: int = spawner.max_enemies
+	while enemy_pool.active_count() < cap and enemy_pool.available_count() > 0:
 		var filler: EnemyBase = enemy_pool.acquire() as EnemyBase
 		if filler == null:
 			break
 		filler.configure(def, 1)
 		filler.spawn_at(player.global_position + Vector2(2000.0 + float(fill_i) * 40.0, 0.0), player)
 		fill_i += 1
-	_assert(enemy_pool.available_count() == 0, "对象池已填满 available=0")
+	_assert(
+		enemy_pool.active_count() >= cap,
+		"同屏上限已满 active=%d（cap=%d）" % [enemy_pool.active_count(), cap]
+	)
 	spawner.start_night(1)
 	var rem0: int = spawner.get_remaining()
 	await _run_frames(_opening_grace_frames() + 30)
 	var rem1: int = spawner.get_remaining()
-	_assert(rem0 > 0 and rem1 == rem0, "池满时配额不变 (%d→%d)" % [rem0, rem1])
-	# 腾出一个名额后应能刷出并扣配额
+	_assert(rem0 > 0 and rem1 == rem0, "同屏满时配额不变 (%d→%d)" % [rem0, rem1])
+	# 腾出一个同屏名额后应能刷出并扣配额
 	var actives: Array[Node] = enemy_pool.get_active()
 	if not actives.is_empty():
 		enemy_pool.release(actives[0])

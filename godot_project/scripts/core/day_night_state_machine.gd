@@ -121,12 +121,12 @@ func _set_phase(new_phase: Phase) -> void:
 	phase_changed.emit(new_phase)
 
 
-## 根据夜次计算时长（§5.1）
-func _get_night_duration(night: int) -> float:
+## 根据夜次计算时长（§5.1）；静态入口供 EnemySpawner 等共用，避免双份常量漂移
+static func duration_for_night(night: int) -> float:
 	# 第 20 夜 = 终局
 	if night == 20:
 		return NIGHT_DURATION_FINAL
-	# 第 10/15/20 夜 = 天灾夜
+	# 第 10/15 夜 = 天灾夜（第 20 夜已在上方按终局时长）
 	if night == 10 or night == 15:
 		return NIGHT_DURATION_CALAMITY
 	# 第 5 夜 = 精英夜
@@ -134,6 +134,11 @@ func _get_night_duration(night: int) -> float:
 		return NIGHT_DURATION_ELITE
 	# 其他 = 常规
 	return NIGHT_DURATION_NORMAL
+
+
+## 实例包装（机检 / 内部调用）
+func _get_night_duration(night: int) -> float:
+	return duration_for_night(night)
 
 
 ## 获取夜次类型标签（调试/UI 用）

@@ -1,8 +1,8 @@
 # ============================================================================
 # ObjectPool — 对象池基类（W1 agent 生成初稿）
 # 职责：预分配节点实例，运行时 acquire/release，禁止运行时 instantiate
-# 红线：运行时禁止 instantiate（SKILL.md §2.3），必须走对象池
-# 用法：子类继承本类，设置 scene_class，调用 _init_pool() 预分配
+# 红线：运行时禁止业务路径直接 instantiate（走对象池）；拾取池软扩容例外见 SKILL.md §2.3
+# 用法：子类继承本类，设置 scene，调用 _init_pool() 预分配
 #       pool.acquire() 取节点，pool.release(node) 还节点
 # ============================================================================
 class_name ObjectPool
@@ -133,7 +133,7 @@ func release_all() -> void:
 		release(node)
 
 
-## 扩容（仅在极端情况下使用，正常应预分配足够）
+## 扩容（仅拾取池软扩容应急；见 SKILL.md §2.3 例外；正常应预分配足够）
 func expand(extra: int) -> void:
 	if scene == null:
 		return

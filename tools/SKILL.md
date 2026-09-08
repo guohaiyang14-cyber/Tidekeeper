@@ -63,7 +63,12 @@ Main
 - 预分配：场景加载时 `preload` + `instantiate` 填充池
 - 获取：`pool.acquire()` → 激活 + 重置状态
 - 回收：`pool.release(node)` → 失活 + 移出场景树
-- **红线：运行时禁止 `instantiate`，必须走对象池**
+- **红线：运行时禁止业务路径直接 `instantiate`，必须走对象池**
+- **唯一例外（拾取池软扩容）**：`CoinPool` / `PickupPool` 在空闲耗尽时可经 `ObjectPool.soft_expand_toward` → `expand` 再 `instantiate`，且必须同时满足：
+  1. 仅经验珠 / 潮币池（敌人 / 弹道 / 粒子 / 宝箱等禁止热路径 expand）
+  2. 有硬顶：`pickup_hard_cap()`（`max(max_enemies×6, 2100)`，不随 `pool_size` 抬升）
+  3. 扩出的节点先入池再 `acquire`，业务侧仍只调 `acquire`/`release`
+  4. 触顶后返回 null，由 `PickupSystem` 池压腾槽 / 告警兜底——不得无限 expand
 
 ### 2.4 碰撞（不用 Godot Physics2D）
 

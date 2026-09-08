@@ -35,7 +35,7 @@ Task Progress:
 
 | 检查 | 不合格示例 |
 |------|------------|
-| 运行时实例化 | 战斗/刷怪/弹道路径直接 `instantiate`（未走池） |
+| 运行时实例化 | 战斗/刷怪/弹道路径直接 `instantiate`（未走池）；拾取池在硬顶内的 `soft_expand` 为例外（见主 Skill §2.3） |
 | 物理主路径 | 用 Physics2D 做海量敌我碰撞，绕过 `SpatialHash` |
 | 经验表 | 手改 `config/exp_table.json` |
 | MVP 范围 | 引入侵蚀 / 诅咒契约 / 无尽 / 每日挑战 / 精炼 III 玩法代码 |

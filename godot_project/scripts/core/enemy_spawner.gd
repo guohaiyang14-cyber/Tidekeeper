@@ -29,12 +29,6 @@ const IMPLEMENTED_BEHAVIORS: Array[String] = [
 	"damage_share",
 ]
 
-# 夜晚时长常量（镜像 SKILL.md §5.1，供密度曲线分段；与 DayNightStateMachine 保持一致）
-const NIGHT_DURATION_NORMAL: float = 45.0
-const NIGHT_DURATION_ELITE: float = 60.0
-const NIGHT_DURATION_CALAMITY: float = 90.0
-const NIGHT_DURATION_FINAL: float = 120.0
-
 # 注入引用
 var enemy_pool: ObjectPool
 var target: Node2D
@@ -46,7 +40,8 @@ var _spawning: bool = false
 var _spawn_timer: float = 0.0
 var _remaining: int = 0
 var _elapsed: float = 0.0
-var _night_duration: float = NIGHT_DURATION_NORMAL
+## 夜长单一来源：DayNightStateMachine（SKILL.md §5.1）
+var _night_duration: float = DayNightStateMachine.NIGHT_DURATION_NORMAL
 ## 本夜已刷出的 floor 补刷数（预算耗尽或 even 进度超前时的密度维护）
 var _floor_refills_used: int = 0
 ## 本夜有经验预算总量（含 redundancy；与 _remaining 起点一致）
@@ -629,12 +624,6 @@ func get_night_bonus_affixes() -> Array[String]:
 	return _night_bonus_affixes
 
 
-## 夜晚时长（镜像 DayNightStateMachine §5.1）
+## 夜晚时长（委托 DayNightStateMachine.duration_for_night，§5.1）
 func _get_night_duration(night: int) -> float:
-	if night == 20:
-		return NIGHT_DURATION_FINAL
-	if night == 10 or night == 15:
-		return NIGHT_DURATION_CALAMITY
-	if night == 5:
-		return NIGHT_DURATION_ELITE
-	return NIGHT_DURATION_NORMAL
+	return DayNightStateMachine.duration_for_night(night)

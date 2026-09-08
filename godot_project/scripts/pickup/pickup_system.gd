@@ -21,17 +21,25 @@ signal exp_collected(amount: int)
 ## 宝箱开启信号（kind / amount / rarity_name）
 signal chest_opened(kind: String, amount: int, rarity_name: String)
 
-## 对象池引用（主场景 @onready；测试可用 bind()）
-@onready var _pool: ObjectPool = get_node_or_null("../PickupPool") as ObjectPool
+## 对象池引用（主场景同级 `$`；缺失时 null，测试可用 bind() 注入）
+@onready var _pool: ObjectPool = (
+	$"../PickupPool" as ObjectPool if has_node("../PickupPool") else null
+)
 
 ## 潮币池引用（W4 商店闭环）
-@onready var _coin_pool: ObjectPool = get_node_or_null("../CoinPool") as ObjectPool
+@onready var _coin_pool: ObjectPool = (
+	$"../CoinPool" as ObjectPool if has_node("../CoinPool") else null
+)
 
 ## 宝箱池引用（夜场宝箱 MVP）
-@onready var _chest_pool: ObjectPool = get_node_or_null("../ChestPool") as ObjectPool
+@onready var _chest_pool: ObjectPool = (
+	$"../ChestPool" as ObjectPool if has_node("../ChestPool") else null
+)
 
-## 玩家引用（主场景 @onready；测试可用 bind()）
-@onready var _player: Player = get_node_or_null("../Player") as Player
+## 玩家引用（主场景同级 `$`；测试可用 bind()）
+@onready var _player: Player = (
+	$"../Player" as Player if has_node("../Player") else null
+)
 
 ## 活跃经验珠列表（用于每帧更新）
 var _active_gems: Array[ExpGem] = []
