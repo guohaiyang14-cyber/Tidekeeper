@@ -4,7 +4,8 @@
     "doc_source": "主设计文档 v0.3.4 §5.5 Boss + §8.3 天灾夜规则 + §9.4 MVP 底数表",
     "mvp_scope": "3 个 Boss，仅出现在天灾夜（第 10/15/20 夜）",
     "rule": "第 5 夜不是 Boss 夜（巨钳王仅为精英夜命名精英）",
-    "difficulty_formula": "Boss 不走 §8.2 公式，base_health 直接为表中数值",
+    "difficulty_formula": "Boss 不走 §8.2 夜数公式，base_health 为表底数；运行时仍乘 DifficultySystem 档位×教学（与杂兵同口径）",
+    "b5_n15_note": "2026-09-16 CombatLog：N15 死亡占比过高；下调执政官潮汐波伤害/间隔（表底 HP 不变）",
     "evolution_drop": "Boss 必掉 1 个进化道具（第 15/20 夜额外见 §6.5）；不计入当夜精英上限",
     "stardust_drop": {
       "10": 1,
@@ -76,9 +77,9 @@
       "additional_rule": "强制「潮汐夹击」（两侧夹击；不含宝箱翻倍）；封测可叠侵蚀",
       "teleport_interval": 5.0,
       "teleport_range": 160.0,
-      "wave_interval": 7.0,
-      "wave_damage": 28,
-      "wave_initial_delay": 2.0
+      "wave_interval": 8.0,
+      "wave_damage": 22,
+      "wave_initial_delay": 2.5
     },
     "devouring_star": {
       "id": "devouring_star",

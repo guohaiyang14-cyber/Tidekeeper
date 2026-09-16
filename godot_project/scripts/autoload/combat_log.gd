@@ -470,6 +470,7 @@ func _begin_run(character: String, seed_value: int) -> void:
 		"character": character,
 		"seed": str(seed_value),
 		"max_hp": GameState.player_max_health,
+		"difficulty_tier": DifficultySystem.get_tier(),
 		"bot": TestBot.is_active() if TestBot != null else false,
 		"started_at": Time.get_datetime_string_from_unix_time(_run_started_unix, true),
 	})

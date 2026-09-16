@@ -28,8 +28,8 @@
 | `smoke` | watcher | lighthouse | none | 10 | 3 | 1.1.1 / 1.1.2 / 1.2.3 / 3.3 / 5.2 / **2.4.2·2.4.3 / 4.3.12 / 4.5.4 / 4.9.1** |
 | `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 / 2.4.2 / 4.3.12 |
 | `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 |
-| `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.3.12 |
-| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 |
+| `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.8.6 / 4.3.12 |
+| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 |
 
 显式 CLI / 环境变量 **覆盖** suite 默认值。
 
@@ -105,6 +105,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
 | 1.2.4 灯塔碰撞 | 采样距圆心 ≥ min（开局推出，不改写位） | smoke / full / acceptance | — |
 | 4.8 难度默认 | — | — | 人类默认 **watcher**（A2）；Bot suite 仍可强刷 `lighthouse`（硬档回归，与人类默认解耦） |
+| 4.8.6 Boss 档位倍率 | 采样 Boss `max_health` vs 表底×档位 | smoke / full / meta / acceptance | — |
 | 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |

@@ -63,6 +63,7 @@ def analyze_run(row: Dict[str, Any], path: Path) -> Dict[str, Any]:
         "index_outcome": str(row.get("outcome") or ""),
         "bot": False,
         "character": "",
+        "difficulty_tier": "",
         "seed": None,
         "started_at": "",
         "outcome": "?",
@@ -113,6 +114,7 @@ def analyze_run(row: Dict[str, Any], path: Path) -> Dict[str, Any]:
         if cat == "run" and action == "start":
             sm["bot"] = bool(data.get("bot"))
             sm["character"] = str(data.get("character", ""))
+            sm["difficulty_tier"] = str(data.get("difficulty_tier", "") or "")
             sm["seed"] = data.get("seed")
             sm["started_at"] = str(data.get("started_at", ""))
             sm["max_hp_start"] = int(data.get("max_hp", 0) or 0)
@@ -429,7 +431,7 @@ def print_report(
             print(f"\n### {s['id']}")
             print(
                 f"  outcome={s['outcome']} bot={s['bot']} char={s['character']} "
-                f"seed={fmt_seed(s['seed'])}"
+                f"tier={s.get('difficulty_tier') or '-'} seed={fmt_seed(s['seed'])}"
             )
             print(
                 f"  night={s['max_night']} lv_end={s['level_end']} (run_end) "

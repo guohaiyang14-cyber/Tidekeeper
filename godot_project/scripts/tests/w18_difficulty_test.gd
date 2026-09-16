@@ -6,6 +6,7 @@
 #   W18-3 切换档位 = 灯塔 / 守夜人倍率
 #   W18-4 教学夜（1~6 夜宽容；夜7 起常规；档位×教学叠加）
 #   W18-5 enemy_base.configure 实际施加倍率（灯塔/守夜人/教学夜 三种口径）
+#   W18-5b Boss configure_boss 亦乘档位（不走夜数公式；B5 / A2）
 #   W18-6 Boss 登场提示（教学宽容开启）
 # 运行：godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/w18_difficulty_test.tscn
 #       退出码 0=全过 / 1=有失败
@@ -30,6 +31,7 @@ func _ready() -> void:
 	_test_watcher_tier()
 	_test_teaching_night()
 	_test_configure_scaling()
+	_test_boss_configure_scaling()
 	_test_boss_prompt()
 	_test_tier_persistence()
 	print("------------------------------------------------------------")
@@ -147,6 +149,38 @@ func _test_configure_scaling() -> void:
 	var expect_t: int = int(roundi(base_hp * region_coeff * 0.7 * 0.6 * (1.0 + hp_per_night * 2.0) * (1.0 + hp_per_5 * floor(2.0 / 5.0))))
 	_assert(e_t.max_health == expect_t, "守夜人 教学夜2 血量=%d (期望 %d)" % [e_t.max_health, expect_t])
 	e_t.free()
+	DifficultySystem.reset_tier()
+
+
+# ============================================================================
+# W18-5b Boss configure_boss 乘难度档位（表底 × 档位；不走 §8.2 夜数公式）
+# ============================================================================
+func _test_boss_configure_scaling() -> void:
+	var def: Dictionary = ConfigLoader.get_boss("tide_archon")
+	_assert(not def.is_empty(), "存在 tide_archon 配置")
+	var base_hp: float = float(def.get("base_health", 4200))
+	var base_wave: float = float(def.get("wave_damage", 22))
+	var base_contact: float = float(def.get("contact_damage", 24))
+	GameState.current_night = 15
+
+	DifficultySystem.set_tier("lighthouse")
+	var b_l: EnemyBase = EnemyBase.new()
+	b_l.configure_boss(def)
+	_assert(b_l.max_health == int(roundi(base_hp * 1.0)), "灯塔 Boss 血量=表底 (%d)" % b_l.max_health)
+	_assert(b_l.contact_damage == int(roundi(base_contact * 1.0)), "灯塔 Boss 接触伤=表底")
+	_assert(int(b_l._boss_data.get("wave_damage", -1)) == int(roundi(base_wave * 1.0)), "灯塔 潮汐波伤=表底")
+	b_l.free()
+
+	DifficultySystem.set_tier("watcher")
+	var b_w: EnemyBase = EnemyBase.new()
+	b_w.configure_boss(def)
+	var expect_hp: int = int(roundi(base_hp * 0.7))
+	var expect_wave: int = int(roundi(base_wave * 0.7))
+	var expect_contact: int = int(roundi(base_contact * 0.7))
+	_assert(b_w.max_health == expect_hp, "守夜人 Boss 血量=%d (期望 %d)" % [b_w.max_health, expect_hp])
+	_assert(b_w.contact_damage == expect_contact, "守夜人 Boss 接触伤=%d (期望 %d)" % [b_w.contact_damage, expect_contact])
+	_assert(int(b_w._boss_data.get("wave_damage", -1)) == expect_wave, "守夜人 潮汐波伤=%d (期望 %d)" % [int(b_w._boss_data.get("wave_damage", -1)), expect_wave])
+	b_w.free()
 	DifficultySystem.reset_tier()
 
 

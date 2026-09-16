@@ -173,6 +173,7 @@ var _soft_caps_checked: bool = false
 var _affix_cfg_checked: bool = false
 var _affix_cfg_ok: bool = false
 var _elite_affix_checked: bool = false
+var _boss_tier_checked: bool = false
 var _chest_hooked_world: World = null
 var _peak_enemies: int = 0
 var _seen_affix_ids: Dictionary = {}
@@ -213,6 +214,7 @@ func _ready() -> void:
 		_affix_cfg_checked = false
 		_affix_cfg_ok = false
 		_elite_affix_checked = false
+		_boss_tier_checked = false
 		_peak_enemies = 0
 		_seen_affix_ids.clear()
 		_thorns_hits = 0
@@ -580,6 +582,7 @@ func _prepare_new_run_meta() -> void:
 	_run_outcome_recorded = false
 	_serial_advanced_for_run = false
 	_elite_affix_checked = false
+	_boss_tier_checked = false
 	if _unlock_all_chars:
 		MetaSystem.set_unlock_all_characters_override(true)
 	_apply_run_difficulty()
@@ -2281,6 +2284,32 @@ func _accept_sample_enemies(world: World) -> void:
 				"pass" if ok_elite else "fail",
 				"elite_affix=%d expect=%d..%d" % [n_aff, amin, amax]
 			)
+		if enemy.is_boss and not _boss_tier_checked:
+			_accept_boss_tier_scaling(enemy)
+
+
+## 4.8.6：Boss 血量 = 表底 × DifficultySystem 档位（局内采样）
+func _accept_boss_tier_scaling(enemy: EnemyBase) -> void:
+	_boss_tier_checked = true
+	var boss_def: Dictionary = ConfigLoader.get_boss(enemy.enemy_id)
+	if boss_def.is_empty():
+		_record_accept("4.8.6", "fail", "unknown_boss=%s" % enemy.enemy_id)
+		return
+	var base_hp: float = float(boss_def.get("base_health", 0))
+	var night_value: int = enemy.night if enemy.night > 0 else GameState.current_night
+	var expect: int = maxi(1, int(roundi(base_hp * DifficultySystem.enemy_hp_multiplier(night_value))))
+	var ok: bool = enemy.max_health == expect
+	_record_accept(
+		"4.8.6",
+		"pass" if ok else "fail",
+		"id=%s hp=%d expect=%d tier=%s n=%d" % [
+			enemy.enemy_id,
+			enemy.max_health,
+			expect,
+			DifficultySystem.get_tier(),
+			night_value,
+		]
+	)
 
 
 ## pass 不覆盖既有 fail（词缀夜规等多探针项）；fail 仍可打回
@@ -2397,6 +2426,8 @@ func _accept_finalize_feature_skips(peak_night: int) -> void:
 			_record_accept("2.4.2", "skip", "no_affix_evidence")
 	elif _thorns_hits <= 0 and _accept_pass.has("2.4.2"):
 		_record_accept("2.4.2", "info", "thorns_hits=0")
+	if not _accept_pass.has("4.8.6") and not _accept_fail.has("4.8.6"):
+		_record_accept("4.8.6", "skip", "no_boss_sampled")
 	if not _accept_pass.has("2.4.3") and not _accept_fail.has("2.4.3"):
 		_record_accept("2.4.3", "skip", "no_rule_sample")
 

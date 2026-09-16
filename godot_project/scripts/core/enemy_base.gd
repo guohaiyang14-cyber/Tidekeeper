@@ -281,7 +281,7 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	_apply_visual(1.0)
 
 
-## Boss 配置（W9）：不走 §8.2 难度缩放；挂载 BossBrain
+## Boss 配置（W9）：不走 §8.2 夜数公式；仍乘 W18 难度档位（守夜人/教学）；挂载 BossBrain
 func configure_boss(boss_data: Dictionary) -> void:
 	enemy_id = boss_data.get("id", "")
 	prototype_id = enemy_id
@@ -291,39 +291,47 @@ func configure_boss(boss_data: Dictionary) -> void:
 	is_boss = true
 	is_elite = false
 	is_floor_refill = false
-	_boss_data = boss_data
 	night = GameState.current_night
-	var bexp: int = int(boss_data.get("base_exp", 50))
+	var night_value: int = night if night > 0 else int(boss_data.get("night", 1))
+	var tier_hp: float = DifficultySystem.enemy_hp_multiplier(night_value)
+	var tier_dmg: float = DifficultySystem.enemy_damage_multiplier(night_value)
+	# 运行时副本：技能表伤随档位缩放，避免改写 ConfigLoader 缓存
+	var scaled: Dictionary = boss_data.duplicate(true)
+	for dmg_key: String in ["barrage_damage", "wave_damage", "ranged_projectile_damage", "self_destruct_damage"]:
+		if scaled.has(dmg_key):
+			scaled[dmg_key] = int(roundi(float(scaled[dmg_key]) * tier_dmg))
+	_boss_data = scaled
+	var bexp: int = int(scaled.get("base_exp", 50))
 	base_exp = bexp
-	max_health = int(boss_data.get("base_health", 1000))
-	contact_damage = int(boss_data.get("contact_damage", 20))
-	var coin_mult: float = float(boss_data.get("coin_drop_mult", 2.0))
+	max_health = maxi(1, int(roundi(float(scaled.get("base_health", 1000)) * tier_hp)))
+	contact_damage = maxi(0, int(roundi(float(scaled.get("contact_damage", 20)) * tier_dmg)))
+	var coin_mult: float = float(scaled.get("coin_drop_mult", 2.0))
 	coin_drop = maxi(1, roundi(float(bexp) * coin_mult))
 	health = max_health
-	move_speed = float(boss_data.get("move_speed", 40.0))
-	contact_radius = float(boss_data.get("contact_radius", 30.0))
-	_fire_interval = float(boss_data.get("fire_interval", 2.0))
-	_ranged_damage = int(boss_data.get("ranged_projectile_damage", 0))
-	_explode_radius = float(boss_data.get("explode_radius", 40.0))
-	_self_destruct_damage = int(boss_data.get("self_destruct_damage", 0))
-	_burrow_duration = float(boss_data.get("burrow_duration", 3.0))
+	move_speed = float(scaled.get("move_speed", 40.0))
+	contact_radius = float(scaled.get("contact_radius", 30.0))
+	_fire_interval = float(scaled.get("fire_interval", 2.0))
+	_ranged_damage = int(scaled.get("ranged_projectile_damage", 0))
+	_explode_radius = float(scaled.get("explode_radius", 40.0))
+	_self_destruct_damage = int(scaled.get("self_destruct_damage", 0))
+	_burrow_duration = float(scaled.get("burrow_duration", 3.0))
 	var combat: Dictionary = ConfigLoader.get_enemy_combat()
-	_contact_interval = float(boss_data.get("contact_interval", combat.get("contact_interval", 0.5)))
-	_burrow_cooldown_cfg = float(boss_data.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
-	_burrow_initial_delay = float(boss_data.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
-	_burrow_emerge_behind = float(boss_data.get("burrow_emerge_behind", combat.get("burrow_emerge_behind", 40.0)))
-	_burrow_move_detect_speed_sq = float(boss_data.get(
+	_contact_interval = float(scaled.get("contact_interval", combat.get("contact_interval", 0.5)))
+	_burrow_cooldown_cfg = float(scaled.get("burrow_cooldown", combat.get("burrow_cooldown", 2.0)))
+	_burrow_initial_delay = float(scaled.get("burrow_initial_delay", combat.get("burrow_initial_delay", 1.0)))
+	_burrow_emerge_behind = float(scaled.get("burrow_emerge_behind", combat.get("burrow_emerge_behind", 40.0)))
+	_burrow_move_detect_speed_sq = float(scaled.get(
 		"burrow_move_detect_speed_sq", combat.get("burrow_move_detect_speed_sq", 40.0)
 	))
 	_burrow_cooldown = _burrow_initial_delay
 	affix_ids.clear()
 	affix_state.clear()
-	_visual_size = float(boss_data.get("visual_size", 48.0))
-	_tint = _parse_tint(boss_data.get("tint", [0.7, 0.2, 0.8]))
+	_visual_size = float(scaled.get("visual_size", 48.0))
+	_tint = _parse_tint(scaled.get("tint", [0.7, 0.2, 0.8]))
 	_apply_visual(1.0)
 	_boss_brain = BossBrain.create(behavior_type)
 	if _boss_brain != null:
-		_boss_brain.setup(self, boss_data)
+		_boss_brain.setup(self, scaled)
 
 
 func apply_affixes(ids: Array[String]) -> void:

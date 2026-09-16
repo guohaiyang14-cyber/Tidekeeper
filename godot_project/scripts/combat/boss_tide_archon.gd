@@ -11,7 +11,7 @@ var _wave_cd: float = 0.0
 
 func _on_setup() -> void:
 	_teleport_cd = get_float("teleport_interval", 5.0)
-	_wave_cd = get_float("wave_initial_delay", 2.0)
+	_wave_cd = get_float("wave_initial_delay", 2.5)
 
 
 func _tick(delta: float, player_pos: Vector2, do_move: bool) -> void:
@@ -25,7 +25,7 @@ func _tick(delta: float, player_pos: Vector2, do_move: bool) -> void:
 
 	_wave_cd -= delta
 	if _wave_cd <= 0.0:
-		_wave_cd = get_float("wave_interval", 7.0)
+		_wave_cd = get_float("wave_interval", 8.0)
 		_do_tidal_wave()
 
 
@@ -37,7 +37,7 @@ func _do_teleport() -> void:
 
 
 func _do_tidal_wave() -> void:
-	var dmg: int = get_int("wave_damage", 28)
+	var dmg: int = get_int("wave_damage", 22)
 	var aura: float = _lighthouse_aura_radius()
 	var light_pos: Vector2 = host.get_lighthouse_position()
 	if host.target == null:
