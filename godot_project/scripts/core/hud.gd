@@ -10,6 +10,8 @@
 # ============================================================================
 extends Control
 
+const _UI := preload("res://scripts/ui/ui_chrome.gd")
+
 const VIEW_W: float = 1280.0
 const VIEW_H: float = 720.0
 
@@ -52,9 +54,9 @@ func notify_chest(kind: String, amount: int, rarity_name: String) -> void:
 	if _toast_label == null:
 		return
 	if kind == "none" or amount <= 0:
-		_toast_label.text = "宝箱（%s）· 挣扎中未发奖" % rarity_name
+		_toast_label.text = LanguageSystem.localizef("ui.hud.chest_toast_struggle", [rarity_name])
 	else:
-		_toast_label.text = "宝箱（%s）· %s ×%d" % [rarity_name, kind, amount]
+		_toast_label.text = LanguageSystem.localizef("ui.hud.chest_toast", [rarity_name, kind, amount])
 	_toast_label.visible = true
 	_toast_left = 2.2
 
@@ -284,11 +286,14 @@ func _rebuild_slots(box: HBoxContainer, items: Array[String]) -> void:
 	for c in box.get_children():
 		box.remove_child(c)
 		c.queue_free()
+	var chip_style: StyleBoxFlat = _UI.chip_style()
 	for it in items:
 		var chip := PanelContainer.new()
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_theme_stylebox_override("panel", chip_style)
 		var lbl := Label.new()
 		lbl.text = it
-		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
 		chip.add_child(lbl)
 		box.add_child(chip)

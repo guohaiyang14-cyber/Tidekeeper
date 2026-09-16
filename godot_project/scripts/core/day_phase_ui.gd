@@ -1,17 +1,17 @@
 # ============================================================================
-# DayPhaseUI — 抉择之昼（白昼选择页面）视觉框架（W4 雏形）
-# 职责：夜晚结束进入「昼」时显示明确的昼阶段框架（暗色背景 + 标题 + 夜数副标题
-#        + 操作提示），让玩家清晰感知「已进入白昼选择页面」。
-# 设计：技术选型.md —— DayPhaseUI = 抉择之昼（三选一/商店/事件）。
-# 红线：本节点只负责昼阶段的视觉框架与提示；商店内容由 ShopUI（兄弟节点，
-#       在场景树中位于本节点之后，渲染在上层）承载，不直接改 GameState/槽位。
-# 说明：背景 mouse_filter=IGNORE，避免拦截上层 ShopUI 按钮点击与玩家移动输入。
+# DayPhaseUI — 抉择之昼视觉框架（W4 + A6 事件卡）
+# 职责：夜晚结束进入「昼」时显示暗色背景 + 标题 + 夜数副标题 + 事件卡 + 操作提示。
+# 红线：只负责昼阶段视觉；商店由 ShopUI 承载；不直接改 GameState。
 # ============================================================================
 class_name DayPhaseUI
 extends Control
 
+const _UI := preload("res://scripts/ui/ui_chrome.gd")
+
 var _title: Label
 var _subtitle: Label
+var _event_panel: Panel
+var _event_title: Label
 var _event_label: Label
 var _hint: Label
 
@@ -26,7 +26,6 @@ func _ready() -> void:
 
 
 func _build_frame() -> void:
-	# 半透明暗色背景，明确「进入昼」的模式切换
 	var backdrop := ColorRect.new()
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.color = Color(0.03, 0.05, 0.12, 0.55)
@@ -38,7 +37,7 @@ func _build_frame() -> void:
 	_title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	_title.offset_top = 28.0
 	_title.offset_bottom = 80.0
-	_title.add_theme_font_size_override("font_size", 36)
+	_title.add_theme_font_size_override("font_size", _UI.FONT_TITLE)
 	_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.7))
 	add_child(_title)
 
@@ -51,16 +50,35 @@ func _build_frame() -> void:
 	_subtitle.add_theme_color_override("font_color", Color(0.75, 0.82, 0.95))
 	add_child(_subtitle)
 
-	# 事件卡提示（W14：抉择之昼抽到的事件卡，无事件时隐藏）
+	_event_panel = _UI.make_panel(_UI.accent_panel_style())
+	_event_panel.name = "EventCard"
+	_event_panel.position = Vector2(_UI.VIEW_W * 0.5 - 280.0, 128.0)
+	_event_panel.size = Vector2(560.0, 72.0)
+	_event_panel.visible = false
+	_event_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_event_panel)
+
+	var ev_box := VBoxContainer.new()
+	ev_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ev_box.offset_left = 16.0
+	ev_box.offset_right = -16.0
+	ev_box.offset_top = 8.0
+	ev_box.offset_bottom = -8.0
+	ev_box.add_theme_constant_override("separation", 2)
+	_event_panel.add_child(ev_box)
+
+	_event_title = Label.new()
+	_event_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_event_title.add_theme_font_size_override("font_size", 14)
+	_event_title.add_theme_color_override("font_color", Color(0.70, 0.90, 0.82))
+	ev_box.add_child(_event_title)
+
 	_event_label = Label.new()
 	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_event_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_event_label.offset_top = 126.0
-	_event_label.offset_bottom = 156.0
 	_event_label.add_theme_font_size_override("font_size", 22)
-	_event_label.add_theme_color_override("font_color", Color(0.65, 0.95, 0.85))
-	_event_label.visible = false
-	add_child(_event_label)
+	_event_label.add_theme_color_override("font_color", Color(0.85, 1.0, 0.92))
+	_event_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ev_box.add_child(_event_label)
 
 	_hint = Label.new()
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -78,6 +96,8 @@ func _refresh_localized_static() -> void:
 		_title.text = LanguageSystem.localize("ui.day.title")
 	if _hint != null:
 		_hint.text = LanguageSystem.localize("ui.day.hint")
+	if _event_title != null:
+		_event_title.text = LanguageSystem.localize("ui.day.event_title")
 
 
 func _on_language_changed(_lang: String) -> void:
@@ -91,15 +111,14 @@ func enter_day(night: int, event_name: String = "") -> void:
 			_subtitle.text = LanguageSystem.localizef("ui.day.subtitle_rest", [night])
 		else:
 			_subtitle.text = LanguageSystem.localizef("ui.day.subtitle", [night])
-	if _event_label != null:
+	if _event_panel != null and _event_label != null:
 		if event_name != "":
-			_event_label.text = LanguageSystem.localizef("ui.day.event", [event_name])
-			_event_label.visible = true
+			_event_label.text = event_name
+			_event_panel.visible = true
 		else:
-			_event_label.visible = false
+			_event_panel.visible = false
 	visible = true
 
 
-## 离开昼（跳过 / 游戏结束 / 通关）
 func exit_day() -> void:
 	visible = false

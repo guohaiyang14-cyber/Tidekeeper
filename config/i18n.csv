@@ -10,11 +10,43 @@ ui.shop.retire_confirm_title,确认提前收工？,Confirm early retire?
 ui.shop.retire_confirm_body,将按当前进度结算星尘并结束本局（非通关）。,Settle stardust by progress and end this run (not a clear).
 ui.shop.retire_confirm_ok,点亮信号,Light Signal
 ui.shop.retire_confirm_cancel,取消,Cancel
+ui.shop.kind_weapon,武器,Weapon
+ui.shop.kind_passive,被动,Passive
+ui.shop.item_row,%s · %s  (潮币 %d),%s · %s  (Coins %d)
+ui.shop.coins,潮币：%d,Coins: %d
+ui.shop.evo_items,进化道具：%d,Evolution items: %d
+ui.shop.refine_essence,淬炼精华：%d（II 上限 %d）,Refine essence: %d (II cap %d)
+ui.shop.fuse,融合 · %s → %s,Fuse · %s → %s
+ui.shop.refine,精炼 T%d · %s → %s（本阶×%.2f / 累积×%.2f，精华 %d）,"Refine T%d · %s → %s (step×%.2f / total×%.2f, cost %d)"
+ui.shop.reroll_header,重铸回收（退 %d%% 实付潮币；至少保留 1 把武器）,Reroll refund (%d%% paid; keep ≥1 weapon)
+ui.shop.reroll_weapon,重铸 · 武器 %s（退 %d）,Reroll · weapon %s (refund %d)
+ui.shop.reroll_weapon_locked,重铸 · 武器 %s（事件锁定中）,Reroll · weapon %s (event-locked)
+ui.shop.reroll_weapon_keep,重铸 · 武器 %s（需保留末把）,Reroll · weapon %s (must keep last)
+ui.shop.reroll_passive,重铸 · 被动 %s（退 %d）,Reroll · passive %s (refund %d)
 ui.day.title,抉择之昼,Day of Choice
 ui.day.hint,"右侧商店可购买强化 · 可融合时点「融合」· 按 Q 继续下一夜 · 「点亮信号」可提前收工","Shop on the right · Fuse when ready · Q for next night · Light Signal to retire early"
 ui.day.subtitle_rest,第 %d 夜结束 · 灯塔休息回血,Night %d ended · Lighthouse rest heal
 ui.day.subtitle,第 %d 夜结束,Night %d ended
 ui.day.event,事件：%s,Event: %s
+ui.day.event_title,本夜事件,Night Event
+ui.hud.chest_toast,宝箱（%s）· %s ×%d,Chest (%s) · %s ×%d
+ui.hud.chest_toast_struggle,宝箱（%s）· 挣扎中未发奖,Chest (%s) · no reward while struggling
+ui.lh.title,灯塔升级树,Lighthouse Upgrades
+ui.lh.stardust,星尘：%d,Stardust: %d
+ui.lh.back,返回角色选择,Back to Characters
+ui.lh.start,开始游戏,Start Game
+ui.lh.lit,✔ 已点亮,✔ Lit
+ui.lh.need_prereq,需先点亮前置,Requires prerequisite
+ui.lh.not_enough,星尘不足,Not enough stardust
+ui.lh.node_effects,Lv%d %s,Lv%d %s
+ui.lh.node_cost,%d 星尘,%d stardust
+ui.lh.branch.vigil.name,守望之径,Path of Vigil
+ui.lh.branch.vigil.desc,生存与防御,Survival & Defense
+ui.lh.branch.edge.name,锋锐之径,Path of Edge
+ui.lh.branch.edge.desc,攻击与暴击,Attack & Crit
+ui.lh.branch.tide.name,潮汐之径,Path of Tide
+ui.lh.branch.tide.desc,范围与机动,Area & Mobility
+ui.death.panel_title,死亡原因,Death Analysis
 ui.victory,通关,Victory
 ui.restart,再来一局 (Enter),Play Again (Enter)
 ui.meta,角色 / 灯塔,Character / Lighthouse

@@ -189,8 +189,32 @@ print("== i18n.csv 覆盖 ==")
 csv_path = os.path.join(CONFIG_DIR, "i18n.csv")
 ok(os.path.isfile(csv_path), "i18n.csv 存在")
 csv_keys = set()
+bad_rows = []
 if os.path.isfile(csv_path):
-    with open(csv_path, "r", encoding="utf-8-sig") as f:
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader, None)
+        if header is None or [c.strip() for c in header[:3]] != ["key", "zh", "en"]:
+            bad_rows.append((1, "bad_header", header))
+        for i, row in enumerate(reader, start=2):
+            if not row or all(not str(c).strip() for c in row):
+                continue
+            if len(row) != 3:
+                bad_rows.append((i, "cols=%d" % len(row), (row[0][:48] if row else "")))
+                continue
+            k = (row[0] or "").strip()
+            if not k or "." not in k:
+                bad_rows.append((i, "bad_key", k[:48]))
+                continue
+            csv_keys.add(k)
+ok(
+    len(bad_rows) == 0,
+    "i18n.csv 行结构合法（3 列 / key 含 '.'）(异常=%s)" % (bad_rows[:5] if bad_rows else "无"),
+)
+
+# 兼容旧路径：DictReader 再扫一遍（与上表应一致）
+if os.path.isfile(csv_path) and not csv_keys:
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             k = (row.get("key") or "").strip()

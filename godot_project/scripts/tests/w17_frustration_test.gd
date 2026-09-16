@@ -473,7 +473,13 @@ func _test_early_retire_shop_wiring() -> void:
 	shop.add_child(vbox)
 	add_child(shop)
 	await get_tree().process_frame
-	_assert(shop.get_node_or_null("VBox") != null, "ShopUI 最小场景树就绪")
+	_assert(shop.get_node_or_null("ShopPanel") != null, "ShopPanel 存在")
+	var skip_btn: Button = shop.find_child("SkipButton", true, false) as Button
+	_assert(skip_btn != null, "SkipButton 存在")
+	shop.visible = true
+	skip_btn.grab_focus()
+	await get_tree().process_frame
+	_assert(skip_btn.has_focus(), "SkipButton 可获焦")
 
 	var fired: Array = [false]
 	var shop_closed: Array = [false]
@@ -490,7 +496,6 @@ func _test_early_retire_shop_wiring() -> void:
 	GameState.start_new_run("watcher")
 	GameState.enter_night(4)
 	GameState.end_night()
-	shop.visible = true
 	# 未确认前不应发信号（仅点按钮会弹确认框；机检走确认入口）
 	shop.emit_retire_confirmed_for_test()
 	_assert(bool(fired[0]) == true, "确认后发出 retire_requested")

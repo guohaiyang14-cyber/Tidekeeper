@@ -6,6 +6,8 @@
 # ============================================================================
 extends Control
 
+const _UI := preload("res://scripts/ui/ui_chrome.gd")
+
 const VIEW_W: float = 1280.0
 const MAIN_SCENE := "res://scenes/main.tscn"
 const LIGHTHOUSE_SCENE := "res://scenes/lighthouse_tree.tscn"
@@ -91,6 +93,8 @@ func _build() -> void:
 
 	_refresh_stardust()
 	_refresh_tier_buttons()
+	if _start_btn != null:
+		_start_btn.grab_focus()
 
 
 func _build_difficulty_row() -> void:
@@ -151,13 +155,14 @@ func _on_language_changed(_lang: String) -> void:
 
 func _make_card(id: String) -> Panel:
 	var data: Dictionary = ConfigLoader.get_character(id)
-	var panel := Panel.new()
+	var panel := _UI.make_panel()
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vbox.offset_left = 16.0
 	vbox.offset_right = -16.0
 	vbox.offset_top = 16.0
 	vbox.offset_bottom = -16.0
+	vbox.add_theme_constant_override("separation", 8)
 
 	var name_l := Label.new()
 	name_l.text = _character_name(id, data)
@@ -182,6 +187,7 @@ func _make_card(id: String) -> Panel:
 
 	var unlocked: bool = MetaSystem.is_character_unlocked(id)
 	var btn := Button.new()
+	_UI.style_button(btn)
 	btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	btn.offset_left = 16.0
 	btn.offset_right = -16.0

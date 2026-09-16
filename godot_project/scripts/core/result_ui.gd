@@ -1,19 +1,11 @@
 # ============================================================================
-# ResultUI — 结算/死因界面（W10 雏形）
-# 职责：游戏结束/通关时显示结算页（标题 + 死因 + 存活统计 + 重启按钮），
-#       让玩家清楚死亡原因并能快速重开。
-# 设计：技术选型.md —— ResultUI = 结算/死因；
-#       游戏设计文档 §挫败感控制：死亡原因可视化（结算页说明死因与建议）。
-# 红线：本节点只做结算页展示与重启交互，不直接改 GameState 数值；
-#       重启走 get_tree().reload_current_scene() —— 重新走 world._ready →
-#       start_new_run + UpgradeManager.reset（自动 paused=false） + day_night.start_run 全套初始化。
-# 架构：CanvasLayer 子 Control；process_mode=ALWAYS 保证暂停期可交互；
-#       背景 mouse_filter=IGNORE 不拦截按钮点击。
+# ResultUI — 结算/死因界面（W10 + W17 + A6 死因面板）
 # ============================================================================
 extends Control
 
 class_name ResultUI
 
+const _UI := preload("res://scripts/ui/ui_chrome.gd")
 const VIEW_W: float = 1280.0
 
 var _title: Label
@@ -23,7 +15,8 @@ var _stardust: Label
 var _restart_btn: Button
 var _meta_btn: Button
 var _hint: Label
-## W17 死因可视化：最后一击 + 伤害来源 Top3
+var _death_panel: Panel
+var _death_title: Label
 var _death_cause: Label
 var _showing_victory: bool = false
 var _last_game_over_reason: String = ""
@@ -44,7 +37,6 @@ func _ready() -> void:
 
 
 func _build_frame() -> void:
-	# 半透明更深色背景，明确"结算"模式
 	var backdrop := ColorRect.new()
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	backdrop.color = Color(0.02, 0.03, 0.08, 0.78)
@@ -54,60 +46,83 @@ func _build_frame() -> void:
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_title.offset_top = 120.0
-	_title.offset_bottom = 200.0
-	_title.add_theme_font_size_override("font_size", 56)
+	_title.offset_top = 72.0
+	_title.offset_bottom = 140.0
+	_title.add_theme_font_size_override("font_size", 52)
 	add_child(_title)
 
 	_reason = Label.new()
 	_reason.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_reason.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_reason.offset_top = 210.0
-	_reason.offset_bottom = 260.0
-	_reason.add_theme_font_size_override("font_size", 24)
+	_reason.offset_top = 148.0
+	_reason.offset_bottom = 188.0
+	_reason.add_theme_font_size_override("font_size", 22)
 	_reason.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92))
 	add_child(_reason)
 
 	_stats = Label.new()
 	_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stats.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_stats.offset_top = 290.0
-	_stats.offset_bottom = 360.0
-	_stats.add_theme_font_size_override("font_size", 22)
+	_stats.offset_top = 200.0
+	_stats.offset_bottom = 250.0
+	_stats.add_theme_font_size_override("font_size", 20)
 	_stats.add_theme_color_override("font_color", Color(0.75, 0.82, 0.95))
 	add_child(_stats)
 
 	_stardust = Label.new()
 	_stardust.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stardust.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_stardust.offset_top = 368.0
-	_stardust.offset_bottom = 400.0
-	_stardust.add_theme_font_size_override("font_size", 22)
+	_stardust.offset_top = 258.0
+	_stardust.offset_bottom = 290.0
+	_stardust.add_theme_font_size_override("font_size", 20)
 	_stardust.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
 	add_child(_stardust)
 
-	# W17 死因可视化：最后一击 + 伤害来源 Top3（位于星尘与按钮之间）
+	_death_panel = _UI.make_panel(_UI.death_panel_style())
+	_death_panel.name = "DeathPanel"
+	_death_panel.position = Vector2(VIEW_W * 0.5 - 320.0, 304.0)
+	_death_panel.size = Vector2(640.0, 120.0)
+	_death_panel.visible = false
+	_death_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_death_panel)
+
+	var death_box := VBoxContainer.new()
+	death_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	death_box.offset_left = 12.0
+	death_box.offset_right = -12.0
+	death_box.offset_top = 8.0
+	death_box.offset_bottom = -8.0
+	death_box.add_theme_constant_override("separation", 4)
+	_death_panel.add_child(death_box)
+
+	_death_title = Label.new()
+	_death_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_title.add_theme_font_size_override("font_size", 15)
+	_death_title.add_theme_color_override("font_color", Color(1.0, 0.70, 0.72))
+	death_box.add_child(_death_title)
+
 	_death_cause = Label.new()
 	_death_cause.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_death_cause.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_death_cause.offset_top = 408.0
-	_death_cause.offset_bottom = 454.0
-	_death_cause.add_theme_font_size_override("font_size", 16)
-	_death_cause.add_theme_color_override("font_color", Color(0.92, 0.78, 0.82))
-	add_child(_death_cause)
+	_death_cause.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_death_cause.add_theme_font_size_override("font_size", 15)
+	_death_cause.add_theme_color_override("font_color", Color(0.95, 0.82, 0.85))
+	_death_cause.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	death_box.add_child(_death_cause)
 
 	_restart_btn = Button.new()
+	_UI.style_button(_restart_btn)
 	_restart_btn.text = LanguageSystem.localize("ui.restart")
 	_restart_btn.size = Vector2(280.0, 56.0)
-	_restart_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 502.0)
+	_restart_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 448.0)
 	_restart_btn.add_theme_font_size_override("font_size", 22)
 	_restart_btn.pressed.connect(_on_restart_pressed)
 	add_child(_restart_btn)
 
 	_meta_btn = Button.new()
+	_UI.style_button(_meta_btn)
 	_meta_btn.text = LanguageSystem.localize("ui.meta")
 	_meta_btn.size = Vector2(280.0, 48.0)
-	_meta_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 564.0)
+	_meta_btn.position = Vector2(VIEW_W / 2.0 - 140.0, 514.0)
 	_meta_btn.add_theme_font_size_override("font_size", 20)
 	_meta_btn.pressed.connect(_on_meta_pressed)
 	add_child(_meta_btn)
@@ -130,6 +145,8 @@ func _refresh_localized_static() -> void:
 	_restart_btn.text = LanguageSystem.localize("ui.restart")
 	_meta_btn.text = LanguageSystem.localize("ui.meta")
 	_hint.text = LanguageSystem.localize("ui.hint")
+	if _death_title != null:
+		_death_title.text = LanguageSystem.localize("ui.death.panel_title")
 
 
 func _on_language_changed(_lang: String) -> void:
@@ -150,7 +167,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## 显示游戏结束（§挫败感控制：死亡原因可视化）
 func show_game_over(reason: String, night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
 	_showing_victory = false
 	_last_game_over_reason = reason
@@ -162,7 +178,6 @@ func show_game_over(reason: String, night: int, level: int, tidecoins: int, star
 	_show()
 
 
-## 显示通关
 func show_victory(night: int, level: int, tidecoins: int, stardust_earned: int = 0) -> void:
 	_showing_victory = true
 	_last_night = night
@@ -190,8 +205,14 @@ func _apply_game_over_text() -> void:
 	_stardust.text = LanguageSystem.localizef("ui.result.stardust", [
 		_last_stardust_earned, MetaSystem.get_stardust(),
 	])
-	# 提前收工无死因面板（主动离场，非致死）
-	_death_cause.text = "" if is_retire else _death_cause_text()
+	if is_retire:
+		_death_cause.text = ""
+		if _death_panel != null:
+			_death_panel.visible = false
+	else:
+		_death_cause.text = _death_cause_text()
+		if _death_panel != null:
+			_death_panel.visible = true
 
 
 func _apply_victory_text() -> void:
@@ -206,6 +227,8 @@ func _apply_victory_text() -> void:
 		_last_stardust_earned, MetaSystem.get_stardust(),
 	])
 	_death_cause.text = ""
+	if _death_panel != null:
+		_death_panel.visible = false
 
 
 func _show() -> void:
@@ -215,20 +238,17 @@ func _show() -> void:
 
 
 func _on_restart_pressed() -> void:
-	# 重置暂停状态，避免 reload 后新场景继承暂停（UpgradeManager.reset 也会兜底）
 	if get_tree() != null:
 		get_tree().paused = false
 	get_tree().reload_current_scene()
 
 
-## 进入角色选择 / 灯塔升级界面（W15-W16）
 func _on_meta_pressed() -> void:
 	if get_tree() != null:
 		get_tree().paused = false
 		get_tree().change_scene_to_file("res://scenes/character_select.tscn")
 
 
-## 死因 / 离场文案映射
 func _reason_label(reason: String) -> String:
 	match reason:
 		"hp_zero": return LanguageSystem.localize("ui.death.reason.hp_zero")
@@ -238,7 +258,6 @@ func _reason_label(reason: String) -> String:
 		_: return LanguageSystem.localizef("ui.death.reason.other", [reason])
 
 
-## W17 死因可视化文案：最后一击来源 + 伤害来源 Top3（来自 GameState.get_death_analysis）
 func _death_cause_text() -> String:
 	var a: Dictionary = GameState.get_death_analysis()
 	var lines: Array[String] = []
@@ -261,7 +280,6 @@ func _death_cause_text() -> String:
 	return "\n".join(lines)
 
 
-## 伤害来源友好名（接触/自爆带敌人中文名；其余走固定映射）
 func _source_label(src: String) -> String:
 	if src.begins_with("contact:"):
 		return LanguageSystem.localizef("ui.source.contact", [_entity_name(src.substr(8))])

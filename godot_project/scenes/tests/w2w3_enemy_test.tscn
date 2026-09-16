@@ -66,14 +66,3 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("10_shopui")
-
-[node name="VBox" type="VBoxContainer" parent="ShopUI"]
-layout_mode = 1
-offset_left = 40.0
-offset_top = 120.0
-offset_right = 520.0
-offset_bottom = 620.0
-
-[node name="CoinLabel" type="Label" parent="ShopUI/VBox"]
-layout_mode = 2
-text = "潮币：0"
