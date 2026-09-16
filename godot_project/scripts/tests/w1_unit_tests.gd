@@ -77,14 +77,17 @@ class _TelemetrySink extends Object:
 		death_calls += 1
 
 
-## 教学夜武器展示：按 difficulty.json teaching.demo_weapons 顺序在夜2/3/4 授予尚未拥有的武器；
-## 夜1（非展示）/ 夜5（非教学）/ 已拥有 → 不授予（幂等）。
+## 教学夜武器展示：teaching.nights=6 窗内，夜2+ 按 difficulty.json teaching.demo_weapons
+## 顺序授予尚未拥有的武器；夜1（非展示）/ 已拥有 / 槽满 → 不授予（幂等）。
+## 窗内夜数可多于 demo 表项（N5/N6 顺位越表）→ 回补扫描更早顺位，严禁数组越界。
 func _test_teaching_demo_weapons() -> void:
 	print("[教学夜武器展示]")
 	var demo: Array = ConfigLoader.get_teaching_demo_weapons()
 	if demo.is_empty():
 		print("  [SKIP] teaching.demo_weapons 为空")
 		return
+	var teaching_cfg: Dictionary = ConfigLoader.get_difficulty_config().get("teaching", {})
+	var teaching_nights: int = int(teaching_cfg.get("nights", 6))
 	GameState.start_new_run("watcher", 20260824)
 	_assert(GameState.weapon_slots.size() == 1, "开局仅 1 把武器")
 	_assert(GameState.grant_teaching_demo_weapon(1) == "", "夜1 不授予展示武器")
@@ -96,10 +99,21 @@ func _test_teaching_demo_weapons() -> void:
 		if wid != "":
 			_assert(not ConfigLoader.get_weapon(wid).is_empty(), "授予的 %s 是有效武器" % wid)
 			_assert(GameState.weapon_slots.has(wid), "授予后入槽: %s" % wid)
-	_assert(GameState.grant_teaching_demo_weapon(5) == "", "夜5(非教学) 不授予")
+	# N5/N6 仍在教学窗（A2 窗=6）但顺位已越 demo 表长：3 把均持有 → 安全返回空，不越界
+	_assert(GameState.grant_teaching_demo_weapon(5) == "", "夜5 演示武器已授全 → 不授予")
+	_assert(GameState.grant_teaching_demo_weapon(teaching_nights) == "", "夜%d(窗末) 不越界、不授予" % teaching_nights)
+	_assert(GameState.teaching_demo_grants.size() == 3, "授予记录=3（夜2/3/4 各1）")
 	var before: int = GameState.weapon_slots.size()
 	_assert(GameState.grant_teaching_demo_weapon(2) == "", "已拥有的夜2 不再授予（幂等）")
 	_assert(GameState.weapon_slots.size() == before, "幂等：槽数不变")
+	_assert(GameState.teaching_demo_grants.size() == 3, "幂等：授予记录不追加")
+	# 越表回补回归（修复前 N6 访问 demo[3] 越界）：新局直接进夜6，应回补授予 demo[0]
+	GameState.start_new_run("watcher", 20260828)
+	_assert(GameState.grant_teaching_demo_weapon(teaching_nights) == String(demo[0]), "夜%d 越表回补授予 %s" % [teaching_nights, String(demo[0])])
+	_assert(GameState.grant_teaching_demo_weapon(5) == String(demo[1]), "夜5 回补授予下一把 %s" % String(demo[1]))
+	_assert(GameState.teaching_demo_grants.size() == 2, "回补授予记录=2")
+	_assert(GameState.teaching_demo_grants[0]["night"] == teaching_nights, "记录夜次正确")
+	_assert(GameState.teaching_demo_grants[0]["weapon"] == String(demo[0]), "记录武器正确")
 	# 铁匠开局锚锤：夜4 顺位为 anchor_hammer 已持有 → 不重复授予
 	GameState.start_new_run("blacksmith", 20260825)
 	_assert(GameState.weapon_slots.has("anchor_hammer"), "铁匠开局锚锤")

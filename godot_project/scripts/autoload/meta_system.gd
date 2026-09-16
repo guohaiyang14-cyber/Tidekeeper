@@ -131,8 +131,8 @@ func get_character_unlock_hint(id: String) -> String:
 # 统计记录（由 World 在开局/清夜/通关时调用）
 # ============================================================================
 
-## 记录一局开始（累计 runs +1）
-func record_run_started(character: String) -> void:
+## 记录一局开始（累计 runs +1；character 预留给后续按角色统计，当前不计）
+func record_run_started(_character: String) -> void:
 	var meta: Dictionary = SaveSystem.get_save_meta()
 	meta["total_runs"] = int(meta.get("total_runs", 0)) + 1
 	SaveSystem.set_save_meta(meta)

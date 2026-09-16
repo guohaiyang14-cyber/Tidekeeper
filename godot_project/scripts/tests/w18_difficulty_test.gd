@@ -168,7 +168,7 @@ func _test_boss_configure_scaling() -> void:
 	b_l.configure_boss(def)
 	_assert(b_l.max_health == int(roundi(base_hp * 1.0)), "灯塔 Boss 血量=表底 (%d)" % b_l.max_health)
 	_assert(b_l.contact_damage == int(roundi(base_contact * 1.0)), "灯塔 Boss 接触伤=表底")
-	_assert(int(b_l._boss_data.get("wave_damage", -1)) == int(roundi(base_wave * 1.0)), "灯塔 潮汐波伤=表底")
+	_assert(int(b_l.get_boss_data().get("wave_damage", -1)) == int(roundi(base_wave * 1.0)), "灯塔 潮汐波伤=表底")
 	b_l.free()
 
 	DifficultySystem.set_tier("watcher")
@@ -179,7 +179,7 @@ func _test_boss_configure_scaling() -> void:
 	var expect_contact: int = int(roundi(base_contact * 0.7))
 	_assert(b_w.max_health == expect_hp, "守夜人 Boss 血量=%d (期望 %d)" % [b_w.max_health, expect_hp])
 	_assert(b_w.contact_damage == expect_contact, "守夜人 Boss 接触伤=%d (期望 %d)" % [b_w.contact_damage, expect_contact])
-	_assert(int(b_w._boss_data.get("wave_damage", -1)) == expect_wave, "守夜人 潮汐波伤=%d (期望 %d)" % [int(b_w._boss_data.get("wave_damage", -1)), expect_wave])
+	_assert(int(b_w.get_boss_data().get("wave_damage", -1)) == expect_wave, "守夜人 潮汐波伤=%d (期望 %d)" % [int(b_w.get_boss_data().get("wave_damage", -1)), expect_wave])
 	b_w.free()
 	DifficultySystem.reset_tier()
 

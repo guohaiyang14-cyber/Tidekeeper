@@ -50,6 +50,8 @@ var evolution_items: int = 0
 # 武器槽 / 被动槽（SKILL.md §5.2：上限 4 武器 / 6 被动）
 var weapon_slots: Array[String] = []
 var passive_slots: Array[String] = []
+## 本局教学夜演示武器实际授予记录 [{night:int, weapon:String}]；TestBot / 调试只读
+var teaching_demo_grants: Array[Dictionary] = []
 # 武器等级：id → 等级（1~max_weapon_level），重复获得已持有武器则升级（W5）
 var weapon_levels: Dictionary[String, int] = {}
 # 被动等级：id → 等级（1~max_passive_level）
@@ -130,6 +132,7 @@ func start_new_run(character: String = "watcher", seed_value: int = -1) -> void:
 
 	weapon_slots.clear()
 	passive_slots.clear()
+	teaching_demo_grants.clear()
 	weapon_levels.clear()
 	passive_levels.clear()
 	evolved_weapons.clear()
@@ -218,6 +221,9 @@ func add_exp(amount: int) -> void:
 ## 添加或升级武器（返回是否成功）
 ## 未持有 → 入槽并置等级 1；已持有 → 等级 +1（上限 max_weapon_level），满级返回 false
 func add_weapon(weapon_id: String) -> bool:
+	if weapon_id == "":
+		push_warning("[GameState] add_weapon 收到空武器 id，忽略")
+		return false
 	if weapon_id in weapon_slots:
 		var lv: int = get_weapon_level(weapon_id)
 		if lv >= max_weapon_level:
@@ -256,17 +262,19 @@ func grant_teaching_demo_weapon(night: int) -> String:
 		return ""
 	if add_weapon(wid):
 		print("[GameState] 教学夜展示武器: %s (夜%d)" % [wid, night])
+		teaching_demo_grants.append({"night": night, "weapon": wid})
 		return wid
 	return ""
 
 
 ## 从 demo 列表选取首个未持有武器：先 [start_idx..)，再 [0, start_idx)（跳过角色开局重复）
+## start_idx 可能 ≥ demo.size()（教学窗夜数多于演示武器数），两段循环均须夹表长上界
 func _pick_teaching_demo_weapon(demo: Array, start_idx: int) -> String:
 	for i in range(start_idx, demo.size()):
 		var wid: String = String(demo[i])
 		if wid != "" and wid not in weapon_slots:
 			return wid
-	for i in range(0, start_idx):
+	for i in range(0, mini(start_idx, demo.size())):
 		var wid: String = String(demo[i])
 		if wid != "" and wid not in weapon_slots:
 			return wid

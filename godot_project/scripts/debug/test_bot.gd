@@ -174,6 +174,7 @@ var _affix_cfg_checked: bool = false
 var _affix_cfg_ok: bool = false
 var _elite_affix_checked: bool = false
 var _boss_tier_checked: bool = false
+var _teaching_demo_checked: bool = false
 var _chest_hooked_world: World = null
 var _peak_enemies: int = 0
 var _seen_affix_ids: Dictionary = {}
@@ -215,6 +216,7 @@ func _ready() -> void:
 		_affix_cfg_ok = false
 		_elite_affix_checked = false
 		_boss_tier_checked = false
+		_teaching_demo_checked = false
 		_peak_enemies = 0
 		_seen_affix_ids.clear()
 		_thorns_hits = 0
@@ -583,6 +585,7 @@ func _prepare_new_run_meta() -> void:
 	_serial_advanced_for_run = false
 	_elite_affix_checked = false
 	_boss_tier_checked = false
+	_teaching_demo_checked = false
 	if _unlock_all_chars:
 		MetaSystem.set_unlock_all_characters_override(true)
 	_apply_run_difficulty()
@@ -2075,6 +2078,7 @@ func _accept_on_night_start(night: int) -> void:
 		)
 	_accept_lighthouse_collision_once(world)
 	_accept_affix_night_rules(night, world)
+	_accept_teaching_demo_once(night)
 
 
 ## 1.1.5：开店后 Skip 获焦（局内证据）
@@ -2312,6 +2316,35 @@ func _accept_boss_tier_scaling(enemy: EnemyBase) -> void:
 	)
 
 
+## 4.8.2：教学窗结束首夜（N nights+1）核对窗内演示武器授予记录。
+## 合法 = 每条 weapon ∈ demo 表、夜次 ∈ [2, nights]、无空；且 ≥1 条（槽满跳过允许少于表项）。
+## 回归 N6 顺位越表（修复前 Debug 必断、非 Debug 脏槽）。
+func _accept_teaching_demo_once(night: int) -> void:
+	if _teaching_demo_checked:
+		return
+	var teach: Dictionary = ConfigLoader.get_difficulty_config().get("teaching", {})
+	var teach_n: int = int(teach.get("nights", 6))
+	if night != teach_n + 1:
+		return
+	_teaching_demo_checked = true
+	var demo: Array = ConfigLoader.get_teaching_demo_weapons()
+	var grants: Array = GameState.teaching_demo_grants
+	var bad: Array[String] = []
+	var granted_nights: Array[int] = []
+	for g in grants:
+		var gn: int = int(g.get("night", 0))
+		var gw: String = String(g.get("weapon", ""))
+		granted_nights.append(gn)
+		if gw == "" or gw not in demo or gn < 2 or gn > teach_n:
+			bad.append("n%d:%s" % [gn, gw])
+	var ok: bool = grants.size() > 0 and bad.is_empty()
+	_record_accept_keep_fail(
+		"4.8.2",
+		"pass" if ok else "fail",
+		"granted=%d nights=%s bad=%s" % [grants.size(), str(granted_nights), str(bad)]
+	)
+
+
 ## pass 不覆盖既有 fail（词缀夜规等多探针项）；fail 仍可打回
 func _record_accept_keep_fail(id: String, status: String, detail: String = "") -> void:
 	if status == "pass" and _accept_fail.has(id):
@@ -2428,6 +2461,8 @@ func _accept_finalize_feature_skips(peak_night: int) -> void:
 		_record_accept("2.4.2", "info", "thorns_hits=0")
 	if not _accept_pass.has("4.8.6") and not _accept_fail.has("4.8.6"):
 		_record_accept("4.8.6", "skip", "no_boss_sampled")
+	if not _accept_pass.has("4.8.2") and not _accept_fail.has("4.8.2"):
+		_record_accept("4.8.2", "skip", "teaching_window_not_finished")
 	if not _accept_pass.has("2.4.3") and not _accept_fail.has("2.4.3"):
 		_record_accept("2.4.3", "skip", "no_rule_sample")
 

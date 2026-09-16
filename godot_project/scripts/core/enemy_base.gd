@@ -11,6 +11,10 @@ extends Node2D
 
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
 const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
+## Boss 技能表伤键：configure_boss 时乘 DifficultySystem 伤害档位
+const BOSS_TIER_DAMAGE_KEYS: Array[String] = [
+	"barrage_damage", "wave_damage", "ranged_projectile_damage", "self_destruct_damage",
+]
 
 signal enemy_died(enemy: EnemyBase)
 
@@ -297,7 +301,7 @@ func configure_boss(boss_data: Dictionary) -> void:
 	var tier_dmg: float = DifficultySystem.enemy_damage_multiplier(night_value)
 	# 运行时副本：技能表伤随档位缩放，避免改写 ConfigLoader 缓存
 	var scaled: Dictionary = boss_data.duplicate(true)
-	for dmg_key: String in ["barrage_damage", "wave_damage", "ranged_projectile_damage", "self_destruct_damage"]:
+	for dmg_key: String in BOSS_TIER_DAMAGE_KEYS:
 		if scaled.has(dmg_key):
 			scaled[dmg_key] = int(roundi(float(scaled[dmg_key]) * tier_dmg))
 	_boss_data = scaled
@@ -626,6 +630,11 @@ func get_boss_phase() -> int:
 	if _boss_brain == null:
 		return 0
 	return _boss_brain.phase
+
+
+## 运行时 Boss 配置副本（已乘档位的技能表伤）；非 Boss 为空 Dictionary
+func get_boss_data() -> Dictionary:
+	return _boss_data
 
 
 func _explode() -> void:

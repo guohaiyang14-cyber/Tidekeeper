@@ -677,6 +677,7 @@ def _self_test() -> int:
                     "action": "start",
                     "bot": True,
                     "character": "watcher",
+                    "difficulty_tier": "watcher",
                     "max_hp": 100,
                     "seed": 42,
                     "started_at": "2026-01-01 00:00:00",
@@ -793,6 +794,8 @@ def _self_test() -> int:
 
         sm = analyze_run({"id": rid, "outcome": "win"}, jsonl)
         assert sm["outcome"] == "win"
+        assert sm["character"] == "watcher"
+        assert sm["difficulty_tier"] == "watcher"
         assert sm["level_end"] == 5
         assert sm["final_char"].get("level") == 5
         assert sm["final_char"].get("phase") == "run_end"
