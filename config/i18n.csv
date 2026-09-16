@@ -29,6 +29,24 @@ ui.day.subtitle_rest,第 %d 夜结束 · 灯塔休息回血,Night %d ended · Li
 ui.day.subtitle,第 %d 夜结束,Night %d ended
 ui.day.event,事件：%s,Event: %s
 ui.day.event_title,本夜事件,Night Event
+ui.evo.resonance,潮汐共鸣,Tide Resonance
+ui.lang.zh,中文,中文
+ui.lang.en,English,English
+event.storm.name,暴风雨,Storm
+event.tidal_reversal.name,潮汐反转,Tidal Reversal
+event.eclipse.name,月食,Eclipse
+event.lost_ship.name,迷途航船,Lost Ship
+event.fish_migration.name,鱼群回游,Fish Migration
+event.lighthouse_resonance.name,灯塔共鸣,Lighthouse Resonance
+event.stardust_rain.name,星尘雨,Stardust Rain
+refine.harpoon.name,深溯之径,Path of the Deep
+refine.holy_fire.name,耀阳之径,Path of Radiance
+refine.anchor_hammer.name,雷霆之径,Path of Thunder
+refine.spore.name,群生之径,Path of Swarm
+refine.storm_cloud.name,苍穹之径,Path of the Sky
+refine.jellyfish_cannon.name,漩涡之径,Path of the Vortex
+refine.anchor_chain.name,不屈之径,Path of Resolve
+refine.albatross.name,翱翔之径,Path of Flight
 ui.hud.chest_toast,宝箱（%s）· %s ×%d,Chest (%s) · %s ×%d
 ui.hud.chest_toast_struggle,宝箱（%s）· 挣扎中未发奖,Chest (%s) · no reward while struggling
 ui.lh.title,灯塔升级树,Lighthouse Upgrades

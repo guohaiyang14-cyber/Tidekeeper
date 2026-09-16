@@ -197,6 +197,17 @@ func get_active_event_name() -> String:
 	return _active_name
 
 
+## 局内 UI 展示名（i18n）；遥测 / CombatLog 仍用 get_active_event_name 原始 config 名
+func get_active_event_display_name() -> String:
+	if _active_id == "":
+		return ""
+	var key: String = "event.%s.name" % _active_id
+	var text: String = LanguageSystem.localize(key)
+	if text != key:
+		return text
+	return _active_name if _active_name != "" else _active_id
+
+
 func has_active_event() -> bool:
 	return _active_id != ""
 

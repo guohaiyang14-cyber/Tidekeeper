@@ -17,6 +17,7 @@ var _difficulty_label: Label
 var _title_label: Label
 var _lighthouse_btn: Button
 var _start_btn: Button
+var _lang_btn: Button
 var _tier_buttons: Dictionary = {}  # tier_id -> Button
 var _tier_group: ButtonGroup
 var _char_cards: Array[Dictionary] = []  # {id, btn, name_l, desc_l, trait_l}
@@ -91,10 +92,31 @@ func _build() -> void:
 	start_btn.pressed.connect(_on_start_default_pressed)
 	add_child(start_btn)
 
+	_lang_btn = Button.new()
+	_UI.style_button(_lang_btn)
+	_lang_btn.size = Vector2(160.0, 40.0)
+	_lang_btn.position = Vector2(VIEW_W - 180.0, 28.0)
+	_lang_btn.add_theme_font_size_override("font_size", 16)
+	_lang_btn.pressed.connect(_on_lang_pressed)
+	add_child(_lang_btn)
+	_refresh_lang_button()
+
 	_refresh_stardust()
 	_refresh_tier_buttons()
 	if _start_btn != null:
 		_start_btn.grab_focus()
+
+
+func _refresh_lang_button() -> void:
+	if _lang_btn == null:
+		return
+	var lang: String = LanguageSystem.get_language()
+	_lang_btn.text = LanguageSystem.localize("ui.lang.en" if lang == "zh" else "ui.lang.zh")
+
+
+func _on_lang_pressed() -> void:
+	var next: String = "en" if LanguageSystem.get_language() == "zh" else "zh"
+	LanguageSystem.set_language(next)
 
 
 func _build_difficulty_row() -> void:
@@ -148,6 +170,7 @@ func _on_language_changed(_lang: String) -> void:
 		_start_btn.text = LanguageSystem.localize("ui.char_select.start")
 	if _difficulty_label != null:
 		_difficulty_label.text = LanguageSystem.localize("ui.difficulty_select")
+	_refresh_lang_button()
 	_refresh_stardust()
 	_refresh_tier_buttons()
 	_refresh_card_content()

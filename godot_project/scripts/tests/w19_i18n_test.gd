@@ -56,7 +56,10 @@ func _ready() -> void:
 	_test_result_ui_language()
 
 	print("[assert] 角色选择卡切语言")
-	_test_character_select_language()
+	await _test_character_select_language()
+
+	print("[assert] A7 事件/精炼/共鸣文案")
+	_test_a7_display_names()
 
 	print("[assert] 缺失 key 回退")
 	_assert(LanguageSystem.localize("no.such.key") == "no.such.key", "缺失 key 回退自身")
@@ -113,13 +116,34 @@ func _test_character_select_language() -> void:
 	var cs: Control = CHARACTER_SELECT.new()
 	add_child(cs)
 	await get_tree().process_frame
+	LanguageSystem.set_language("zh")
+	await get_tree().process_frame
+	var lang_btn: Button = cs._lang_btn as Button
+	_assert(lang_btn != null, "语言切换钮存在")
+	_assert(lang_btn.text == LanguageSystem.localize("ui.lang.en"), "zh 时按钮显示 English")
 	LanguageSystem.set_language("en")
 	await get_tree().process_frame
+	_assert(lang_btn.text == LanguageSystem.localize("ui.lang.zh"), "en 时按钮显示 中文")
 	var card: Dictionary = cs._char_cards[0]
 	var trait_l: Label = card.get("trait_l") as Label
 	_assert(trait_l != null and trait_l.text.contains("Damage"), "角色卡 en 特性 Damage")
 	var name_l: Label = card.get("name_l") as Label
 	_assert(name_l != null and name_l.text == "Watcher", "角色卡 en 名称 Watcher")
+	cs.queue_free()
+
+
+func _test_a7_display_names() -> void:
+	EventSystem.reset()
+	EventSystem.arm_event("storm", 2)
+	LanguageSystem.set_language("zh")
+	_assert(EventSystem.get_active_event_name() == "暴风雨", "事件 config 名仍为中文")
+	_assert(EventSystem.get_active_event_display_name() == "暴风雨", "事件 UI zh")
+	LanguageSystem.set_language("en")
+	_assert(EventSystem.get_active_event_display_name() == "Storm", "事件 UI en")
+	_assert(LanguageSystem.localize("refine.harpoon.name") == "Path of the Deep", "精炼路径 en")
+	_assert(LanguageSystem.localize("ui.evo.resonance") == "Tide Resonance", "共鸣标题 en")
+	LanguageSystem.set_language("zh")
+	_assert(LanguageSystem.localize("refine.harpoon.name") == "深溯之径", "精炼路径 zh")
 
 
 func _assert(cond: bool, label: String) -> void:

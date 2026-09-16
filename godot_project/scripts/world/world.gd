@@ -195,7 +195,7 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 				# 迷途航船等即时入槽后同步武器实例（loadout_changed 亦会触发；此处兜底）
 				weapon_manager.sync_from_game_state()
 			# 显示白昼选择页面框架（技术选型.md：DayPhaseUI = 抉择之昼）
-			day_phase_ui.enter_day(day_night.get_current_night(), EventSystem.get_active_event_name())
+			day_phase_ui.enter_day(day_night.get_current_night(), EventSystem.get_active_event_display_name())
 			shop_manager.open_shop()
 		DayNightStateMachine.Phase.TRANSITION:
 			pass  # 过渡帧，无需处理

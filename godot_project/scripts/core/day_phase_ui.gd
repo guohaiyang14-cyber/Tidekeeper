@@ -102,6 +102,10 @@ func _refresh_localized_static() -> void:
 
 func _on_language_changed(_lang: String) -> void:
 	_refresh_localized_static()
+	if visible and _event_panel != null and _event_panel.visible and _event_label != null:
+		var disp: String = EventSystem.get_active_event_display_name()
+		if disp != "":
+			_event_label.text = disp
 
 
 ## 进入昼：显示框架并更新夜数副标题（休息夜提示灯塔回血；有事件卡则展示事件名）

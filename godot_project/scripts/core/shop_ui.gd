@@ -347,7 +347,7 @@ func _refresh_refine_buttons_only() -> void:
 		btn.text = LanguageSystem.localizef("ui.shop.refine", [
 			target,
 			GameState.get_weapon_display_name(wid),
-			path.get("name", "?"),
+			_refine_path_display_name(wid, path),
 			step_mult,
 			cum_mult,
 			cost,
@@ -355,6 +355,14 @@ func _refresh_refine_buttons_only() -> void:
 		btn.pressed.connect(_on_refine_pressed.bind(wid))
 		_vbox.add_child(btn)
 		_refine_btns.append(btn)
+
+
+func _refine_path_display_name(weapon_id: String, path: Dictionary) -> String:
+	var key: String = "refine.%s.name" % weapon_id
+	var text: String = LanguageSystem.localize(key)
+	if text != key:
+		return text
+	return String(path.get("name", weapon_id))
 
 
 func _refresh_reroll_buttons_only() -> void:

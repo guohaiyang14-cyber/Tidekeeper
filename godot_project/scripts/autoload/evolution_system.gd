@@ -7,7 +7,7 @@ extends Node
 
 signal evolved(weapon_id: String, evolved_name: String)
 signal item_gained(amount: int, total: int)
-signal resonance_requested(duration: float)
+signal resonance_requested(duration: float, weapon_id: String)
 
 var _elite_drops_this_night: int = 0
 
@@ -77,7 +77,7 @@ func fuse(weapon_id: String) -> bool:
 	GameState.remove_passive(pid)
 	GameState.mark_weapon_evolved(weapon_id, evo_name)
 	var dur: float = float(ConfigLoader.get_evolution_rules().get("resonance_duration", 1.5))
-	resonance_requested.emit(dur)
+	resonance_requested.emit(dur, weapon_id)
 	evolved.emit(weapon_id, evo_name)
 	print("[EvolutionSystem] 融合成功：%s → %s" % [weapon_id, evo_name])
 	return true

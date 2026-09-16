@@ -20,6 +20,7 @@ func _ready() -> void:
 	_test_soft_cap()
 	_test_elite_and_boss_drops()
 	_test_evolved_damage_mult()
+	await _test_resonance_ui()
 	print("------------------------------------------------------------")
 	print("W10 机检通过=%d 失败=%d" % [_passed, _failed])
 	print("============================================================")
@@ -172,3 +173,35 @@ func _test_evolved_damage_mult() -> void:
 	var evo_dmg: int = w.get_leveled_damage()
 	_assert(evo_dmg > base_dmg, "进化后伤害提升 (%d → %d)" % [base_dmg, evo_dmg])
 	w.free()
+
+
+func _test_resonance_ui() -> void:
+	print("[A7 全屏共鸣 UI]")
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	const EVO_UI := preload("res://scripts/ui/evolution_effect_ui.gd")
+	var ui: EvolutionEffectUI = EVO_UI.new() as EvolutionEffectUI
+	add_child(ui)
+	await get_tree().process_frame
+	LanguageSystem.set_language("zh")
+	_reset_run()
+	GameState.weapon_slots.clear()
+	GameState.weapon_levels.clear()
+	GameState.evolved_weapons.clear()
+	_max_weapon("harpoon")
+	_max_passive("tide_compass")
+	GameState.evolution_items = 1
+	get_tree().paused = true
+	var ok: bool = EvolutionSystem.fuse("harpoon")
+	_assert(ok, "fuse 触发共鸣")
+	await get_tree().process_frame
+	_assert(ui.is_playing(), "昼暂停下共鸣播放中")
+	_assert(is_equal_approx(ui.get_last_duration(), 1.5), "共鸣时长=1.5s")
+	_assert(ui.get_title_text() == LanguageSystem.localize("ui.evo.resonance"), "zh 共鸣标题")
+	_assert(ui.get_subtitle_text() == LanguageSystem.localize("weapon.harpoon.evolved_name"), "zh 进化副标题")
+	LanguageSystem.set_language("en")
+	await get_tree().process_frame
+	_assert(ui.get_title_text() == "Tide Resonance", "en 共鸣标题")
+	_assert(ui.get_subtitle_text() == "Abyss Harpoon", "en 进化副标题")
+	get_tree().paused = false
+	LanguageSystem.set_language("zh")
+	ui.queue_free()
