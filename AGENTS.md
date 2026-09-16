@@ -53,6 +53,16 @@
 & "E:\Godot\Godot_v4.7.1-stable_win64_console.exe" --headless --fixed-fps 60 --path godot_project res://scenes/tests/w1_unit_tests.tscn
 ```
 
+## R1 性能压测（350 敌 / A1·A4 代理）
+
+```bash
+# 勿加 --fixed-fps。汇总 headless + 窗口模式墙钟帧时与内存趋势。
+# 代理边界：单种怪+AI/哈希（无武器弹道/UI）；A4=同进程刷满×3，≠连续3局。
+# TestBot ACCEPT：N/A
+python tools/run_perf_bench.py
+# 或：python tools/run_perf_bench.py --headless-only
+```
+
 ## Debug / TestBot
 
 - `debug.bat`：Debug + TestBot；默认倍速 **×4**（范围 2~10）
