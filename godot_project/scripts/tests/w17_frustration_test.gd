@@ -4,7 +4,7 @@
 #   W17-1 配置加载（首夜保护 / 挣扎模式 / 失败保底 / 死因可视化 参数齐全且符合设计）
 #   W17-2 伤害来源追踪（damage_player(source_id) → 累计 + 最后一击）
 #   W17-3 死因可视化（get_death_analysis：最后一击 + 伤害 TopN）
-#   W17-4 首夜保护（前 4 夜死亡满血复活 1 次；>4 夜不触发；复活后短暂无敌）
+#   W17-4 首夜保护（前 protect_nights 夜死亡满血复活 1 次；窗外不触发；复活后短暂无敌）
 #   W17-5 挣扎模式（免死窗口 + 击杀 K 敌复活；每夜最多 1 次；窗口耗尽判负）
 #   W17-6 失败保底结算（落败星尘 ≥ floor_pct × 满通应得）
 #   W17-7 门控：未 begin_run 时挫败感复活不生效（与角色/灯塔特性同门控，不污染单元机检）
@@ -79,7 +79,7 @@ func _test_config() -> void:
 	_assert(not cfg.is_empty(), "frustration.json 已加载")
 	var fn: Dictionary = cfg.get("first_night", {})
 	_assert(bool(fn.get("enabled", false)) == true, "首夜保护启用")
-	_assert(int(fn.get("protect_nights", -1)) == 4, "首夜保护窗口 = 前 4 夜")
+	_assert(int(fn.get("protect_nights", -1)) == 6, "首夜保护窗口 = 前 6 夜")
 	_assert(int(fn.get("max_revives", -1)) == 1, "首夜保护最多复活 1 次")
 	_assert(abs(float(fn.get("revive_invuln_sec", -1.0)) - 1.5) < 0.001, "首夜复活后无敌 1.5s（数据驱动）")
 	var st: Dictionary = cfg.get("struggle", {})
@@ -174,17 +174,17 @@ func _test_first_night() -> void:
 
 
 # ============================================================================
-# W17-5 首夜保护窗口过期（>4 夜不触发首夜）
+# W17-5 首夜保护窗口过期（>protect_nights 不触发首夜）
 # ============================================================================
 func _test_first_night_expiry() -> void:
 	print("[W17-5 首夜保护窗口过期]")
 	MetaSystem.begin_run()
 	GameState.start_new_run("watcher")
-	GameState.enter_night(6)  # > protect_nights(4)
+	GameState.enter_night(7)  # > protect_nights(6)
 	GameState.damage_player(9999)
-	_assert(GameState.is_over == false, "第 6 夜致命未直接判负")
-	_assert(GameState.player_health == 0, "第 6 夜首夜保护未触发（HP 仍为 0）")
-	_assert(GameState.is_struggling() == true, "第 6 夜致命进入挣扎模式（首夜已过期）")
+	_assert(GameState.is_over == false, "第 7 夜致命未直接判负")
+	_assert(GameState.player_health == 0, "第 7 夜首夜保护未触发（HP 仍为 0）")
+	_assert(GameState.is_struggling() == true, "第 7 夜致命进入挣扎模式（首夜已过期）")
 
 
 # ============================================================================

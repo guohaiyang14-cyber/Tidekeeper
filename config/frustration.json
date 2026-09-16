@@ -5,7 +5,7 @@
   },
   "first_night": {
     "enabled": true,
-    "protect_nights": 4,
+    "protect_nights": 6,
     "max_revives": 1,
     "revive_invuln_sec": 1.5
   },

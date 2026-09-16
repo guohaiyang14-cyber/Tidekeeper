@@ -231,7 +231,7 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	var hp_per_5: float = float(diff.get("health_per_5nights", 0.15))
 	var dmg_per_night: float = float(diff.get("damage_per_night", 0.04))
 
-	# W18 难度档位 + 教学宽容（守夜人 0.7× / 灯塔 1.0×；教学夜 1~4 敌人数值减半）
+	# W18 难度档位 + 教学宽容（守夜人 0.7× / 灯塔 1.0×；教学夜读 teaching.nights）
 	var tier_hp: float = DifficultySystem.enemy_hp_multiplier(night_value)
 	var tier_dmg: float = DifficultySystem.enemy_damage_multiplier(night_value)
 

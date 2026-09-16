@@ -14,6 +14,9 @@
 #   python tools/stats_combat_logs.py --completed-only
 #   python tools/stats_combat_logs.py --json
 #   python tools/stats_combat_logs.py --dir path/to/combat_logs
+#   python tools/stats_combat_logs.py --a2-proxy
+#   python tools/stats_combat_logs.py --a2-proxy --latest 30 --completed-only
+#   python tools/stats_combat_logs.py --a2-proxy --json
 #   python tools/stats_combat_logs.py --self-test
 # ============================================================================
 from __future__ import annotations
@@ -548,6 +551,115 @@ def build_json_payload(
     }
 
 
+def build_a2_proxy(all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """A2 首局完成率工程代理：通关率 / 里程碑 / 死亡夜分布 / last_hit。"""
+    completed = [s for s in all_runs if s["outcome"] in COMPLETED]
+    wins = [s for s in completed if s["outcome"] == "win"]
+    deaths = [s for s in completed if s["outcome"] == "death"]
+    n_c = len(completed)
+    ge8 = sum(1 for s in completed if int(s.get("max_night") or 0) >= 8)
+    ge10 = sum(1 for s in completed if int(s.get("max_night") or 0) >= 10)
+    death_nights: Counter = Counter()
+    last_hit: Counter = Counter()
+    for s in deaths:
+        death_nights[int(s.get("max_night") or 0)] += 1
+        death = s.get("death")
+        if isinstance(death, dict):
+            last_hit[str(death.get("last_hit_source") or "?")] += 1
+    peak_share = 0.0
+    peak_night = 0
+    if deaths:
+        peak_night, peak_count = death_nights.most_common(1)[0]
+        peak_share = peak_count / len(deaths)
+    early_deaths = sum(death_nights[n] for n in range(1, 7))
+    early_share = (early_deaths / len(deaths)) if deaths else 0.0
+    thorns_hits = sum(c for k, c in last_hit.items() if "thorn" in k.lower())
+    thorns_share = (thorns_hits / len(deaths)) if deaths else 0.0
+
+    suggestions: List[str] = []
+    if n_c == 0:
+        suggestions.append("无 completed 局：先跑 debug.bat / 真人局再复盘")
+    else:
+        winrate = len(wins) / n_c
+        if winrate < 0.6:
+            suggestions.append(
+                f"通关率 {winrate:.0%} < 60%：继续 A2 试玩；工程侧已默认守夜人+教学6夜"
+            )
+        else:
+            suggestions.append(f"通关率 {winrate:.0%} ≥ 60%（代理样本，真人首局仍须单独统计）")
+        flagged = False
+        if deaths and peak_share > 0.4:
+            flagged = True
+            suggestions.append(
+                f"死亡集中夜 N{peak_night} 占 {peak_share:.0%} >40%（GDD §11.1）：排查该夜压力/Boss/词缀"
+            )
+        if deaths and early_share >= 0.5:
+            flagged = True
+            suggestions.append(
+                "半数以上死亡在 ≤N6：核对 teaching.nights / first_night.protect_nights"
+            )
+        if deaths and thorns_share >= 0.35:
+            flagged = True
+            suggestions.append(
+                "last_hit 荆棘占比偏高：见 enemies.json affixes.thorns（B5 已校 ratio/cap）"
+            )
+        if not flagged:
+            suggestions.append("无死亡夜/荆棘红线；维持现表，组织真人首局试玩填 A2 表格")
+
+    return {
+        "completed": n_c,
+        "wins": len(wins),
+        "deaths": len(deaths),
+        "winrate": (len(wins) / n_c) if n_c else None,
+        "reach_ge8": ge8,
+        "reach_ge8_rate": (ge8 / n_c) if n_c else None,
+        "reach_ge10": ge10,
+        "reach_ge10_rate": (ge10 / n_c) if n_c else None,
+        "death_nights": {str(k): v for k, v in sorted(death_nights.items())},
+        "death_peak_night": peak_night,
+        "death_peak_share": peak_share,
+        "early_death_share_le6": early_share,
+        "last_hit_sources": _counter_to_dict(last_hit),
+        "suggestions": suggestions,
+    }
+
+
+def print_a2_proxy_report(all_runs: List[Dict[str, Any]], *, dir_path: Path) -> None:
+    report = build_a2_proxy(all_runs)
+    print("=" * 72)
+    print("## A2 proxy (first-run engineering; completed win+death)")
+    print("=" * 72)
+    print(f"dir={dir_path}")
+    n_c = int(report["completed"])
+    print(f"completed={n_c}  wins={report['wins']}  deaths={report['deaths']}")
+    wr = report["winrate"]
+    print(f"winrate={wr:.1%}" if wr is not None else "winrate=n/a")
+    r8 = report["reach_ge8_rate"]
+    r10 = report["reach_ge10_rate"]
+    print(
+        f"reach≥8: {report['reach_ge8']}/{n_c}"
+        + (f" ({r8:.1%})" if r8 is not None else "")
+    )
+    print(
+        f"reach≥10: {report['reach_ge10']}/{n_c}"
+        + (f" ({r10:.1%})" if r10 is not None else "")
+    )
+    print(f"death nights: {report['death_nights'] or '{}'}")
+    if report["deaths"]:
+        print(
+            f"death peak: N{report['death_peak_night']} share={report['death_peak_share']:.1%} "
+            f"(flag if >40%)"
+        )
+        print(f"early deaths ≤N6 share={report['early_death_share_le6']:.1%}")
+    lh = report["last_hit_sources"]
+    if lh:
+        top = sorted(lh.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+        print("last_hit top: " + ", ".join(f"{k}={v}" for k, v in top))
+    print("\n## Suggestions")
+    for line in report["suggestions"]:
+        print(f"- {line}")
+
+
 def _self_test() -> int:
     """Minimal fixture test for path sandbox + analyze_run aggregation."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -701,6 +813,39 @@ def _self_test() -> int:
         )
         assert [r["outcome"] for r in filtered] == ["win", "death"]
 
+        # A2 proxy: mix win + deaths with night / last_hit
+        a2_runs = [
+            {"outcome": "win", "max_night": 20, "death": None},
+            {
+                "outcome": "death",
+                "max_night": 5,
+                "death": {"last_hit_source": "affix_thorns"},
+            },
+            {
+                "outcome": "death",
+                "max_night": 5,
+                "death": {"last_hit_source": "enemy_contact"},
+            },
+            {
+                "outcome": "death",
+                "max_night": 12,
+                "death": {"last_hit_source": "boss_melee"},
+            },
+            {"outcome": "aborted", "max_night": 2, "death": None},
+        ]
+        a2 = build_a2_proxy(a2_runs)
+        assert a2["completed"] == 4
+        assert a2["wins"] == 1
+        assert abs(float(a2["winrate"]) - 0.25) < 1e-9
+        assert a2["reach_ge8"] == 2  # win N20 + death N12
+        assert a2["reach_ge10"] == 2
+        assert a2["death_nights"]["5"] == 2
+        assert a2["death_peak_night"] == 5
+        assert abs(float(a2["death_peak_share"]) - 2 / 3) < 1e-9
+        assert abs(float(a2["early_death_share_le6"]) - 2 / 3) < 1e-9
+        assert a2["last_hit_sources"]["affix_thorns"] == 1
+        assert any("40%" in s or "教学" in s or "通关率" in s for s in a2["suggestions"])
+
         # Filtered-empty index must NOT glob all files
         other = root / "run_other.jsonl"
         other.write_text("{}\n", encoding="utf-8")
@@ -738,6 +883,11 @@ def main() -> int:
     ap.add_argument("--detail", action="store_true", help="print per-run build/death details")
     ap.add_argument("--top", type=int, default=10, help="top-N lists (default 10)")
     ap.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    ap.add_argument(
+        "--a2-proxy",
+        action="store_true",
+        help="A2 first-run proxy: winrate / reach N8·N10 / death night histogram / suggestions",
+    )
     ap.add_argument("--self-test", action="store_true", help="run built-in fixture checks")
     args = ap.parse_args()
 
@@ -773,7 +923,13 @@ def main() -> int:
 
     if args.json:
         payload = build_json_payload(all_runs, dir_path=dir_path, min_events=args.min_events)
+        if args.a2_proxy:
+            payload["a2_proxy"] = build_a2_proxy(all_runs)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.a2_proxy:
+        print_a2_proxy_report(all_runs, dir_path=dir_path)
         return 0
 
     print_report(

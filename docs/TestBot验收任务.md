@@ -1,8 +1,8 @@
 # TestBot 验收任务（对齐原型验证验收清单）
 
-> **版本**：v1.1  
-> **日期**：2026-09-08  
-> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.6+ · [`开发进度总览.md`](开发进度总览.md) · `AGENTS.md`  
+> **版本**：v1.2  
+> **日期**：2026-09-16  
+> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.11 · [`开发进度总览.md`](开发进度总览.md) · [`A2_首局试玩记录.md`](A2_首局试玩记录.md) · `AGENTS.md`  
 > **Skill**：新功能同步 Bot → [`tools/SKILL_testbot-coverage.md`](../tools/SKILL_testbot-coverage.md)（`tidekeeper-testbot-coverage`）
 
 ---
@@ -14,8 +14,10 @@
 | 证据类型 | 工具 |
 |----------|------|
 | Godot 日志 `[TestBot] ACCEPT` / `ACCEPT_SUMMARY` | `python tools/check_bot_acceptance.py` |
-| CombatLog JSONL | `python tools/stats_combat_logs.py` |
+| CombatLog JSONL | `python tools/stats_combat_logs.py`（A2 代理：`--a2-proxy`） |
 | 局次胜负 / 夜次 | `python tools/view_bot_runs.py` |
+
+**A2 说明**：真人首局完成率 **无** 新 ACCEPT id。人类默认难度为 **watcher**；下表 suite 默认 **lighthouse** 仍保留硬档回归（与人类默认解耦）。
 
 ---
 
@@ -102,6 +104,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 1.2.1 移速 | `base_move_speed` vs config | smoke / acceptance | 手感 |
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
 | 1.2.4 灯塔碰撞 | 采样距圆心 ≥ min（开局推出，不改写位） | smoke / full / acceptance | — |
+| 4.8 难度默认 | — | — | 人类默认 **watcher**（A2）；Bot suite 仍可强刷 `lighthouse`（硬档回归，与人类默认解耦） |
 | 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |
@@ -124,3 +127,4 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 - Bot 套件跑 Debug 时 CombatLog 默认开启（`debug_only`）。
 - `map.pincer` 已与 `EnemySpawner.is_pincer_mode()` 对齐（含第 15 夜天灾夹击）。
 - 勾选清单时：**ACCEPT_SUMMARY + CombatLog** 可并用；帧率/内存仍只认 Profiler。
+- A2 工程代理：`python tools/stats_combat_logs.py --a2-proxy --latest 30 --completed-only`（通关率/死亡夜/建议；**≠** 真人首局完成率终勾）。

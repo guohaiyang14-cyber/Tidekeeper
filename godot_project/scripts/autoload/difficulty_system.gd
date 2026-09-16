@@ -3,15 +3,15 @@
 # 职责：
 #   - 持有当前难度档位（守夜人 0.7× / 灯塔 1.0×），开局前可选，运行时只读
 #   - 暴露敌人 血量/伤害/数量 倍率 = 档位倍率 × 教学宽容倍率（按夜数）
-#   - 教学夜（默认 1~4 夜）敌人数值适度降低（非减半）+ Boss 提示开关 + 武器展示（demo_weapons）
+#   - 教学夜（默认读 teaching.nights，A2 为 1~6）敌人数值适度降低 + Boss 提示 + 武器展示（demo_weapons）
 # 红线：数值全部来自 config/difficulty.json，运行时禁止硬编码（SKILL.md §4.2）
 # 架构：与 ConfigLoader/GameState 同为 autoload 单例；不引用 enemy_base（避免环依赖）
 # ============================================================================
 extends Node
 
-# 当前选中档位（lighthouse / watcher）
-var _selected_tier: String = "lighthouse"
-var _default_tier: String = "lighthouse"
+# 当前选中档位（lighthouse / watcher）；启动时由 config default_tier 覆盖
+var _selected_tier: String = "watcher"
+var _default_tier: String = "watcher"
 var _tiers: Dictionary = {}
 var _teaching: Dictionary = {}
 
@@ -25,9 +25,9 @@ func _load_from_config() -> void:
 	var cfg: Dictionary = ConfigLoader.get_difficulty_config()
 	_tiers = cfg.get("tiers", {})
 	_teaching = cfg.get("teaching", {})
-	_default_tier = String(cfg.get("default_tier", "lighthouse"))
+	_default_tier = String(cfg.get("default_tier", "watcher"))
 	if not _tiers.has(_default_tier):
-		_default_tier = "lighthouse"
+		_default_tier = "watcher" if _tiers.has("watcher") else "lighthouse"
 	_selected_tier = _default_tier
 
 
@@ -81,7 +81,7 @@ func enemy_count_multiplier() -> float:
 	return float(tier.get("enemy_count_mult", 1.0))
 
 
-## 是否教学夜（默认 1~4 夜）
+## 是否教学夜（默认 1~6 夜，读 teaching.nights）
 func is_teaching_night(night: int) -> bool:
 	return night <= int(_teaching.get("nights", 0))
 

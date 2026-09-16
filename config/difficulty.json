@@ -1,11 +1,11 @@
 {
-  "default_tier": "lighthouse",
+  "default_tier": "watcher",
   "tiers": {
     "lighthouse": { "label": "灯塔守望", "enemy_hp_mult": 1.0, "enemy_dmg_mult": 1.0, "enemy_count_mult": 1.0 },
     "watcher":   { "label": "守夜人",   "enemy_hp_mult": 0.7, "enemy_dmg_mult": 0.7, "enemy_count_mult": 0.8 }
   },
   "teaching": {
-    "nights": 4,
+    "nights": 6,
     "enemy_hp_mult": 0.6,
     "enemy_dmg_mult": 0.6,
     "boss_prompt": true,

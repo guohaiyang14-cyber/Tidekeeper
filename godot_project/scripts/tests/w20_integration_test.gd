@@ -115,7 +115,8 @@ func _phase_full_win_run(char_id: String, tier: String, seed: int) -> void:
 		var dmg_mult: float = DifficultySystem.enemy_damage_multiplier(night)
 		_assert(hp_mult > 0.0 and dmg_mult > 0.0, "夜%d 难度倍率>0" % night)
 		if DifficultySystem.is_teaching_night(night):
-			_assert(hp_mult < DifficultySystem.enemy_hp_multiplier(5), "教学夜%d 敌血倍率低于常规夜" % night)
+			# 对比非教学夜（教学窗扩到 6 后，夜5/6 仍属教学，须用 ≥7）
+			_assert(hp_mult < DifficultySystem.enemy_hp_multiplier(10), "教学夜%d 敌血倍率低于常规夜" % night)
 
 		# 模拟战斗：击杀推进升级 + 拾币（register_enemy_kill 驱动挣扎复活计数）
 		var to_kill: int = 8 + night
