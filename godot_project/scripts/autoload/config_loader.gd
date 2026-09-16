@@ -35,6 +35,8 @@ var frustration: Dictionary = {}
 var difficulty: Dictionary = {}
 # 战斗局次日志（可选；缺省时 CombatLog 用内置默认）
 var combat_log: Dictionary = {}
+# A5 地图 / 灯塔碰撞
+var map_cfg: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -78,6 +80,8 @@ func _load_all() -> void:
 	difficulty = _load_json("difficulty.json", true)
 	# 战斗局次日志（缺文件不阻断启动）
 	combat_log = _load_json("combat_log.json", false)
+	# A5 地图（缺文件用内置默认半径）
+	map_cfg = _load_json("map.json", false)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -482,6 +486,17 @@ func get_character_max_health(id: String) -> int:
 ## 角色基础移速（按 id；缺省 4.2，对齐 GDD §9.4）
 func get_character_move_speed(id: String) -> float:
 	return float(get_character(id).get("move_speed", 4.2))
+
+
+## 地图配置（config/map.json）
+func get_map_config() -> Dictionary:
+	return map_cfg
+
+
+## 灯塔碰撞半径（游戏单位；缺省 0.5 ≈ 30px）
+func get_lighthouse_collision_radius_units() -> float:
+	var lh: Dictionary = map_cfg.get("lighthouse", {}) as Dictionary
+	return float(lh.get("collision_radius_units", 0.5))
 
 
 ## 全部灯塔节点（扁平）

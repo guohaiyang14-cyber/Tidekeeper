@@ -206,6 +206,11 @@ func _on_shop_opened(items: Array) -> void:
 		_skip_btn.grab_focus()
 
 
+## 开店后 Skip 是否持焦（验收 1.1.5 / TestBot）
+func has_skip_focus() -> bool:
+	return _skip_btn != null and _skip_btn.has_focus()
+
+
 func _on_purchase_made(_item: Dictionary) -> void:
 	_refresh_coins()
 	_refresh_fusion()

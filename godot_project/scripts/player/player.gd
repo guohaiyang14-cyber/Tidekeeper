@@ -19,6 +19,9 @@ class_name Player
 ## 单位→像素换算（§5.2：1 单位 = 60 像素，W2 调校）
 const UNIT_TO_PIXEL: float = 60.0
 
+## 玩家本体碰撞半径（像素；与 _draw 本体圆一致）
+const BODY_RADIUS_PX: float = 14.0
+
 
 ## 移速软上限阈值（GDD §6.9 / passives.json soft_caps.move_speed；缺省 +60%）
 static func move_speed_soft_cap() -> float:
@@ -31,6 +34,10 @@ var _hurt_flash: float = 0.0
 ## 锁链等：剩余束缚时间；>0 时乘 _bind_move_mult（0=完全定身，(0,1]=减速）
 var _bind_timer: float = 0.0
 var _bind_move_mult: float = 0.5
+## A5 灯塔障碍（圆心 + 半径像素；不用 Physics2D）
+var _lh_center: Vector2 = Vector2.ZERO
+var _lh_radius_px: float = 0.0
+var _lh_enabled: bool = false
 
 
 func _ready() -> void:
@@ -129,10 +136,43 @@ func _handle_movement() -> void:
 		if _bind_move_mult <= 0.0:
 			velocity = Vector2.ZERO
 			move_and_slide()
+			resolve_lighthouse_collision()
 			return
 		speed *= _bind_move_mult
 	velocity = input_vector * speed * UNIT_TO_PIXEL
 	move_and_slide()
+	resolve_lighthouse_collision()
+
+
+## 注入灯塔障碍（圆心世界坐标 + 碰撞半径像素；radius≤0 关闭）
+func set_lighthouse_obstacle(center: Vector2, radius_px: float) -> void:
+	_lh_center = center
+	_lh_radius_px = maxf(radius_px, 0.0)
+	_lh_enabled = _lh_radius_px > 0.0
+	resolve_lighthouse_collision()
+
+
+## 玩家与灯塔最小间距（像素）
+func get_lighthouse_min_distance() -> float:
+	if not _lh_enabled:
+		return 0.0
+	return BODY_RADIUS_PX + _lh_radius_px
+
+
+## 灯塔推出：若侵入碰撞圆则推至边界（几何推出，非 Physics2D；机检可直调）
+func resolve_lighthouse_collision() -> void:
+	if not _lh_enabled:
+		return
+	var min_dist: float = BODY_RADIUS_PX + _lh_radius_px
+	var offset: Vector2 = global_position - _lh_center
+	var dist: float = offset.length()
+	if dist >= min_dist:
+		return
+	if dist < 0.001:
+		offset = Vector2.RIGHT
+	else:
+		offset = offset / dist
+	global_position = _lh_center + offset * min_dist
 
 
 ## 设置移速加成（原始倍率；与角色&灯塔同乘区加算后在 _effective_move_mult 软衰减）
@@ -194,5 +234,5 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(0.3, 0.85, 1.0, 0.15), 2.0)
 	# 玩家本体（受击闪红）
 	var body_color: Color = Color(0.9, 0.95, 1.0, 0.9) if _hurt_flash <= 0.0 else Color(1.0, 0.25, 0.25, 0.95)
-	draw_circle(Vector2.ZERO, 14.0, body_color)
-	draw_arc(Vector2.ZERO, 14.0, 0.0, TAU, 24, Color(0.3, 0.6, 1.0, 1.0), 2.0)
+	draw_circle(Vector2.ZERO, BODY_RADIUS_PX, body_color)
+	draw_arc(Vector2.ZERO, BODY_RADIUS_PX, 0.0, TAU, 24, Color(0.3, 0.6, 1.0, 1.0), 2.0)

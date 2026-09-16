@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 §5.2 地图/灯塔居中；验收 1.2.4 灯塔碰撞",
+    "note": "运行时只读；碰撞半径为游戏单位（× Player.UNIT_TO_PIXEL → 像素）"
+  },
+  "lighthouse": {
+    "collision_radius_units": 0.5,
+    "collision_radius_note": "0.5 单位 ≈ 30px；玩家本体半径另计"
+  }
+}

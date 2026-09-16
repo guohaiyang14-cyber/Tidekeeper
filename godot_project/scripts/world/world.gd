@@ -16,6 +16,7 @@ const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
 const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
 const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
+const _LH_BEACON = preload("res://scripts/world/lighthouse_beacon.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -39,6 +40,10 @@ const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
 @onready var debug_label: Label = $UI/HUD/DebugLabel
 ## 视野遮罩（用 Node2D：class_name 未入 global cache 时 typed VisionOverlay 会解析失败）
 var vision_overlay: Node2D = null
+## A5 灯塔视觉占位
+var _lighthouse_beacon: Node2D = null
+## 防连点重复跳昼
+var _day_skip_busy: bool = false
 
 
 func _ready() -> void:
@@ -69,6 +74,7 @@ func _ready() -> void:
 	# 刷怪器接线（EnemyPool / 玩家 / 拾取系统）；灯塔光晕圆心显式注入（执政官潮汐波）
 	enemy_spawner.setup(enemy_pool, player, pickup_system)
 	enemy_spawner.lighthouse_position = player.global_position
+	_setup_lighthouse_collision()
 	# 商店接线（ShopManager ↔ ShopUI 双向）
 	shop_manager.setup(shop_ui)
 	shop_ui.setup(shop_manager)
@@ -248,11 +254,44 @@ func _on_chest_opened(kind: String, amount: int, rarity_name: String) -> void:
 		hud.notify_chest(kind, amount, rarity_name)
 
 
-## 玩家在商店点「继续下一夜」→ 关店并进下一夜（与 Q 键等效）
+## 玩家在商店点「继续下一夜」→ 关店并进下一夜（与 Q/Space/Enter/Esc 等效）
 func _on_shop_skip() -> void:
+	_request_day_skip()
+
+
+## 抉择之昼跳过（防连点；非昼忽略）
+func _request_day_skip() -> void:
+	if day_night.get_phase() != DayNightStateMachine.Phase.DAY:
+		return
+	if _day_skip_busy:
+		return
+	_day_skip_busy = true
 	day_phase_ui.exit_day()
 	shop_ui.close()
 	day_night.skip_day_phase()
+	call_deferred("_clear_day_skip_busy")
+
+
+func _clear_day_skip_busy() -> void:
+	_day_skip_busy = false
+
+
+## A5：灯塔圆心 + config 半径注入玩家推出；轻量视觉占位
+func _setup_lighthouse_collision() -> void:
+	var p: Player = player as Player
+	if p == null or enemy_spawner == null:
+		return
+	var center: Vector2 = enemy_spawner.lighthouse_position
+	var units: float = ConfigLoader.get_lighthouse_collision_radius_units()
+	var radius_px: float = units * Player.UNIT_TO_PIXEL
+	p.set_lighthouse_obstacle(center, radius_px)
+	if _lighthouse_beacon == null:
+		_lighthouse_beacon = _LH_BEACON.new() as Node2D
+		_lighthouse_beacon.z_index = -2
+		add_child(_lighthouse_beacon)
+	# 与 VisionOverlay 同：class_name 可能未入 cache，走 preload 脚本方法
+	if _lighthouse_beacon.has_method("setup"):
+		_lighthouse_beacon.call("setup", center, radius_px)
 
 
 ## 抉择之昼「点亮信号」→ 按进度结算离场（GDD §8.4 P1；非通关）
@@ -292,11 +331,19 @@ func _on_loadout_changed() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# 抉择之昼按 skip 键进入下一夜
-	if event.is_action_pressed("skip") and day_night.get_phase() == DayNightStateMachine.Phase.DAY:
-		day_phase_ui.exit_day()
-		shop_ui.close()
-		day_night.skip_day_phase()
+	# 抉择之昼：skip（Q/Space/Enter）或 Esc → 下一夜（Esc 仅昼阶段当跳过）
+	if day_night.get_phase() == DayNightStateMachine.Phase.DAY:
+		var want_skip: bool = event.is_action_pressed("skip")
+		if not want_skip and event is InputEventKey:
+			var ek: InputEventKey = event as InputEventKey
+			if ek.pressed and not ek.echo and (
+				ek.keycode == KEY_ESCAPE or ek.physical_keycode == KEY_ESCAPE
+			):
+				want_skip = true
+		if want_skip:
+			_request_day_skip()
+			get_viewport().set_input_as_handled()
+			return
 	# W2 调试：按 interact(E) 在玩家周围生成经验珠（随机品质）
 	if event.is_action_pressed("interact") and pickup_system and player:
 		# 围绕玩家生成 6 颗，展示不同品质颜色

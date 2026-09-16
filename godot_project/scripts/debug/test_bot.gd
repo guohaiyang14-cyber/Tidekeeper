@@ -150,6 +150,8 @@ var _runs_reached_n10: int = 0
 var _wins: int = 0
 var _run_peak_night: int = 0
 var _move_speed_checked: bool = false
+var _skip_focus_checked: bool = false
+var _lh_collision_checked: bool = false
 var _refine_clicked: bool = false
 var _cutoff_restart_pending: bool = false
 var _run_outcome_recorded: bool = false
@@ -571,6 +573,8 @@ func _pick_run_character() -> String:
 func _prepare_new_run_meta() -> void:
 	_run_peak_night = 0
 	_move_speed_checked = false
+	_skip_focus_checked = false
+	_lh_collision_checked = false
 	_refine_clicked = false
 	_cutoff_restart_pending = false
 	_run_outcome_recorded = false
@@ -1046,6 +1050,7 @@ func _tick_day_shop(world: World, delta: float) -> void:
 	if _action_timer > 0.0:
 		return
 	if world.shop_ui != null and world.shop_ui.visible:
+		_accept_skip_focus_once(world)
 		_try_shop_actions(world)
 		_bot_file_only("[TestBot] 跳过抉择之昼 → 下一夜")
 		if world.day_phase_ui != null:
@@ -2065,7 +2070,43 @@ func _accept_on_night_start(night: int) -> void:
 			"pass" if is_equal_approx(want, got) else "fail",
 			"base=%.2f expect=%.2f" % [got, want]
 		)
+	_accept_lighthouse_collision_once(world)
 	_accept_affix_night_rules(night, world)
+
+
+## 1.1.5：开店后 Skip 获焦（局内证据）
+func _accept_skip_focus_once(world: World) -> void:
+	if _skip_focus_checked:
+		return
+	if world == null or world.shop_ui == null or not world.shop_ui.visible:
+		return
+	_skip_focus_checked = true
+	var ok: bool = world.shop_ui.has_skip_focus()
+	_record_accept("1.1.5", "pass" if ok else "fail", "skip_focus=%s" % str(ok))
+
+
+## 1.2.4：只观测开局推出后距圆心下界（禁止改写玩家位）
+func _accept_lighthouse_collision_once(world: World) -> void:
+	if _lh_collision_checked:
+		return
+	if world == null or world.player == null or world.enemy_spawner == null:
+		return
+	var p: Player = world.player as Player
+	if p == null:
+		return
+	_lh_collision_checked = true
+	var center: Vector2 = world.enemy_spawner.lighthouse_position
+	var min_dist: float = p.get_lighthouse_min_distance()
+	if min_dist <= 0.0:
+		_record_accept("1.2.4", "fail", "obstacle_not_injected")
+		return
+	var dist: float = p.global_position.distance_to(center)
+	var ok: bool = dist >= min_dist - 0.05
+	_record_accept(
+		"1.2.4",
+		"pass" if ok else "fail",
+		"dist=%.1f_min=%.1f" % [dist, min_dist]
+	)
 
 
 func _accept_on_night_end(night: int) -> void:

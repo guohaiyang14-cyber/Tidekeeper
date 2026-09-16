@@ -98,10 +98,10 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 |--------|----------|------|----------|
 | 1.1.1 昼夜循环 | 夜结束 / peak / 截断均需 **≥10** | smoke / acceptance | — |
 | 1.1.2 夜长 | 对比 `duration_for_night` | 全部 | — |
-| 1.1.5 跳过焦点 | — | — | 试玩 |
-| 1.2.1 移速 | `base_move_speed` vs config | 全部 | 手感 |
+| 1.1.5 跳过焦点 | 开店后 `has_skip_focus` | acceptance（机检 `a5_feel_test`） | 手感 |
+| 1.2.1 移速 | `base_move_speed` vs config | smoke / acceptance | 手感 |
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
-| 1.2.4 灯塔碰撞 | — | — | 试玩 |
+| 1.2.4 灯塔碰撞 | 采样距圆心 ≥ min（开局推出，不改写位） | smoke / full / acceptance | — |
 | 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |
