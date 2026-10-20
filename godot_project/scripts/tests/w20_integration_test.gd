@@ -189,8 +189,11 @@ func _phase_defeat_run(char_id: String, seed: int) -> void:
 		GameState.end_night()
 		MetaSystem.record_night_cleared(night)
 
-	# 第 6 夜致命伤（超出首夜保护 4 夜）：进入挣扎或判负
-	GameState.enter_night(6)
+	# 致命伤：选在首夜保护窗口之后（protect_nights 来自 config/frustration.json，MVP=6 对齐教学夜）
+	var fn_cfg: Dictionary = ConfigLoader.get_frustration_config().get("first_night", {})
+	var protect_nights: int = int(fn_cfg.get("protect_nights", 4))
+	var lethal_night: int = protect_nights + 2
+	GameState.enter_night(lethal_night)
 	GameState.player_health = 1
 	GameState.damage_player(999, "boss_tide_archon")
 	if GameState.is_player_down():

@@ -319,10 +319,12 @@ func _test_spawn_and_collect() -> void:
 		_assert(GameState.tidecoins == coins_alt0, "未抽到 tidecoins")
 	_pickup_system.reload_chest_config_for_test()
 
-	# 挣扎中开箱：不发奖、不转潮币（第5夜，避开首夜保护）
+	# 挣扎中开箱：不发奖、不转潮币（选在首夜保护窗口之后，避免首夜保护复活抢占挣扎）
 	_pickup_system.clear_all()
 	MetaSystem.begin_run()
-	GameState.current_night = 5
+	var fn_cfg: Dictionary = ConfigLoader.get_frustration_config().get("first_night", {})
+	var protect_nights: int = int(fn_cfg.get("protect_nights", 4))
+	GameState.current_night = protect_nights + 1
 	GameState.player_health = 1
 	GameState.damage_player(999, "test")
 	_assert(GameState.is_struggling(), "已进入挣扎")

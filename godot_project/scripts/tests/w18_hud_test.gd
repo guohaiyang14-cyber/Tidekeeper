@@ -45,7 +45,7 @@ func _ready() -> void:
 	_assert(hud._hp_label.text.contains("HP"), "血条文案 (HP)")
 	_assert(hud._exp_label.text.contains("Lv"), "经验条文案 (Lv)")
 	_assert(hud._night_label.text.contains("第") and hud._night_label.text.contains("夜"), "夜数文案")
-	_assert(hud._diff_label.text.contains("灯塔"), "难度档位默认=灯塔守望")
+	_assert(hud._diff_label.text.contains("守夜人"), "难度档位默认=守夜人（首局友好）")
 	_assert(hud._weapon_box.get_child_count() >= 1, "武器槽 >= 1 (实际 %d)" % hud._weapon_box.get_child_count())
 	_assert(hud._passive_box.get_child_count() >= 1, "被动槽 >= 1 (实际 %d)" % hud._passive_box.get_child_count())
 

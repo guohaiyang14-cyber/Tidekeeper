@@ -377,7 +377,14 @@ func _test_boss_night10() -> void:
 	for en in enemy_pool.get_active():
 		if en is EnemyBase and en.is_boss:
 			boss = en
-	_assert(boss != null and boss.max_health >= 2000, "第10夜 Boss 占位 (hp=%d)" % (boss.max_health if boss != null else 0))
+	# 天灾夜 Boss 占位：血量 = 表底 base_health × 难度档位倍率
+	# 与 EnemyBase.configure_boss 同口径：night_value = GameState.current_night(>0) 否则 Boss 表内 night
+	var bdef: Dictionary = ConfigLoader.get_boss_by_night(10)
+	var base_hp: float = float(bdef.get("base_health", 0))
+	var boss_night: int = GameState.current_night if GameState.current_night > 0 else int(bdef.get("night", 10))
+	var expect_hp: int = int(roundi(base_hp * DifficultySystem.enemy_hp_multiplier(boss_night)))
+	_assert(boss != null and boss.max_health == expect_hp,
+		"第10夜 Boss 占位 (hp=%d, 期望 %d)" % [(boss.max_health if boss != null else 0), expect_hp])
 	spawner.clear_all()
 
 
@@ -564,7 +571,12 @@ func _test_budget_floor_ratio() -> void:
 	var base_count: int = int(spawn_meta.get("base_count", 0))
 	var redundancy: float = float(spawn_meta.get("budget_exp_redundancy", 1.0))
 	var min_active: int = int(spawn_meta.get("min_active", 0))
-	var n1_budget: int = int(roundi(float(base_count) * redundancy))
+	# 对齐 EnemySpawner._compute_count(1)：base_count × 难度数量倍率 ×（redundancy>1 再乘），封顶 max_enemies
+	var count_mult: float = DifficultySystem.enemy_count_multiplier()
+	var n1_budget: int = int(roundi(float(base_count) * count_mult))
+	if redundancy > 1.0:
+		n1_budget = int(roundi(float(n1_budget) * redundancy))
+	n1_budget = mini(maxi(n1_budget, 1), spawner.max_enemies)
 	_assert(min_active > 0 and n1_budget > 0, "夜1 预算与 min_active 有效")
 	_assert(n1_budget >= min_active * 2,
 		"夜1有经验预算≥2×min_active（budget=%d floor=%d）" % [n1_budget, min_active])
