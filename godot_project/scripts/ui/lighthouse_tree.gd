@@ -141,13 +141,13 @@ func _effect_parts(eff: Dictionary) -> String:
 	var parts: Array[String] = []
 	for k in eff.keys():
 		var v: float = float(eff[k])
-		var sign: String = "+" if v >= 0 else ""
+		var sign_str: String = "+" if v >= 0 else ""
 		var suffix: String = "%" if not (k == "projectile_bonus" or k == "max_health" or k == "regen_per_night") else ""
 		var trait_key: String = "ui.trait.%s" % String(k)
 		var label: String = LanguageSystem.localize(trait_key)
 		if label == trait_key:
 			label = String(k)
-		parts.append("%s%s%d%s" % [label, sign, int(v), suffix])
+		parts.append("%s%s%d%s" % [label, sign_str, int(v), suffix])
 	return "·".join(parts)
 
 

@@ -1163,11 +1163,11 @@ func _bot_buy_shop_items(world: World) -> void:
 func _bot_fuse_ready_weapons() -> void:
 	var guard: int = 0
 	while guard < 8:
-		var ready: Array[String] = EvolutionSystem.list_ready()
-		if ready.is_empty():
+		var ready_ids: Array[String] = EvolutionSystem.list_ready()
+		if ready_ids.is_empty():
 			break
 		var fused_any: bool = false
-		for wid in ready:
+		for wid in ready_ids:
 			if EvolutionSystem.fuse(wid):
 				_bot_file_only("[TestBot] 融合武器 %s → %s" % [wid, GameState.get_evolved_name(wid)])
 				fused_any = true
@@ -2406,7 +2406,7 @@ func _on_chest_opened_accept(kind: String, amount: int, rarity_name: String) -> 
 ## 同屏峰值门槛：max(底数, max_enemies/4)
 func _enemy_peak_min() -> int:
 	var cap: int = int(ConfigLoader.get_difficulty_config().get("max_enemies", 350))
-	return maxi(ACCEPT_ENEMY_PEAK_FLOOR, int(cap / 4))
+	return maxi(ACCEPT_ENEMY_PEAK_FLOOR, int(cap / 4.0))
 
 
 ## 有证据即打 pass（可多次覆盖为更新 detail；不覆盖既有 fail；同 detail 由 _record_accept 去重）

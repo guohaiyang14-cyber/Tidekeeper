@@ -1,7 +1,7 @@
 # ============================================================================
 # WeaponManager — 武器管理器（W5，挂在 World 下）
 # 职责：按 GameState.weapon_slots 增删武器实例；_process 驱动所有武器 tick；
-#       注入索敌（SpatialHash 最近敌人）与玩家位置；提供投射物池 / hash 给武器
+#       注入索敌（SpatialHash 最近敌人）与玩家位置；提供投射物池 / spatial_hash 给武器
 # 红线：运行时禁止 instantiate（武器实例按 behavior_type new，弹道走 projectile_pool）
 # ============================================================================
 class_name WeaponManager
@@ -25,9 +25,9 @@ var _projectile_pool: ProjectilePool
 var _particle_pool: ObjectPool = null
 
 
-func setup(player: Node2D, hash: SpatialHash, projectile_pool: ProjectilePool, particle_pool: ObjectPool = null) -> void:
+func setup(player: Node2D, spatial_hash: SpatialHash, projectile_pool: ProjectilePool, particle_pool: ObjectPool = null) -> void:
 	_player = player
-	_hash = hash
+	_hash = spatial_hash
 	_projectile_pool = projectile_pool
 	_particle_pool = particle_pool
 

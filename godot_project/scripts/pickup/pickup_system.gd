@@ -90,9 +90,9 @@ func _ready() -> void:
 	# 触达 preload，确保 headless 首次加载已注册 class_name
 	assert(_CHEST_SCRIPT != null and _CHEST_POOL_SCRIPT != null)
 	print("[PickupSystem] 就绪 (pool=%s player=%s chest_pool=%s)" % [
-		_pool.name if _pool else "null",
-		_player.name if _player else "null",
-		_chest_pool.name if _chest_pool else "null",
+		String(_pool.name) if _pool else "null",
+		String(_player.name) if _player else "null",
+		String(_chest_pool.name) if _chest_pool else "null",
 	])
 
 
@@ -187,7 +187,7 @@ func spawn_exp_gems(pos: Vector2, total_exp: int, gem_count: int = 3) -> void:
 		return
 	var quality: ExpGem.Quality = _roll_quality()
 	var final_total: int = maxi(1, roundi(float(total_exp) * _quality_exp_mult[quality]))
-	var per_gem: int = final_total / gem_count
+	var per_gem: int = int(final_total / float(gem_count))
 	var remainder: int = final_total % gem_count
 	for i in gem_count:
 		var value: int = per_gem + (1 if i < remainder else 0)

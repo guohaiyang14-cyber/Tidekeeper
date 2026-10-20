@@ -852,10 +852,10 @@ func _ensure_dir() -> void:
 	DirAccess.make_dir_recursive_absolute(abs_dir)
 
 
-func _cat(name: String) -> bool:
+func _cat(cat_name: String) -> bool:
 	if _categories.is_empty():
 		return true
-	return bool(_categories.get(name, true))
+	return bool(_categories.get(cat_name, true))
 
 
 ## debug_only + headless：启动时决定是否接线；开局再判 scene

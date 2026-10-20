@@ -75,7 +75,7 @@ func _add_joy_axis_if_missing(action: String, axis: int, axis_value: float) -> v
 			if jm.axis == axis and signf(jm.axis_value) == signf(axis_value):
 				return
 	var motion := InputEventJoypadMotion.new()
-	motion.axis = axis
+	motion.axis = axis as JoyAxis
 	motion.axis_value = axis_value
 	InputMap.action_add_event(action, motion)
 
@@ -87,7 +87,7 @@ func _add_joy_button_if_missing(action: String, button: int) -> void:
 		if ev is InputEventJoypadButton and (ev as InputEventJoypadButton).button_index == button:
 			return
 	var btn := InputEventJoypadButton.new()
-	btn.button_index = button
+	btn.button_index = button as JoyButton
 	InputMap.action_add_event(action, btn)
 
 

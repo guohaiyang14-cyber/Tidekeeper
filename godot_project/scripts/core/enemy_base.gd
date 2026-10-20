@@ -206,8 +206,8 @@ func get_alive_seconds() -> float:
 
 
 ## 数据驱动配置：读 config 并按 §8.2 难度公式缩放血量/伤害
-## scale=false 时跳过难度缩放（Boss 用 config 表中的 base_health 原值）
-func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
+## （Boss 不走本公式，改由 configure_boss 按表底 base_health × 难度档位缩放）
+func configure(data: Dictionary, night_value: int) -> void:
 	enemy_id = data.get("id", "")
 	prototype_id = String(data.get("prototype_id", enemy_id))
 	behavior_type = data.get("behavior_type", "charge_linear")
@@ -239,11 +239,8 @@ func configure(data: Dictionary, night_value: int, scale: bool = true) -> void:
 	var tier_hp: float = DifficultySystem.enemy_hp_multiplier(night_value)
 	var tier_dmg: float = DifficultySystem.enemy_damage_multiplier(night_value)
 
-	var hp_scale: float = 1.0
-	var dmg_scale: float = 1.0
-	if scale:
-		hp_scale = region_coeff * tier_hp * (1.0 + hp_per_night * float(night)) * (1.0 + hp_per_5 * floor(float(night) / 5.0))
-		dmg_scale = tier_dmg * (1.0 + dmg_per_night * float(night))
+	var hp_scale: float = region_coeff * tier_hp * (1.0 + hp_per_night * float(night)) * (1.0 + hp_per_5 * floor(float(night) / 5.0))
+	var dmg_scale: float = tier_dmg * (1.0 + dmg_per_night * float(night))
 
 	max_health = int(roundi(float(data.get("base_health", 30)) * hp_scale))
 	contact_damage = int(roundi(float(data.get("base_contact_damage", 8)) * dmg_scale))

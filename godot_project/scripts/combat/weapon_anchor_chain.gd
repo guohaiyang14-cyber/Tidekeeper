@@ -12,8 +12,8 @@ func fire(_target: EnemyBase) -> void:
 	var mgr: WeaponManager = get_parent() as WeaponManager
 	if mgr == null:
 		return
-	var hash: SpatialHash = mgr.get_hash()
-	if hash == null:
+	var spatial_hash: SpatialHash = mgr.get_hash()
+	if spatial_hash == null:
 		return
 	var origin: Vector2 = get_owner_pos.call()
 	var base_r: float = get_behavior_float("base_radius", 60.0)
@@ -25,12 +25,12 @@ func fire(_target: EnemyBase) -> void:
 	for i in rings:
 		var inner: float = 0.0 if i == 0 else radius + spacing * float(i - 1)
 		var outer: float = radius + spacing * float(i)
-		_hit_annulus(hash, origin, inner, outer)
+		_hit_annulus(spatial_hash, origin, inner, outer)
 
 
 ## 对距 origin 在 (inner, outer] 的敌人各造成一次命中（inner=0 含圆心）
-func _hit_annulus(hash: SpatialHash, origin: Vector2, inner: float, outer: float) -> void:
-	var pts: Array = hash.query_radius(origin, outer)
+func _hit_annulus(spatial_hash: SpatialHash, origin: Vector2, inner: float, outer: float) -> void:
+	var pts: Array = spatial_hash.query_radius(origin, outer)
 	for p in pts:
 		if not (p is EnemyBase):
 			continue

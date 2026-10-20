@@ -124,7 +124,7 @@ func start_night(night: int) -> void:
 	])
 	# 精英 / Boss 远距立即登场（不受开局缓冲影响；同样受 max_enemies 约束）
 	if night == 5:
-		_spawn_elite(night)
+		_spawn_elite()
 	elif night in [10, 15, 20]:
 		_spawn_boss(night)
 	# 鱼群回游：缓冲结束后再刷贴环精英波，避免开局包围（先缓存数量，consume 会清零 EventSystem）
@@ -310,7 +310,7 @@ func _can_spawn_more() -> bool:
 
 
 ## 精英夜：巨钳王 = 强化铁壳蟹（倍率见 metadata.elite；叠 §8.2 后约为表内倍率）
-func _spawn_elite(night: int) -> void:
+func _spawn_elite() -> void:
 	if not _can_spawn_more():
 		push_warning("[EnemySpawner] 同屏已满，跳过精英登场")
 		return

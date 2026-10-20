@@ -207,7 +207,7 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 			pass  # 过渡帧，无需处理
 
 
-func _on_night_tick(remaining: float) -> void:
+func _on_night_tick(_remaining: float) -> void:
 	pass  # HUD 更新由 _process 处理
 
 

@@ -109,10 +109,10 @@ static func _tick_swift(enemy: EnemyBase) -> void:
 	var bonus: float = float(sw.get("speed_bonus", 0.25))
 	var refresh: float = float(sw.get("aura_refresh", 0.25))
 	_apply_aura_to(enemy, bonus, refresh)
-	var hash: SpatialHash = enemy.get_spatial_hash()
-	if hash == null:
+	var spatial_hash: SpatialHash = enemy.get_spatial_hash()
+	if spatial_hash == null:
 		return
-	var nearby: Array = hash.query_radius(enemy.global_position, radius)
+	var nearby: Array = spatial_hash.query_radius(enemy.global_position, radius)
 	for n in nearby:
 		if n is EnemyBase and n != enemy:
 			var other: EnemyBase = n as EnemyBase
@@ -141,9 +141,9 @@ static func _tick_teleport(enemy: EnemyBase, delta: float) -> void:
 	var dist: float = RNG.randf_range(rng_range * 0.4, rng_range)
 	var old_pos: Vector2 = enemy.global_position
 	enemy.global_position = old_pos + Vector2.from_angle(angle) * dist
-	var hash: SpatialHash = enemy.get_spatial_hash()
-	if hash != null:
-		hash.update(enemy, old_pos)
+	var spatial_hash: SpatialHash = enemy.get_spatial_hash()
+	if spatial_hash != null:
+		spatial_hash.update(enemy, old_pos)
 
 
 static func _tick_regen(enemy: EnemyBase, delta: float) -> void:

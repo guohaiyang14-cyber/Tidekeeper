@@ -116,12 +116,12 @@ func _parse_hex_color(hex: String, default_hex: String) -> Color:
 
 
 ## 从 SpatialHash 取距 origin 最近的至多 count 个敌人（O(n·k)，k=count，避免全量 sort）
-func query_nearest_enemies(hash: SpatialHash, origin: Vector2, radius: float, count: int) -> Array[EnemyBase]:
+func query_nearest_enemies(spatial_hash: SpatialHash, origin: Vector2, radius: float, count: int) -> Array[EnemyBase]:
 	var result: Array[EnemyBase] = []
-	if hash == null or count <= 0:
+	if spatial_hash == null or count <= 0:
 		return result
 	var best_d2: Array[float] = []
-	var candidates: Array = hash.query_radius(origin, radius)
+	var candidates: Array = spatial_hash.query_radius(origin, radius)
 	for node in candidates:
 		if not (node is EnemyBase):
 			continue

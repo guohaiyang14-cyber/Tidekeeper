@@ -311,8 +311,8 @@ func _refresh_fusion() -> void:
 func _refresh_fusion_buttons_only() -> void:
 	if _evo_label != null:
 		_evo_label.text = LanguageSystem.localizef("ui.shop.evo_items", [GameState.evolution_items])
-	var ready: Array[String] = EvolutionSystem.list_ready()
-	for wid in ready:
+	var ready_ids: Array[String] = EvolutionSystem.list_ready()
+	for wid in ready_ids:
 		var path: Dictionary = EvolutionSystem.evolution_path(wid)
 		var btn: Button = Button.new()
 		_UI.style_button(btn)
@@ -337,8 +337,8 @@ func _refresh_refine_buttons_only() -> void:
 		_refine_label.text = LanguageSystem.localizef("ui.shop.refine_essence", [
 			GameState.refine_essence, GameState.MAX_REFINE_II,
 		])
-	var ready: Array[String] = RefineSystem.list_ready()
-	for wid in ready:
+	var ready_ids: Array[String] = RefineSystem.list_ready()
+	for wid in ready_ids:
 		var path: Dictionary = RefineSystem.refine_path(wid)
 		var target: int = RefineSystem.next_refine_tier(wid)
 		var cost: int = int(RefineSystem.get_rules().get("tier_%d_cost" % target, 1 if target == 1 else 2))
