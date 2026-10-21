@@ -29,7 +29,7 @@
 | `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 / 2.4.2 / 4.3.12 / 4.8.2 |
 | `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2 |
 | `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.8.6 / 4.8.2 / 4.3.12 |
-| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 |
+| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 / 4.11.1 |
 
 显式 CLI / 环境变量 **覆盖** suite 默认值。
 
@@ -119,6 +119,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 4.2.8 精炼入口 | Bot 调用 RefineSystem | full / acceptance | UI 排版 |
 | 2.5.3 / 4.10.1 | 通关 win | full | — |
 | 4.6 / 4.8 | 角色 cycle / 难度 | meta | UI |
+| 4.11.1 音频就绪与发声 | `AudioManager.is_enabled()` 且局末 `play_count` 增量>0（开局记基线、局末比增量；headless/关闭 → skip） | acceptance | 音色/音量平衡（4.11.3 人工试听） |
 | 5.1 / 5.3 | — | — | Profiler |
 | 4.1.4 / 4.4.9 / 4.5.9 / 4.6.13 / 4.7.11 | — | — | 视觉 |
 

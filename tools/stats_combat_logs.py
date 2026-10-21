@@ -553,6 +553,24 @@ def build_json_payload(
     }
 
 
+def a2_tier_breakdown(all_runs: List[Dict[str, Any]]) -> Dict[str, int]:
+    """按难度档位统计局数（空档位=历史无档位倍率的旧局）。"""
+    out: Counter = Counter()
+    for s in all_runs:
+        out[str(s.get("difficulty_tier") or "unknown")] += 1
+    return dict(out)
+
+
+def filter_a2_runs(all_runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A2 代理样本口径：剔除显式 lighthouse（硬档）局。
+
+    Bot 验收套件（acceptance/full）会强刷 `difficulty=lighthouse`（1.0× 敌人数值），
+    与「人类默认守夜人（0.7×）」不是同一口径；混入会让首局完成率代理失真。
+    历史无 `difficulty_tier` 的旧局保留（当年无档位倍率）。
+    """
+    return [s for s in all_runs if (s.get("difficulty_tier") or "") != "lighthouse"]
+
+
 def build_a2_proxy(all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
     """A2 首局完成率工程代理：通关率 / 里程碑 / 死亡夜分布 / last_hit。"""
     completed = [s for s in all_runs if s["outcome"] in COMPLETED]
@@ -893,11 +911,19 @@ def main() -> int:
         action="store_true",
         help="A2 first-run proxy: winrate / reach N8·N10 / death night histogram / suggestions",
     )
+    ap.add_argument(
+        "--a2-watcher-only",
+        action="store_true",
+        help="A2 proxy 仅统计非 lighthouse 局（剔除 Bot 验收套件强刷的硬档样本）",
+    )
     ap.add_argument("--self-test", action="store_true", help="run built-in fixture checks")
     args = ap.parse_args()
 
     if args.self_test:
         return _self_test()
+
+    if args.a2_watcher_only and not args.a2_proxy:
+        print("[A2 代理] --a2-watcher-only 仅在 --a2-proxy 下生效（本次忽略）")
 
     dir_path = Path(args.dir) if args.dir else default_log_dir()
     if not dir_path.is_dir():
@@ -929,12 +955,24 @@ def main() -> int:
     if args.json:
         payload = build_json_payload(all_runs, dir_path=dir_path, min_events=args.min_events)
         if args.a2_proxy:
-            payload["a2_proxy"] = build_a2_proxy(all_runs)
+            a2_runs = filter_a2_runs(all_runs) if args.a2_watcher_only else all_runs
+            payload["a2_proxy"] = build_a2_proxy(a2_runs)
+            payload["a2_proxy"]["tier_breakdown"] = a2_tier_breakdown(all_runs)
+            payload["a2_proxy"]["watcher_only"] = bool(args.a2_watcher_only)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     if args.a2_proxy:
-        print_a2_proxy_report(all_runs, dir_path=dir_path)
+        tiers = a2_tier_breakdown(all_runs)
+        hard = int(tiers.get("lighthouse", 0))
+        if hard:
+            scope = "已剔除" if args.a2_watcher_only else "未剔除（加 --a2-watcher-only 可剔除）"
+            print(
+                f"[A2 代理] 样本含 {hard} 局 lighthouse 硬档（Bot 验收套件强刷，"
+                f"与人类默认守夜人 0.7× 不同口径）→ {scope}"
+            )
+        a2_runs = filter_a2_runs(all_runs) if args.a2_watcher_only else all_runs
+        print_a2_proxy_report(a2_runs, dir_path=dir_path)
         return 0
 
     print_report(
