@@ -250,6 +250,7 @@ func _process_coins(delta: float, player_pos: Vector2, pickup_radius: float, vie
 ## 收集潮币（入账 + 回收）
 func _collect_coin(coin: Coin, index: int) -> void:
 	GameState.add_tidecoins(coin.value)
+	AudioManager.play_sfx("coin")
 	_active_coins.remove_at(index)
 	_coin_pool.release(coin)
 

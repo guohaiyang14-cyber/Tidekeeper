@@ -83,6 +83,8 @@ func _ready() -> void:
 	shop_ui.evolution_fused.connect(_on_evolution_fused)
 	if not GameState.loadout_changed.is_connected(_on_loadout_changed):
 		GameState.loadout_changed.connect(_on_loadout_changed)
+	# 音频接线（拾取 / 商店音效）：显式绑定，不依赖 scene_changed 时序
+	AudioManager.bind_world(self)
 	# 注册 group（供 EnemyProjectile 查玩家 / EnemyBase 查弹道池；tscn 的 groups 属性在 headless 不生效，统一在此注册）
 	player.add_to_group("player")
 	enemy_spawner.add_to_group("enemy_spawner")

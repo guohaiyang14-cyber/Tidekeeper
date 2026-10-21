@@ -174,6 +174,8 @@ func tick(delta: float) -> void:
 	while attack_timer >= interval:
 		attack_timer -= interval
 		fire(target)
+		# 开火音效（冷却/并发由 config/audio.json 控制，多武器齐射不会糊成一团）
+		AudioManager.play_sfx("shoot")
 
 
 ## 开火（子类实现；target 为当前索敌到的敌人）

@@ -1,0 +1,42 @@
+{
+  "_note": "音频总表（唯一数据源）。总线布局见 godot_project/default_bus_layout.tres；资源为程序化占位 WAV（tools/generate_audio_placeholders.py 生成，可整批替换为正式素材）。",
+  "version": 1,
+  "enabled": true,
+  "skip_headless": true,
+  "audio_dir": "res://assets/audio/",
+  "buses": {
+    "music": { "name": "Music", "volume_db": -6.0 },
+    "sfx":   { "name": "SFX",   "volume_db": -4.0 },
+    "ui":    { "name": "UI",    "volume_db": -8.0 }
+  },
+  "sfx_voice_count": 16,
+  "bgm_fade_sec": 1.2,
+  "default_bgm": "menu",
+  "bgm_by_phase": {
+    "menu": "menu",
+    "day": "day",
+    "night": "night",
+    "boss": "boss"
+  },
+  "boss_bgm_on_boss_nights": true,
+  "sfx": {
+    "shoot":      { "file": "sfx_shoot.wav",      "bus": "sfx", "volume_db": -14.0, "cooldown_sec": 0.05, "max_concurrent": 4, "pitch_jitter": 0.08 },
+    "hit":        { "file": "sfx_hit.wav",        "bus": "sfx", "volume_db": -18.0, "cooldown_sec": 0.05, "max_concurrent": 3, "pitch_jitter": 0.10 },
+    "enemy_die":  { "file": "sfx_enemy_die.wav",  "bus": "sfx", "volume_db": -16.0, "cooldown_sec": 0.08, "max_concurrent": 3, "pitch_jitter": 0.12 },
+    "pickup":     { "file": "sfx_pickup.wav",     "bus": "sfx", "volume_db": -16.0, "cooldown_sec": 0.05, "max_concurrent": 3, "pitch_jitter": 0.10 },
+    "coin":       { "file": "sfx_coin.wav",       "bus": "sfx", "volume_db": -16.0, "cooldown_sec": 0.06, "max_concurrent": 3, "pitch_jitter": 0.14 },
+    "level_up":   { "file": "sfx_level_up.wav",   "bus": "sfx", "volume_db": -8.0,  "cooldown_sec": 0.60, "max_concurrent": 1, "pitch_jitter": 0.0 },
+    "hurt":       { "file": "sfx_hurt.wav",       "bus": "sfx", "volume_db": -10.0, "cooldown_sec": 0.22, "max_concurrent": 2, "pitch_jitter": 0.06 },
+    "chest":      { "file": "sfx_chest.wav",      "bus": "sfx", "volume_db": -8.0,  "cooldown_sec": 0.30, "max_concurrent": 1, "pitch_jitter": 0.0 },
+    "ui_click":   { "file": "sfx_ui_click.wav",   "bus": "ui",  "volume_db": -12.0, "cooldown_sec": 0.03, "max_concurrent": 2, "pitch_jitter": 0.0 },
+    "boss_roar":  { "file": "sfx_boss_roar.wav",  "bus": "sfx", "volume_db": -6.0,  "cooldown_sec": 1.00, "max_concurrent": 1, "pitch_jitter": 0.0 },
+    "game_over":  { "file": "sfx_game_over.wav",  "bus": "sfx", "volume_db": -6.0,  "cooldown_sec": 1.00, "max_concurrent": 1, "pitch_jitter": 0.0 },
+    "victory":    { "file": "sfx_victory.wav",    "bus": "sfx", "volume_db": -6.0,  "cooldown_sec": 1.00, "max_concurrent": 1, "pitch_jitter": 0.0 }
+  },
+  "bgm": {
+    "menu":  { "file": "bgm_menu.wav",  "bus": "music", "volume_db": -12.0, "loop": true },
+    "day":   { "file": "bgm_day.wav",   "bus": "music", "volume_db": -14.0, "loop": true },
+    "night": { "file": "bgm_night.wav", "bus": "music", "volume_db": -11.0, "loop": true },
+    "boss":  { "file": "bgm_boss.wav",  "bus": "music", "volume_db": -8.0,  "loop": true }
+  }
+}

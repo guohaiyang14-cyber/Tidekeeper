@@ -94,6 +94,8 @@ func _process(delta: float) -> void:
 				var enemy: EnemyBase = node as EnemyBase
 				# 每次命中独立掷暴击（穿透多段各自判定，W12）
 				enemy.take_damage(PassiveSystem.apply_crit_to_damage(_damage), false, false, _source_id)
+				# 命中音效（冷却/并发上限见 config/audio.json，热路径下由 AudioManager 节流）
+				AudioManager.play_sfx("hit")
 				if _slow_duration > 0.0 and _slow_factor < 1.0:
 					enemy.apply_slow(_slow_factor, _slow_duration)
 				_pierce -= 1

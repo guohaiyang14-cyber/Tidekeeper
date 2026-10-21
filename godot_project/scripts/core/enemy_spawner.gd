@@ -385,6 +385,7 @@ func _spawn_boss(night: int) -> void:
 	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
 	e.spawn_at(pos, target)
 	_connect_died(e)
+	AudioManager.play_sfx("boss_roar")
 	print("[EnemySpawner] 天灾夜 Boss 登场：%s (%s)" % [b.get("name", "未知"), b.get("behavior_type", "")])
 
 
@@ -398,6 +399,8 @@ func _connect_died(e: EnemyBase) -> void:
 func _on_enemy_died(enemy: EnemyBase) -> void:
 	if not is_instance_valid(enemy):
 		return
+	# Boss 死亡用长吼（与登场同素材，比小怪死亡音更有分量）
+	AudioManager.play_sfx("boss_roar" if enemy.is_boss else "enemy_die")
 	var pos: Vector2 = enemy.global_position
 	var was_final_boss: bool = enemy.is_boss and GameState.current_night >= 20
 	if pickup_system != null and not enemy.is_floor_refill:

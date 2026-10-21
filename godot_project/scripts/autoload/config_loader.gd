@@ -35,6 +35,8 @@ var frustration: Dictionary = {}
 var difficulty: Dictionary = {}
 # 战斗局次日志（可选；缺省时 CombatLog 用内置默认）
 var combat_log: Dictionary = {}
+# 音频总表（总线音量 / SFX / BGM；缺省时 AudioManager 静默）
+var audio: Dictionary = {}
 # A5 地图 / 灯塔碰撞
 var map_cfg: Dictionary = {}
 
@@ -80,6 +82,8 @@ func _load_all() -> void:
 	difficulty = _load_json("difficulty.json", true)
 	# 战斗局次日志（缺文件不阻断启动）
 	combat_log = _load_json("combat_log.json", false)
+	# 音频总表（缺文件时 AudioManager 不启用）
+	audio = _load_json("audio.json", false)
 	# A5 地图（缺文件用内置默认半径）
 	map_cfg = _load_json("map.json", false)
 
@@ -91,7 +95,7 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s combat_log=%s" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s combat_log=%s audio=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
@@ -102,6 +106,7 @@ func _load_all() -> void:
 		_pickups_status(),
 		"ok" if upgrade.has("reroll_cost") else "missing",
 		"ok" if combat_log.has("max_runs") else "default",
+		"ok" if audio.has("sfx") else "off",
 	])
 
 
@@ -527,3 +532,8 @@ func get_combat_log_config() -> Dictionary:
 
 func get_frustration_config() -> Dictionary:
 	return frustration
+
+
+## 音频总表（config/audio.json；AudioManager 唯一数据源）
+func get_audio_config() -> Dictionary:
+	return audio
