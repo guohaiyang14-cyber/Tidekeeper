@@ -155,6 +155,8 @@ var _lh_collision_checked: bool = false
 var _refine_clicked: bool = false
 var _cutoff_restart_pending: bool = false
 var _run_outcome_recorded: bool = false
+## 4.11.1 音频探针：开局时 AudioManager.play_count 基线（-1=未记录，局末比增量而非累计值）
+var _run_audio_play_baseline: int = -1
 var _accept_pass: Dictionary = {}
 var _accept_fail: Dictionary = {}
 var _suite_checklist: Array[String] = []
@@ -582,6 +584,7 @@ func _prepare_new_run_meta() -> void:
 	_refine_clicked = false
 	_cutoff_restart_pending = false
 	_run_outcome_recorded = false
+	_run_audio_play_baseline = AudioManager.play_count
 	_serial_advanced_for_run = false
 	_elite_affix_checked = false
 	_boss_tier_checked = false
@@ -2149,6 +2152,7 @@ func _finalize_run_outcome(is_win: bool) -> void:
 			)
 	if not _refine_clicked and _suite_name in ["acceptance", "full", "meta"]:
 		_record_accept("4.2.8", "skip", "no_refine_this_run")
+	_accept_audio_probe()
 	_accept_emit_feature_progress()
 	_accept_finalize_feature_skips(peak)
 	_bot_say(
@@ -2428,6 +2432,26 @@ func _accept_emit_feature_progress() -> void:
 			"pass",
 			"peak=%d min=%d max_enemies=%d" % [_peak_enemies, peak_min, cap]
 		)
+
+
+## 4.11.1 音频：headless/关闭 → skip；启用且本局确有发声 → pass；启用却本局零播放 → fail
+## 证据取自 AudioManager 运行统计：play_count 只增，故开局记基线（_prepare_new_run_meta）、
+## 局末比增量，多局连跑时不会因首局累计值误判后续局
+func _accept_audio_probe() -> void:
+	if not AudioManager.is_enabled():
+		_record_accept("4.11.1", "skip", "headless_or_disabled")
+		return
+	# 基线未记录（异常路径直接局末）时按 0 兜底，退化为旧口径
+	var delta: int = AudioManager.play_count - maxi(_run_audio_play_baseline, 0)
+	if delta > 0:
+		_record_accept("4.11.1", "pass", "plays=+%d total=%d sfx=%d bgm=%d" % [
+			delta,
+			AudioManager.play_count,
+			AudioManager.get_sfx_ids().size(),
+			AudioManager.get_bgm_ids().size(),
+		])
+	else:
+		_record_accept("4.11.1", "fail", "no_playback_this_run")
 
 
 ## 局末：未触发项 skip（不覆盖已有 pass/fail）
