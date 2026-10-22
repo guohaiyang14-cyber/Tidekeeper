@@ -99,7 +99,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 清单 # | Bot 能力 | 套件 | 人工仍需 |
 |--------|----------|------|----------|
 | 1.1.1 昼夜循环 | 夜结束 / peak / 截断均需 **≥10** | smoke / acceptance | — |
-| 1.1.2 夜长 | 对比 `duration_for_night` | 全部 | — |
+| 1.1.2 夜长 | 对比 `duration_for_night`（= `config/night.json` 表值） | 全部 | — |
 | 1.1.5 跳过焦点 | 开店后 `has_skip_focus` | acceptance（机检 `a5_feel_test`） | 手感 |
 | 1.2.1 移速 | `base_move_speed` vs config | smoke / acceptance | 手感 |
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
@@ -122,7 +122,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 4.6 / 4.8 | 角色 cycle / 难度 | meta | UI |
 | 4.11.1 音频就绪与发声 | `AudioManager.is_enabled()` 且局末 `play_count` 增量>0（开局记基线、局末比增量；headless/关闭 → skip） | acceptance | 音色/音量平衡（4.11.3 人工试听） |
 | 5.1 / 5.3 | — | — | Profiler |
-| 4.1.4 / 4.4.9 / 4.5.9 / 4.6.13 / 4.7.11 | — | — | 视觉 |
+| 4.1.4 / 4.4.9 / 4.5.9 / 4.6.13 / 4.7.11 / 4.13.1–4.13.6 | — | — | 视觉（4.13 武器特效/弹道/召唤物/系色 HUD 为纯视觉，无局内行为变更；观感见 4.13.6 人工试玩，机检 `w21_weapon_fx_test` 105 断言） |
 
 ---
 

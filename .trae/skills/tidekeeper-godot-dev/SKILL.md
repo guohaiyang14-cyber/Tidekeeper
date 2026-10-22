@@ -138,6 +138,7 @@ enemy_died.emit(self)
 ### 4.1 config/ 是唯一数据源
 
 - 武器/敌人/Boss/事件配置：`config/*.json`
+- 夜长/夜型映射：`config/night.json`（昼夜状态机唯一时长来源）
 - 经验表：`config/exp_table.json`（由 `tools/generate_exp_table.py` 生成）
 - 精炼数据：`config/refine_data.py`
 
@@ -162,7 +163,9 @@ var damage: int = 12  # 鱼叉枪伤害
 
 ### 5.1 昼夜循环
 
-- 夜晚时长常量：常规 45s / 精英 60s / 天灾 90s / 终局 120s
+- 夜晚时长与夜型映射：`config/night.json` 数据驱动（`durations` + `night_types`），**禁止在状态机写时长常量**（§4.2）
+- 当前表值（对齐主设计文档）：常规 45s / 精英 60s / 天灾 90s / 终局 120s；夜型映射：精英夜 5 / 天灾夜 10、15 / 终局夜 20
+- 运行时经 `DayNightStateMachine.duration_for_night()` / `is_calamity_night_number()` 等静态入口读表；调参改表不改脚本
 - 夜晚结束无条件进昼（敌人未清完也切换）
 - 抉择之昼无强制倒计时（可无限停留）
 

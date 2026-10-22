@@ -42,5 +42,12 @@
   "font_colors": {
     "Button": { "font_color": "#F4F0FF", "font_hover_color": "#FFE08A", "font_pressed_color": "#C9BEF0", "font_disabled_color": "#7A7390" },
     "Label": { "font_color": "#EDE8FF" }
-  }
+  },
+  "series_colors": {
+    "潮汐": "4fc3f7",
+    "灯塔": "ffb74d",
+    "礁石": "ba68c8",
+    "夜风": "a5d6a7"
+  },
+  "series_colors_note": "进化系配色（HUD 武器/被动槽徽标）；key = weapons.json evolution.passive_series / passives.json series"
 }

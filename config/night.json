@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "schema_version": 1,
+    "doc_source": "主设计文档 §5.1 昼夜循环；SKILL.md §5.1 / §4.2（禁止硬编码数值）",
+    "note": "运行时只读；单位秒。夜长与夜型映射的唯一数据源：DayNightStateMachine.duration_for_night() 读本表（原状态机 NIGHT_DURATION_* 常量已移除，调参改表不改脚本）"
+  },
+  "durations": {
+    "normal": 45.0,
+    "elite": 60.0,
+    "calamity": 90.0,
+    "final": 120.0
+  },
+  "durations_note": "四类夜型时长（秒）：normal=常规 / elite=精英夜 / calamity=天灾夜 / final=终局夜；当前值即设计文档 §5.1 口径",
+  "night_types": {
+    "elite_nights": [5],
+    "calamity_nights": [10, 15],
+    "final_night": 20,
+    "default_type": "normal",
+    "note": "夜次→夜型映射：命中 elite_nights=精英夜、calamity_nights=天灾夜、final_night=终局夜；其余按 default_type。天灾夜判定含终局夜（与 enemies.json affix_rules.calamity_nights + final 一致）；Boss 夜 = calamity_nights + final_night"
+  }
+}

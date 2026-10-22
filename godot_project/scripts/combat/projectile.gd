@@ -29,6 +29,14 @@ var _hit_set: Dictionary = {}  # 已命中敌人，去重
 var _active: bool = false
 var _life: float = 0.0
 
+## ---- 视觉（weapons.json projectile_visual，数据驱动；缺省回退黄色圆弹）----
+var _vis_shape: String = "orb"
+var _vis_color: Color = Color(0.95, 0.9, 0.5)
+var _vis_length: float = 14.0
+var _vis_width: float = 8.0
+var _vis_trail: float = 0.0
+var _vis_loaded_for: String = ""  # 已加载视觉配置的武器 id（避免每发重复解析）
+
 
 func _on_acquire() -> void:
 	_active = true
@@ -37,6 +45,7 @@ func _on_acquire() -> void:
 	_slow_duration = 0.0
 	_source_id = ""
 	_hit_set.clear()
+	_vis_loaded_for = ""
 	_ensure_hash()
 
 
@@ -73,8 +82,72 @@ func launch(
 	_slow_duration = slow_duration
 	_source_id = source_id
 	_life = MAX_LIFE
+	rotation = _direction.angle()  # 朝向飞行方向（_draw 沿本地 +X 绘制）
+	_configure_visual(source_id)
 	if is_inside_tree():
 		visible = true
+		queue_redraw()
+
+
+## 按武器 id 读取 projectile_visual 配置（shape=dart/orb、color、尺寸、拖尾）；
+## 配置缺失回退默认黄弹。同一武器只解析一次（_vis_loaded_for 记忆）
+func _configure_visual(weapon_id: String) -> void:
+	if weapon_id == "" or weapon_id == _vis_loaded_for:
+		return
+	_vis_loaded_for = weapon_id
+	var data: Dictionary = ConfigLoader.get_weapon(weapon_id)
+	var vis: Variant = data.get("projectile_visual", null)
+	if not (vis is Dictionary):
+		return
+	var d: Dictionary = vis as Dictionary
+	_vis_shape = String(d.get("shape", "orb"))
+	_vis_color = _parse_vis_color(String(d.get("color", "ffe08a")), _vis_color)
+	_vis_length = float(d.get("length_px", 14.0))
+	_vis_width = float(d.get("width_px", 8.0))
+	_vis_trail = float(d.get("trail_px", 0.0))
+
+
+func _parse_vis_color(hex: String, fallback: Color) -> Color:
+	var s: String = hex.strip_edges()
+	if not s.begins_with("#"):
+		s = "#" + s
+	return Color.from_string(s, fallback)
+
+
+## 自定义弹道绘制：沿本地 +X（已由 launch 旋转到飞行方向）
+## dart=修长鱼叉（头尖尾圆 + 拖尾）；orb=圆球 + 内核高光
+func _draw() -> void:
+	if not _active:
+		return
+	var col: Color = _vis_color
+	var col_dark: Color = col.darkened(0.45)
+	var col_hi: Color = col.lightened(0.4)
+	# 拖尾：飞行反方向的渐隐细线
+	if _vis_trail > 0.0:
+		draw_line(Vector2.ZERO, Vector2(-_vis_trail, 0.0), Color(col.r, col.g, col.b, 0.32), maxf(1.0, _vis_width * 0.45))
+	if _vis_shape == "dart":
+		var hl: float = _vis_length * 0.5
+		var hw: float = _vis_width * 0.5
+		var pts: PackedVector2Array = PackedVector2Array([
+			Vector2(hl, 0.0),              # 尖
+			Vector2(hl * 0.15, -hw),
+			Vector2(-hl * 0.55, -hw * 0.8),
+			Vector2(-hl, -hw * 0.35),      # 尾左
+			Vector2(-hl, hw * 0.35),       # 尾右
+			Vector2(-hl * 0.55, hw * 0.8),
+			Vector2(hl * 0.15, hw),
+		])
+		draw_colored_polygon(pts, col)
+		var outline: PackedVector2Array = pts.duplicate()
+		outline.append(pts[0])
+		draw_polyline(outline, col_dark, 1.0)
+		# 脊线高光
+		draw_line(Vector2(hl * 0.1, 0.0), Vector2(-hl * 0.75, 0.0), col_hi, maxf(1.0, hw * 0.3))
+	else:
+		var r: float = _vis_width * 0.5
+		draw_circle(Vector2.ZERO, r, col)
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 16, col_dark, 1.0)
+		draw_circle(Vector2(-r * 0.3, -r * 0.3), maxf(0.8, r * 0.28), col_hi)
 
 
 func _process(delta: float) -> void:

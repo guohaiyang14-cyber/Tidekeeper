@@ -39,6 +39,7 @@ var contact_radius: float = 18.0
 var is_flying: bool = false
 var _fire_interval: float = 2.0
 var _ranged_damage: int = 0
+var _ranged_speed: float = 260.0
 var _explode_radius: float = 40.0
 var _self_destruct_damage: int = 0
 var _burrow_duration: float = 3.0
@@ -255,6 +256,7 @@ func configure(data: Dictionary, night_value: int) -> void:
 	contact_radius = float(data.get("contact_radius", 18.0))
 	_fire_interval = float(data.get("fire_interval", 2.0))
 	_ranged_damage = int(roundi(float(data.get("ranged_projectile_damage", 0)) * dmg_scale))
+	_ranged_speed = float(data.get("ranged_projectile_speed", 260.0))
 	_explode_radius = float(data.get("explode_radius", 40.0))
 	_self_destruct_damage = int(roundi(float(data.get("self_destruct_damage", 0)) * dmg_scale))
 	_burrow_duration = float(data.get("burrow_duration", 3.0))
@@ -597,7 +599,7 @@ func _fire_enemy_projectile(player_pos: Vector2) -> void:
 	if p == null or not p.has_method("launch"):
 		return
 	var dir: Vector2 = (player_pos - global_position).normalized()
-	p.launch(global_position, dir, _ranged_damage)
+	p.launch(global_position, dir, _ranged_damage, _ranged_speed)
 
 
 # ============================================================================

@@ -104,6 +104,16 @@ func get_behavior_color(key: String, default_hex: String) -> Color:
 	return _parse_hex_color(hex, default_hex)
 
 
+## 攻击动作特效 kind（weapons.json attack_fx.kind；缺省 ring）
+func get_attack_fx_kind(default_kind: String = "ring") -> String:
+	var fx: Variant = weapon_data.get("attack_fx", null)
+	if fx is Dictionary:
+		var k: String = String((fx as Dictionary).get("kind", ""))
+		if k != "":
+			return k
+	return default_kind
+
+
 func _parse_hex_color(hex: String, default_hex: String) -> Color:
 	var normalized: String = hex.strip_edges()
 	if not normalized.begins_with("#"):

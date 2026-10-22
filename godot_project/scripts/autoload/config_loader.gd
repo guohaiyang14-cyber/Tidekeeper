@@ -41,6 +41,8 @@ var audio: Dictionary = {}
 var ui_skin: Dictionary = {}
 # A5 地图 / 灯塔碰撞
 var map_cfg: Dictionary = {}
+# 昼夜循环（夜长 / 夜型映射；config/night.json，DayNightStateMachine 唯一时长来源）
+var night_cfg: Dictionary = {}
 
 # 配置目录绝对路径
 var config_dir: String = ""
@@ -90,6 +92,8 @@ func _load_all() -> void:
 	ui_skin = _load_json("ui_skin.json", false)
 	# A5 地图（缺文件用内置默认半径）
 	map_cfg = _load_json("map.json", false)
+	# 昼夜循环夜长（状态机唯一时长来源；必载，缺失会阻断启动）
+	night_cfg = _load_json("night.json", true)
 
 	# enemies.json 内嵌 affixes 子表
 	if enemies.has("affixes"):
@@ -509,12 +513,12 @@ func get_lighthouse_collision_radius_units() -> float:
 	return float(lh.get("collision_radius_units", 0.5))
 
 
-## 玩家活动范围半径（游戏单位；缺省 9.0 ≈ 540px）。≤0 或未启用时返回 0（不限制）
+## 玩家活动范围半径（游戏单位；缺省 12.0 ≈ 720px，对齐 config/map.json 当前值）。≤0 或未启用时返回 0（不限制）
 func get_arena_radius_units() -> float:
 	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
 	if not bool(a.get("enabled", false)):
 		return 0.0
-	return maxf(0.0, float(a.get("radius_units", 9.0)))
+	return maxf(0.0, float(a.get("radius_units", 12.0)))
 
 
 ## 边界软推（渐变减速提示）；缺省 true
@@ -533,6 +537,18 @@ func get_ground_tile_id() -> String:
 func get_ground_cover_px() -> float:
 	var g: Dictionary = map_cfg.get("ground", {}) as Dictionary
 	return maxf(512.0, float(g.get("cover_px", 4096.0)))
+
+
+## 昼夜循环配置（config/night.json：durations 夜长表 / night_types 夜型映射）
+func get_night_config() -> Dictionary:
+	return night_cfg
+
+
+## 夜型时长（秒；normal/elite/calamity/final）。缺省 45.0 与设计文档 §5.1 常规夜一致
+## （night.json 为必载配置，此处仅作解析失败时的安全网）
+func get_night_type_duration(type_name: String) -> float:
+	var durations: Dictionary = night_cfg.get("durations", {}) as Dictionary
+	return maxf(0.0, float(durations.get(type_name, 45.0)))
 
 
 ## 全部灯塔节点（扁平）

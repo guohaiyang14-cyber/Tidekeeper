@@ -183,6 +183,34 @@ def e_crab() -> Canvas:
     return c
 
 
+def e_elite_crab() -> Canvas:
+    """巨钳王（第 5 夜命名精英）：大号铁壳蟹 + 巨钳 + 金冠。24×24 逻辑 px。"""
+    t = C["crab"]
+    c = Canvas(24, 24)
+    for i in range(3):                          # 腿（加粗）
+        c.fill_rect(4 - i, 17 + i, 6 - i, 18 + i, t[1])
+        c.fill_rect(17 + i, 17 + i, 19 + i, 18 + i, t[1])
+    blob(c, 12, 14, 9.0, 6.2, t)                # 壳（大号）
+    # 金冠：壳顶三齿
+    spike(c, 8, 7, 0, -1, 3, GOLD)
+    spike(c, 12, 6, 0, -1, 4, GOLD)
+    spike(c, 16, 7, 0, -1, 3, GOLD)
+    # 巨钳（左右各一，带钳口缝）
+    blob(c, 3.0, 13, 3.2, 2.8, t)
+    blob(c, 21.0, 13, 3.2, 2.8, t)
+    c.fill_rect(1, 11, 4, 12, t[1])             # 左钳上颚缝
+    c.fill_rect(19, 11, 22, 12, t[1])           # 右钳上颚缝
+    c.hline(8, 15, 15, t[1])                    # 壳缝
+    for x in (9, 12, 15):                       # 壳上金铆
+        c.px(x, 11, GOLD)
+    # 怒目：眼 + 压暗眉脊
+    eye(c, 8, 9)
+    eye(c, 14, 9)
+    c.hline(7, 10, 8, t[1])
+    c.hline(13, 16, 8, t[1])
+    return c
+
+
 def e_jelly() -> Canvas:
     """水母浮游：伞盖 + 4 条触手。"""
     t = C["jelly"]
@@ -658,6 +686,58 @@ def p_exp_sac() -> Canvas:
     return c
 
 
+# ----------------------------------------------------------------------------
+# 召唤物（summons 类别；2026-10-22 召唤类武器可视化）
+# ----------------------------------------------------------------------------
+
+SUMMON_TONES = {
+    # 水母召唤物：青蓝调（与敌方紫水母 e_jelly 区分）
+    "jellyfish": ((110, 210, 220, 255), (40, 130, 150, 255), (200, 250, 255, 255)),
+    # 信天翁：白羽 + 黄喙（与敌方紫鸦 e_raven 区分）
+    "albatross": ((238, 242, 250, 255), (150, 160, 185, 255), (255, 255, 255, 255)),
+}
+
+
+def s_jellyfish() -> Canvas:
+    """水母召唤物：半圆伞盖 + 4 条长触手 + 双眼（24x24）。"""
+    t = SUMMON_TONES["jellyfish"]
+    c = Canvas(24, 24)
+    blob(c, 12, 10, 8.0, 6.5, t)                  # 伞盖
+    c.hline(5, 18, 18, t[1])                      # 伞沿
+    for i, x in enumerate((6, 9, 15, 18)):        # 触手（波浪）
+        line(c, x, 17, x + (1 if i % 2 else -1), 23, t[1])
+        c.px(x + (1 if i % 2 else -1), 23, t[2])
+    eye(c, 9, 9, size=1)
+    eye(c, 15, 9, size=1)
+    c.px(12, 5, t[2]); c.px(11, 4, t[2])          # 伞顶高光
+    return c
+
+
+def s_albatross() -> Canvas:
+    """信天翁召唤物：展翼俯冲姿势 + 尖喙 + 尾羽（24x24）。"""
+    t = SUMMON_TONES["albatross"]
+    c = Canvas(24, 24)
+    spike(c, 12, 11, -1, -1, 9, t[1])             # 左翼（前缘指上）
+    spike(c, 12, 11, 1, -1, 9, t[1])              # 右翼
+    for i in range(3):                            # 翼上覆羽
+        c.px(12 - 5 - i, 11 - 4 - i, t[0])
+        c.px(12 + 5 + i, 11 - 4 - i, t[0])
+    blob(c, 12, 12, 2.8, 4.2, t)                  # 身
+    blob(c, 12, 7.5, 2.2, 2.2, t)                 # 头
+    c.px(12, 7, GOLD)                             # 喙
+    c.px(12, 8, GOLD_HI)
+    c.px(11, 6, OUTLINE); c.px(13, 6, OUTLINE)    # 眼
+    line(c, 12, 16, 10, 21, t[1])                 # 尾羽
+    line(c, 12, 16, 14, 21, t[1])
+    return c
+
+
+SUMMON_ICONS = {
+    "jellyfish": s_jellyfish,
+    "albatross": s_albatross,
+}
+
+
 WEAPON_ICONS = {
     "harpoon": w_harpoon,
     "holy_fire": w_holy_fire,
@@ -771,6 +851,17 @@ def check_alignment() -> bool:
             print(f"[MISSING] config/{fname} ({key}): 缺图 {sorted(miss)}")
         else:
             print(f"[OK] config/{fname} ({key})")
+    # 命名精英（enemies.json metadata.elite.id，如巨钳王）也走 enemies 目录
+    elite_id = str(
+        (json.load(open(os.path.join(ROOT, "config", "enemies.json"), encoding="utf-8"))
+         .get("metadata", {}).get("elite", {}) or {}).get("id", "")
+    )
+    if elite_id:
+        if elite_id in pngs("enemies"):
+            print(f"[OK] enemies.json (elite): {elite_id}")
+        else:
+            ok = False
+            print(f"[MISSING] enemies.json (elite): 缺图 ['{elite_id}']")
     print("结论:", "全部对齐 ✅" if ok else "存在缺图 ❌")
     return ok
 
@@ -800,6 +891,7 @@ def _build_registry() -> dict:
     for name, fn in (
         ("small_goblin", e_goblin),
         ("iron_crab", e_crab),
+        ("giant_claw_king", e_elite_crab),
         ("jellyfish_drifter", e_jelly),
         ("deep_diver", e_diver),
         ("bomb_shell", e_bomb),
@@ -826,6 +918,9 @@ def _build_registry() -> dict:
     # 地面砖
     for i in range(len(_GROUND_TRIPLETS)):
         reg[("ground", f"floor_{i}")] = (lambda i=i: _ground_maker(i))
+    # 召唤物（武器 summon 块引用）
+    for name, fn in SUMMON_ICONS.items():
+        reg[("summons", name)] = fn
     # 武器 / 被动图标
     for name, fn in WEAPON_ICONS.items():
         reg[("weapons", name)] = fn

@@ -20,6 +20,10 @@ func fire(_target: EnemyBase) -> void:
 	var count: int = get_behavior_int("base_count", 4) + get_behavior_int("count_per_level", 1) * (level - 1) + MetaSystem.get_extra_projectiles()
 	var slow_factor: float = get_behavior_float("hit_slow_factor", 0.8)
 	var slow_dur: float = get_behavior_float("hit_slow_duration", 1.0)
+	# 齐射动作光环（attack_fx.kind=burst）：玩家身处径向光环 + 辐条
+	if mgr != null:
+		mgr.spawn_area_effect(origin, 26.0, get_behavior_color("effect_color", "7ee8d8"),
+			get_attack_fx_kind("burst"), Vector2.RIGHT)
 	for i in count:
 		var p: Projectile = pool.acquire() as Projectile
 		if p == null:

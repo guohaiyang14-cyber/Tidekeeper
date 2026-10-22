@@ -69,16 +69,27 @@ func _test_day_night_loop() -> void:
 
 
 # ---------------------------------------------------------------------------
-# 1.1.2 夜晚时长常量（常规45/精英60/天灾90/终局120）
+# 1.1.2 夜晚时长（config/night.json 数据驱动；机检对照表值，不在测试里硬编码）
 # ---------------------------------------------------------------------------
 func _test_night_duration_constants() -> void:
-	print("[1.1.2 夜晚时长常量]")
+	print("[1.1.2 夜晚时长（config/night.json）]")
+	var durations: Dictionary = ConfigLoader.get_night_config().get("durations", {})
+	var types: Dictionary = ConfigLoader.get_night_config().get("night_types", {})
+	var elite_night: int = int(types.get("elite_nights", [5])[0])
+	var calamity_night: int = int(types.get("calamity_nights", [10])[0])
+	var final_night: int = int(types.get("final_night", 20))
+	var normal_sec: float = float(durations.get("normal", 0.0))
+	var elite_sec: float = float(durations.get("elite", 0.0))
+	var calamity_sec: float = float(durations.get("calamity", 0.0))
+	var final_sec: float = float(durations.get("final", 0.0))
 	var dn: DayNightStateMachine = DayNightStateMachine.new()
 	add_child(dn)
-	_assert(dn._get_night_duration(1) == 45.0, "常规夜(第1夜)=45s")
-	_assert(dn._get_night_duration(5) == 60.0, "精英夜(第5夜)=60s")
-	_assert(dn._get_night_duration(10) == 90.0, "天灾夜(第10夜)=90s")
-	_assert(dn._get_night_duration(20) == 120.0, "终局夜(第20夜)=120s")
+	_assert(normal_sec > 0.0 and elite_sec > 0.0 and calamity_sec > 0.0 and final_sec > 0.0,
+		"四类夜时长均为正（表值 %.0f/%.0f/%.0f/%.0f）" % [normal_sec, elite_sec, calamity_sec, final_sec])
+	_assert(dn._get_night_duration(1) == normal_sec, "常规夜(第1夜)=%.0fs（表值）" % normal_sec)
+	_assert(dn._get_night_duration(elite_night) == elite_sec, "精英夜(第%d夜)=%.0fs（表值）" % [elite_night, elite_sec])
+	_assert(dn._get_night_duration(calamity_night) == calamity_sec, "天灾夜(第%d夜)=%.0fs（表值）" % [calamity_night, calamity_sec])
+	_assert(dn._get_night_duration(final_night) == final_sec, "终局夜(第%d夜)=%.0fs（表值）" % [final_night, final_sec])
 	dn.queue_free()
 
 

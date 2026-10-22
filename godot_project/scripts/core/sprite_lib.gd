@@ -75,6 +75,11 @@ static func passive(id: String) -> Texture2D:
 	return sprite("passives", id)
 
 
+## 召唤物精灵（武器 summon 块引用；水母/信天翁，24 逻辑 px）
+static func summon(id: String) -> Texture2D:
+	return sprite("summons", id)
+
+
 ## 释放静态缓存（顶层场景 _exit_tree 调用；同 PixelSkin.release_cache 的理由）
 static func release_cache() -> void:
 	_tex_cache.clear()

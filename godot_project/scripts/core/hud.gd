@@ -41,6 +41,9 @@ var _struggle_title: Label
 var _struggle_body: Label
 var _toast_label: Label
 var _toast_left: float = 0.0
+## 召唤型武器图标（呼吸动画；_rebuild_slots 维护）
+var _summon_icons: Array[TextureRect] = []
+var _skin_time: float = 0.0
 
 
 func _ready() -> void:
@@ -72,6 +75,13 @@ func notify_chest(kind: String, amount: int, rarity_name: String) -> void:
 
 
 func _process(delta: float) -> void:
+	# 召唤型武器图标呼吸（提示场上有活的召唤物在动作）
+	if not _summon_icons.is_empty():
+		_skin_time += delta
+		var s: float = 1.0 + 0.09 * sin(_skin_time * 4.2)
+		for ic in _summon_icons:
+			if is_instance_valid(ic):
+				ic.scale = Vector2(s, s)
 	if _toast_left <= 0.0:
 		return
 	_toast_left -= delta
@@ -302,6 +312,9 @@ func _on_loadout_changed() -> void:
 	# 先于重建同步实例，避免 signal 连接顺序导致 HUD 读到 stale WeaponManager
 	if _weapon_mgr != null:
 		_weapon_mgr.sync_from_game_state()
+	# 呼吸动画列表跨两行重建维护：必须在外层清一次（_rebuild_slots 内不清，
+	# 否则被动行重建会把武器行收集的召唤图标清掉）
+	_summon_icons.clear()
 	_rebuild_slots(_weapon_box, _weapon_slots())
 	_rebuild_slots(_passive_box, _passive_slots())
 
@@ -325,18 +338,29 @@ func _is_boss_night(night: int) -> bool:
 
 
 func _weapon_slots() -> Array[Dictionary]:
-	# 武器槽：每项 = {icon: Texture2D, text: "名字 LvN"}；图标来自 assets/sprites/weapons/<id>.png
+	# 武器槽：每项 = {icon, text, series(进化系), summon(召唤型呼吸动画), series_color}
 	var out: Array[Dictionary] = []
 	if _weapon_mgr != null:
 		for w in _weapon_mgr.get_weapons():
 			var wid: String = w.weapon_id
 			var wname: String = GameState.get_weapon_display_name(wid)
-			out.append({"icon": _SPRITE_LIB.weapon(wid), "text": "%s Lv%d" % [wname, w.level]})
+			var wdata: Dictionary = ConfigLoader.get_weapon(wid)
+			var series: String = ""
+			var evo: Variant = wdata.get("evolution", null)
+			if evo is Dictionary:
+				series = String((evo as Dictionary).get("passive_series", ""))
+			out.append({
+				"icon": _SPRITE_LIB.weapon(wid),
+				"text": "%s Lv%d" % [wname, w.level],
+				"series": series,
+				"summon": wdata.get("summon", null) is Dictionary,
+				"series_color": _series_color(series),
+			})
 	return out
 
 
 func _passive_slots() -> Array[Dictionary]:
-	# 被动槽：每项 = {icon: Texture2D, text: "名字 LvN"}；图标来自 assets/sprites/passives/<id>.png
+	# 被动槽：每项 = {icon, text, series, series_color}（series 来自 passives.json）
 	var out: Array[Dictionary] = []
 	for pid in ConfigLoader.get_all_passive_ids():
 		var lv: int = GameState.get_passive_level(pid)
@@ -344,18 +368,40 @@ func _passive_slots() -> Array[Dictionary]:
 			var d: Dictionary = ConfigLoader.get_passive(pid)
 			var pname: String = LanguageSystem.localize_config_name(
 				"passive", pid, String(d.get("name", pid)))
-			out.append({"icon": _SPRITE_LIB.passive(pid), "text": "%s Lv%d" % [pname, lv]})
+			var series: String = String(d.get("series", ""))
+			out.append({
+				"icon": _SPRITE_LIB.passive(pid),
+				"text": "%s Lv%d" % [pname, lv],
+				"series": series,
+				"series_color": _series_color(series),
+			})
 	return out
 
 
-## 重建一排槽位（图标 + 文字）；items 每项 = {icon: Texture2D, text: String}
-## 截图反馈：武器/道具槽不显示背景面板（原 PanelContainer 芯片外框移除）
+## 进化系配色（config/ui_skin.json series_colors；未配置返回白）
+func _series_color(series: String) -> Color:
+	if series == "":
+		return Color(1, 1, 1)
+	var colors: Dictionary = ConfigLoader.get_ui_skin_config().get("series_colors", {})
+	var hex: String = String(colors.get(series, ""))
+	if hex == "":
+		return Color(1, 1, 1)
+	var s: String = hex.strip_edges()
+	if not s.begins_with("#"):
+		s = "#" + s
+	return Color.from_string(s, Color(1, 1, 1))
+
+
+## 重建一排槽位（图标 + series 色标 + 文字）；items 每项 = {icon, text, series_color, summon}
+## 截图反馈：武器/道具槽不显示背景面板（原 PanelContainer 芯片外框移除）；
+## 2026-10-22：进化系色条（ui_skin.json series_colors）+ 召唤型武器图标呼吸动画
 func _rebuild_slots(box: HBoxContainer, items: Array[Dictionary]) -> void:
 	for c in box.get_children():
 		box.remove_child(c)
 		c.queue_free()
 	for it in items:
 		var entry: Dictionary = it
+		var series_col: Color = entry.get("series_color", Color(1, 1, 1)) as Color
 		var icon: Texture2D = entry.get("icon", null) as Texture2D
 		if icon != null:
 			var icon_rect := TextureRect.new()
@@ -366,11 +412,26 @@ func _rebuild_slots(box: HBoxContainer, items: Array[Dictionary]) -> void:
 			icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			icon_rect.custom_minimum_size = Vector2(22.0, 22.0)
 			icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			icon_rect.pivot_offset = Vector2(11.0, 11.0)
 			box.add_child(icon_rect)
+			# series 色条：图标底部 3px（标识进化系；白=无系）
+			if series_col != Color(1, 1, 1):
+				var strip := ColorRect.new()
+				strip.color = series_col
+				strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				strip.custom_minimum_size = Vector2(22.0, 3.0)
+				strip.size = Vector2(22.0, 3.0)
+				strip.position = Vector2(0.0, 19.0)
+				icon_rect.add_child(strip)
+			# 召唤型武器：呼吸缩放（提示场上有活的召唤物）
+			if bool(entry.get("summon", false)):
+				_summon_icons.append(icon_rect)
 		var lbl := Label.new()
 		lbl.text = String(entry.get("text", ""))
 		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+		# 文字色向 series 色提亮（保持可读性的同时贴合系色）
+		var txt_col: Color = series_col.lerp(Color(0.95, 0.97, 1.0), 0.35)
+		lbl.add_theme_color_override("font_color", txt_col)
 		# 无背景面板（截图反馈）→ 用深色描边保证文字在杂乱地面上的可读性
 		lbl.add_theme_color_override("font_outline_color", Color(0.02, 0.03, 0.06, 0.9))
 		lbl.add_theme_constant_override("outline_size", 4)

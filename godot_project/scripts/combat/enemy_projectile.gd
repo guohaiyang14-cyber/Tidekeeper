@@ -19,6 +19,7 @@ var _damage: int = 0
 var _active: bool = false
 var _player: Node2D
 var _life: float = 0.0
+var _speed: float = 260.0
 
 
 func _on_acquire() -> void:
@@ -33,11 +34,14 @@ func _on_release() -> void:
 
 
 ## 发射配置（由 EnemyBase 调用）：pos 起点、dir 方向、damage 伤害
-func launch(pos: Vector2, dir: Vector2, damage: int) -> void:
+## speed_override：杂兵弹道速度（config enemies.json ranged_projectile_speed，数据驱动）；
+## <=0 时沿用 @export speed（Boss 天灾波不传，保持 260 不变）
+func launch(pos: Vector2, dir: Vector2, damage: int, speed_override: float = -1.0) -> void:
 	global_position = pos
 	_direction = dir.normalized()
 	_damage = damage
 	_life = MAX_LIFE
+	_speed = speed_override if speed_override > 0.0 else speed
 
 
 func get_travel_dir() -> Vector2:
@@ -51,7 +55,7 @@ func _process(delta: float) -> void:
 	if _life <= 0.0:
 		_recycle()
 		return
-	global_position += _direction * speed * delta
+	global_position += _direction * _speed * delta
 	if _player == null:
 		_player = _find_player()
 	if _player != null and global_position.distance_to(_player.global_position) <= hit_radius:

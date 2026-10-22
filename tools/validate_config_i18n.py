@@ -134,14 +134,11 @@ for eid in enemy_ids:
     for a in (e.get("affixes") or []):
         ok(a in affix_ids, "敌人 %s 词缀 %s 存在" % (eid, a))
 
-# 天灾夜 Boss：night ∈ {10,15,20}，且 3 个
+# 天灾夜 Boss：收集夜次集合（与 night.json 的交叉校验见下方 night 段）
 boss_nights = []
 for bid in boss_ids:
     b = bosses["bosses"][bid]
-    night = b.get("night")
-    boss_nights.append(night)
-    ok(night in (10, 15, 20), "Boss %s night=%s ∈ {10,15,20}" % (bid, night))
-ok(sorted(boss_nights) == [10, 15, 20], "天灾夜集合 = [10,15,20] (实际 %s)" % sorted(boss_nights))
+    boss_nights.append(b.get("night"))
 
 # 事件：excluded_nights 数值；effect 引用的武器/被动存在
 def _walk_effect(o, eid):
@@ -172,6 +169,39 @@ ok("lighthouse" in tiers and "watcher" in tiers, "难度档位含 lighthouse/wat
 ok(isinstance(difficulty.get("max_enemies"), int) and difficulty.get("max_enemies") == 350,
    "difficulty.max_enemies=350 (=%s)" % difficulty.get("max_enemies"))
 ok(isinstance((difficulty.get("teaching") or {}).get("nights"), int), "difficulty.teaching.nights 为数值")
+
+# 昼夜循环夜长（config/night.json ↔ Boss 夜 / 精英夜 / 进化保底夜口径）
+night = load_json("night.json")
+durations = night.get("durations") or {}
+for tname in ("normal", "elite", "calamity", "final"):
+    v = durations.get(tname)
+    ok(isinstance(v, (int, float)) and v > 0, "night.durations.%s 为正数值 (%s)" % (tname, v))
+night_types = night.get("night_types") or {}
+elite_nights_cfg = night_types.get("elite_nights")
+calamity_nights_cfg = night_types.get("calamity_nights")
+final_night_cfg = night_types.get("final_night")
+ok(isinstance(elite_nights_cfg, list) and len(elite_nights_cfg) > 0
+   and all(isinstance(n, int) for n in elite_nights_cfg),
+   "night.night_types.elite_nights 为非空整数表 (%s)" % elite_nights_cfg)
+ok(isinstance(calamity_nights_cfg, list) and len(calamity_nights_cfg) > 0
+   and all(isinstance(n, int) for n in calamity_nights_cfg),
+   "night.night_types.calamity_nights 为非空整数表 (%s)" % calamity_nights_cfg)
+ok(isinstance(final_night_cfg, int) and final_night_cfg > 0,
+   "night.night_types.final_night 为正整数 (%s)" % final_night_cfg)
+ok(str(night_types.get("default_type", "")) in durations,
+   "night.night_types.default_type 在 durations 中 (%s)" % night_types.get("default_type"))
+# Boss 夜 = 天灾夜 + 终局夜（bosses.json night 集合须与 night.json 映射一致）
+boss_nights_expected = sorted(list(calamity_nights_cfg or []) + [final_night_cfg])
+ok(sorted(boss_nights) == boss_nights_expected,
+   "Boss 夜集合 = 天灾夜+终局夜 %s (实际 %s)" % (boss_nights_expected, sorted(boss_nights)))
+# 天灾夜词缀表口径与 night.json  calamity 映射一致（enemies.json 含终局夜）
+affix_calamity = sorted(((enemies.get("metadata") or {}).get("affix_rules") or {}).get("calamity_nights") or [])
+ok(affix_calamity == sorted(list(calamity_nights_cfg or []) + [final_night_cfg]),
+   "enemies.json calamity_nights = 天灾夜+终局夜 %s (实际 %s)" % (boss_nights_expected, affix_calamity))
+# 进化保底夜必须是精英夜
+for n in (evolutions.get("drops") or {}).get("elite_night_guaranteed") or []:
+    ok(n in (elite_nights_cfg or []),
+       "进化保底夜 %s ∈ night.elite_nights %s" % (n, elite_nights_cfg))
 
 # 星尘 / 挫败感参数
 st = meta.get("stardust") or {}

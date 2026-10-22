@@ -31,7 +31,8 @@
         "count_per_level": 1,
         "base_pierce": 2,
         "pierce_per_level": 1,
-        "spread_deg": 6.0
+        "spread_deg": 6.0,
+        "muzzle_color": "ffd27a"
       },
       "evolution": {
         "name": "深渊鱼叉",
@@ -41,6 +42,18 @@
         "trait": "自动追踪、命中弹射",
         "refine_path_id": 1,
         "required_passive_id": "tide_compass"
+      },
+      "projectile_visual": {
+        "shape": "dart",
+        "color": "9fd8ff",
+        "length_px": 26.0,
+        "width_px": 5.0,
+        "trail_px": 14.0,
+        "note": "朝向飞行方向拉长的鱼叉（头尖尾圆），带短拖尾"
+      },
+      "attack_fx": {
+        "kind": "muzzle",
+        "note": "枪口火药闪光 + 短锥形火光（弹道本身见 projectile_visual）"
       }
     },
     "holy_fire": {
@@ -67,6 +80,10 @@
         "refine_path_id": 2,
         "naming_note": "进化钥被动「燃灯油」≠ 局外升级树「灯油」，实现/本地化须分 key",
         "required_passive_id": "lamp_oil"
+      },
+      "attack_fx": {
+        "kind": "ring",
+        "note": "灼烧火圈：扩散实心盘 + 内焰跳动 + 外环"
       }
     },
     "anchor_hammer": {
@@ -93,6 +110,10 @@
         "trait": "链式闪电（2 次跳转；相对上一跳 ×0.6，递减 40%/跳）",
         "refine_path_id": 3,
         "required_passive_id": "iron_chain"
+      },
+      "attack_fx": {
+        "kind": "slam",
+        "note": "锤击：冲击环 + 两道挥击弧线"
       }
     },
     "spore": {
@@ -110,7 +131,8 @@
         "base_radius": 120.0,
         "radius_per_level": 10.0,
         "base_targets": 3,
-        "targets_per_level": 1
+        "targets_per_level": 1,
+        "sting_color": "8ff2e4"
       },
       "evolution": {
         "name": "水母巢",
@@ -120,6 +142,19 @@
         "trait": "召唤物死亡时爆炸",
         "refine_path_id": 4,
         "required_passive_id": "humus"
+      },
+      "attack_fx": {
+        "kind": "sting",
+        "note": "召唤物叮刺：命中点小针刺 + 麻痹圈"
+      },
+      "summon": {
+        "sprite": "jellyfish",
+        "mode": "orbit_sting",
+        "orbit_radius": 70.0,
+        "orbit_speed": 1.6,
+        "bob_amplitude": 6.0,
+        "scale": 0.8,
+        "note": "水母召唤物环绕玩家漂浮；脉冲到时朝目标伸出触手叮刺（视觉动作，伤害仍由武器脉冲结算）"
       }
     },
     "storm_cloud": {
@@ -145,6 +180,10 @@
         "trait": "落雷连锁 2 次（相对上一击 ×0.7，递减 30%/次）",
         "refine_path_id": 5,
         "required_passive_id": "storm_flask"
+      },
+      "attack_fx": {
+        "kind": "bolt",
+        "note": "落雷：顶部锯齿闪点 + 折线雷弧 + 地面冲击圈"
       }
     },
     "jellyfish_cannon": {
@@ -172,6 +211,18 @@
         "refine_path_id": 6,
         "impl_note": "定身「每轮至多 1 次」=1.0s 时间窗，武器维护冷却；弹幕数仅提高触发机会",
         "required_passive_id": "abyss_eye"
+      },
+      "projectile_visual": {
+        "shape": "orb",
+        "color": "7ee8d8",
+        "length_px": 16.0,
+        "width_px": 16.0,
+        "trail_px": 0.0,
+        "note": "圆球 + 内核高光；命中减速由 behavior.hit_slow_* 控制"
+      },
+      "attack_fx": {
+        "kind": "burst",
+        "note": "环形弹幕齐射：玩家身处径向光环 + 辐条"
       }
     },
     "anchor_chain": {
@@ -186,7 +237,8 @@
       "notes": "环绕 tick",
       "behavior": {
         "base_radius": 60.0,
-        "radius_per_level": 15.0
+        "radius_per_level": 15.0,
+        "chain_color": "b8c4d4"
       },
       "evolution": {
         "name": "永恒锚轮",
@@ -196,6 +248,10 @@
         "trait": "6 圈递增伤害（+15%/层）+ 近战反弹 30%",
         "refine_path_id": 7,
         "required_passive_id": "coral_barrier"
+      },
+      "attack_fx": {
+        "kind": "orbit",
+        "note": "持久环绕链视觉：跟随玩家的旋转链段，tick 时脉冲闪光"
       }
     },
     "albatross": {
@@ -213,7 +269,8 @@
         "base_radius": 280.0,
         "radius_per_level": 20.0,
         "base_targets": 2,
-        "targets_per_level": 1
+        "targets_per_level": 1,
+        "dive_color": "dfe6f2"
       },
       "evolution": {
         "name": "永恒鸥群",
@@ -223,6 +280,20 @@
         "trait": "4 只信天翁 + 1 只鸥王（2.5×伤害）+ 击杀额外经验珠",
         "refine_path_id": 8,
         "required_passive_id": "exp_sac"
+      },
+      "summon": {
+        "sprite": "albatross",
+        "mode": "dive",
+        "orbit_radius": 130.0,
+        "orbit_speed": 2.2,
+        "bob_amplitude": 10.0,
+        "scale": 1.0,
+        "dive_speed": 620.0,
+        "note": "信天翁环绕玩家盘旋；脉冲到时选最近敌人俯冲打击并归位（视觉动作，伤害仍由武器脉冲结算）"
+      },
+      "attack_fx": {
+        "kind": "dive",
+        "note": "俯冲打击：命中点扬尘（召唤物实体见 summon 块）"
       }
     }
   }

@@ -40,6 +40,6 @@ func _burn_at(spatial_hash: SpatialHash, mgr: WeaponManager, at: Vector2, radius
 	_spawn_fx(mgr, at, radius)
 
 
-## 视觉反馈：在灼烧点放一个橙红打击圈，让玩家看到圣火在生效（无可见弹道）
+## 视觉反馈：在灼烧点放橙红火圈（attack_fx.kind=ring），让玩家看到圣火在生效
 func _spawn_fx(mgr: WeaponManager, at: Vector2, radius: float) -> void:
-	mgr.spawn_area_effect(at, radius, get_behavior_color("effect_color", "ff7a1a"))
+	mgr.spawn_area_effect(at, radius, get_behavior_color("effect_color", "ff7a1a"), get_attack_fx_kind("ring"))

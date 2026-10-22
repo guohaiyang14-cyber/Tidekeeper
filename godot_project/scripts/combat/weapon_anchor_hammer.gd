@@ -31,10 +31,12 @@ func fire(target: EnemyBase) -> void:
 		for e in ranked:
 			_burst_toward(spatial_hash, origin, radius, e.global_position, hit)
 			swing_aims.append(e.global_position)
-	# 视觉反馈：每次挥击在瞄准点落一圈冲击波（弹道+1 时多圈）
+	# 视觉反馈：每次挥击在玩家位置落一圈朝目标方向的锤击（attack_fx.kind=slam）；
+	# 冲击环圆心与伤害判定同心（都是 origin），弧线扫向瞄准方向
 	var fx_color: Color = get_behavior_color("effect_color", "cfd8e0")
 	for aim in swing_aims:
-		mgr.spawn_area_effect(aim, radius, fx_color)
+		mgr.spawn_area_effect(origin, radius, fx_color, get_attack_fx_kind("slam"),
+			(aim - origin).normalized())
 
 
 ## 朝 aim_at 方向对前方半球内未命中敌人各造成一次伤害（暴击独立掷骰）

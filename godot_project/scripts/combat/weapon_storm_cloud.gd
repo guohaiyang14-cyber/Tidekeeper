@@ -39,6 +39,8 @@ func _strike_at(spatial_hash: SpatialHash, mgr: WeaponManager, at: Vector2, radi
 	_spawn_fx(mgr, at, radius)
 
 
-## 视觉反馈：在落雷点放一个青蓝打击圈，让玩家看到雷暴云在生效（无可见弹道）
+## 视觉反馈：落雷点放闪电弧 + 冲击圈（attack_fx.kind=bolt），让玩家看到雷暴云在生效
 func _spawn_fx(mgr: WeaponManager, at: Vector2, radius: float) -> void:
-	mgr.spawn_area_effect(at, radius, get_behavior_color("effect_color", "5ec8ff"))
+	# bolt 折线固定竖直（自顶向下），dir 仅占位；height=雷区高度
+	mgr.spawn_area_effect(at, radius, get_behavior_color("effect_color", "5ec8ff"),
+		get_attack_fx_kind("bolt"), Vector2.RIGHT, {"height": 260.0})

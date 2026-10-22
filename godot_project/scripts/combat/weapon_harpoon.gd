@@ -21,6 +21,10 @@ func fire(target: EnemyBase) -> void:
 	var count: int = get_behavior_int("base_count", 5) + get_behavior_int("count_per_level", 1) * (level - 1) + MetaSystem.get_extra_projectiles()
 	var pierce: int = get_behavior_int("base_pierce", 2) + get_behavior_int("pierce_per_level", 1) * (level - 1)
 	var spread_deg: float = get_behavior_float("spread_deg", 6.0)
+	# 枪口火光（attack_fx.kind=muzzle）：与首弹同向，纯视觉
+	if mgr != null:
+		mgr.spawn_area_effect(origin, 10.0, get_behavior_color("muzzle_color", "ffd27a"),
+			get_attack_fx_kind("muzzle"), dir)
 	for i in count:
 		var p: Projectile = pool.acquire() as Projectile
 		if p == null:

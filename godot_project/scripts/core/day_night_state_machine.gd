@@ -1,7 +1,9 @@
 # ============================================================================
 # DayNightStateMachine — 昼夜循环状态机（W1 人工主导）
 # 职责：管理「夜晚 ↔ 抉择之昼」状态切换
-# 时长常量（SKILL.md §5.1）：常规 45s / 精英 60s / 天灾 90s / 终局 120s
+# 夜长与夜型映射：config/night.json（ConfigLoader.get_night_config()）——
+#   常规/精英/天灾/终局时长与夜次映射均在表内（当前值 45/60/90/120s，
+#   对齐主设计文档 §5.1）；调参改表不改脚本（SKILL.md §4.2 禁止硬编码数值）
 # 红线：夜晚结束无条件进昼（敌人未清完也切换）；抉择之昼无强制倒计时
 # 架构：World 节点持有本状态机实例
 # ============================================================================
@@ -19,12 +21,6 @@ enum Phase {
 # 信号
 signal phase_changed(phase: Phase)
 signal night_tick(remaining: float)
-
-## 夜晚时长常量（秒，SKILL.md §5.1）
-const NIGHT_DURATION_NORMAL: float = 45.0   # 常规夜
-const NIGHT_DURATION_ELITE: float = 60.0    # 精英夜（第 5 夜）
-const NIGHT_DURATION_CALAMITY: float = 90.0 # 天灾夜（第 10/15/20 夜）
-const NIGHT_DURATION_FINAL: float = 120.0   # 终局夜（第 20 夜 Boss 战）
 
 var _phase: Phase = Phase.INIT
 var _current_night: int = 0
@@ -70,8 +66,8 @@ func _end_night() -> void:
 	# 挣扎未达标会在 end_night 判负；World.stop() 已把阶段打成 INIT，禁止再进昼开商店
 	if GameState.is_over:
 		return
-	# 通关判定：第 20 夜结束 = 通关
-	if _current_night >= 20:
+	# 通关判定：终局夜结束 = 通关（终局夜次来自 config/night.json night_types.final_night）
+	if is_final_night_number(_current_night):
 		GameState.trigger_game_win()
 		_set_phase(Phase.INIT)
 		return
@@ -121,19 +117,47 @@ func _set_phase(new_phase: Phase) -> void:
 	phase_changed.emit(new_phase)
 
 
-## 根据夜次计算时长（§5.1）；静态入口供 EnemySpawner 等共用，避免双份常量漂移
+## 根据夜次计算时长（§5.1）；静态入口供 EnemySpawner / BotSuite 共用，避免双份常量漂移
+## 时长与夜型映射均来自 config/night.json（durations / night_types）
 static func duration_for_night(night: int) -> float:
-	# 第 20 夜 = 终局
-	if night == 20:
-		return NIGHT_DURATION_FINAL
-	# 第 10/15 夜 = 天灾夜（第 20 夜已在上方按终局时长）
-	if night == 10 or night == 15:
-		return NIGHT_DURATION_CALAMITY
-	# 第 5 夜 = 精英夜
-	if night == 5:
-		return NIGHT_DURATION_ELITE
-	# 其他 = 常规
-	return NIGHT_DURATION_NORMAL
+	return ConfigLoader.get_night_type_duration(_night_type_for(night))
+
+
+## 夜次 → 夜型（normal/elite/calamity/final；config/night.json night_types）
+static func _night_type_for(night: int) -> String:
+	var types: Dictionary = ConfigLoader.get_night_config().get("night_types", {}) as Dictionary
+	if night == int(types.get("final_night", 20)):
+		return "final"
+	if night in _as_int_array(types.get("calamity_nights", [])):
+		return "calamity"
+	if night in _as_int_array(types.get("elite_nights", [])):
+		return "elite"
+	return String(types.get("default_type", "normal"))
+
+
+## Variant → int 数组（容错：非数组返回空表）
+static func _as_int_array(v: Variant) -> Array:
+	var out: Array = []
+	if v is Array:
+		for x in v:
+			out.append(int(x))
+	return out
+
+
+## 是否精英夜（表 night_types.elite_nights）
+static func is_elite_night_number(night: int) -> bool:
+	return _night_type_for(night) == "elite"
+
+
+## 是否天灾夜（表 night_types.calamity_nights，含终局夜）
+static func is_calamity_night_number(night: int) -> bool:
+	var t: String = _night_type_for(night)
+	return t == "calamity" or t == "final"
+
+
+## 是否终局夜（表 night_types.final_night）
+static func is_final_night_number(night: int) -> bool:
+	return _night_type_for(night) == "final"
 
 
 ## 实例包装（机检 / 内部调用）
@@ -141,22 +165,23 @@ func _get_night_duration(night: int) -> float:
 	return duration_for_night(night)
 
 
-## 获取夜次类型标签（调试/UI 用）
+## 获取夜次类型标签（调试/UI 用；映射来自 config/night.json）
 func _get_night_type_label(night: int) -> String:
-	if night == 20:
-		return "终局"
-	if night == 10 or night == 15:
-		return "天灾"
-	if night == 5:
-		return "精英"
+	match _night_type_for(night):
+		"final":
+			return "终局"
+		"calamity":
+			return "天灾"
+		"elite":
+			return "精英"
 	return "常规"
 
 
-## 是否天灾夜
+## 是否天灾夜（含终局夜；表 night_types.calamity_nights + final_night）
 func is_calamity_night() -> bool:
-	return _current_night in [10, 15, 20]
+	return is_calamity_night_number(_current_night)
 
 
-## 是否精英夜
+## 是否精英夜（表 night_types.elite_nights）
 func is_elite_night() -> bool:
-	return _current_night == 5
+	return is_elite_night_number(_current_night)

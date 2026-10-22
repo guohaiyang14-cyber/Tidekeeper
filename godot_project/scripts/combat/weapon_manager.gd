@@ -50,9 +50,11 @@ func get_hash() -> SpatialHash:
 	return _hash
 
 
-## 在 pos 处播放一次打击特效（半径 radius、颜色 color），从 ParticlePool 取节点并自动归还。
-## 纯视觉：不参与伤害/索敌。范围/近战类武器（圣火/雷暴云/锚锤）无可见弹道，靠此让玩家看到在开火。
-func spawn_area_effect(pos: Vector2, radius: float, color: Color) -> void:
+## 在 pos 处播放一次攻击动作特效（半径 radius、颜色 color），从 ParticlePool 取节点并自动归还。
+## 纯视觉：不参与伤害/索敌。kind=ring/bolt/slam/muzzle/sting/dive（见 weapon_effect.gd）；
+## dir=动作朝向（muzzle/slam）；params 可传 bolt 的 {"height": 260.0} 等。
+func spawn_area_effect(pos: Vector2, radius: float, color: Color,
+		kind: String = "ring", dir: Vector2 = Vector2.RIGHT, params: Dictionary = {}) -> void:
 	if _particle_pool == null:
 		push_warning("[WeaponManager] ParticlePool 未注入，跳过打击特效")
 		return
@@ -62,7 +64,7 @@ func spawn_area_effect(pos: Vector2, radius: float, color: Color) -> void:
 		return
 	fx.global_position = pos
 	if fx.has_method("play"):
-		fx.play(radius, color, ConfigLoader.get_area_effect_lifetime(), _particle_pool)
+		fx.play(radius, color, ConfigLoader.get_area_effect_lifetime(), _particle_pool, kind, dir, params)
 
 
 ## 同步 GameState.weapon_slots → 武器实例（升级获得武器后由 World 调用）

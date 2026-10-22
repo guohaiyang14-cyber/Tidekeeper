@@ -137,6 +137,8 @@
       "base_contact_damage": 6,
       "base_exp": 4,
       "ranged_projectile_damage": 6,
+      "ranged_projectile_speed": 200.0,
+      "ranged_projectile_speed_note": "弹道速度 px/s。2026-10-22：260→200——原值快于玩家移速(252px/s)，被弹道追时无法拉开，只能垂直躲；200<252 让「后退脱离」也成为可行策略（Boss 天灾波沿用脚本默认 260 不变）",
       "fire_interval": 2.0,
       "update_group": 4,
       "move_speed": 95.0,

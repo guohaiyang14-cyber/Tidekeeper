@@ -91,8 +91,8 @@ const PROJ_LOOK_CALAMITY: float = 400.0
 const PROJ_DANGER_LEN_SQ: float = 0.42
 const PROJ_PANIC_LEN_SQ: float = 1.15
 const THORNS_FLEE_WEIGHT: float = 5.2
-## 对齐 config/enemies.json → metadata.affix_rules.calamity_nights（Bot 不读表，改夜次须同步）
-const CALAMITY_NIGHTS: Array[int] = [10, 15, 20]
+## 天灾夜判定统一走 DayNightStateMachine.is_calamity_night_number()（config/night.json
+## night_types.calamity_nights + final_night，含终局夜；与 enemies.json 词缀表同源，不再各自硬编码）
 ## 第 15 夜执政官（潮汐波光晕机制；与 bosses.json tide_archon.night 对齐）
 const ARCHON_NIGHT: int = 15
 ## 第 3 夜昼起囤减伤（N4 深潜者 / N5 精英前）
@@ -1286,11 +1286,11 @@ func _want_survival_bias() -> bool:
 
 ## 天灾夜前一昼（N9/14/19）：囤回血与减伤，少买新武器
 func _want_calamity_prep() -> bool:
-	return GameState.current_night + 1 in CALAMITY_NIGHTS
+	return DayNightStateMachine.is_calamity_night_number(GameState.current_night + 1)
 
 
 func _is_calamity_night() -> bool:
-	return GameState.current_night in CALAMITY_NIGHTS
+	return DayNightStateMachine.is_calamity_night_number(GameState.current_night)
 
 
 func _is_archon_night() -> bool:
@@ -2127,7 +2127,7 @@ func _accept_lighthouse_collision_once(world: World) -> void:
 func _accept_arena_bounds_once(night: int, world: World) -> void:
 	if _arena_bounds_checked:
 		return
-	# 延后到 night≥2 再判定（night 1 Bot 刚开局，不会走到 540px 外）
+	# 延后到 night≥2 再判定（night 1 Bot 刚开局，走不到竞技场边界）
 	if night < 2:
 		return
 	if world == null or world.player == null:

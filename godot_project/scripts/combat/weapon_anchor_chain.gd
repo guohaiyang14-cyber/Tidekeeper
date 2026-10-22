@@ -2,10 +2,14 @@
 # WeaponAnchorChain — 锚链（环绕型，behavior_type=orbit_tick）
 # 行为：以玩家为中心脉冲结算环绕伤害，对玩家周围敌人造成 leveled 伤害。
 # 数据：config/weapons.json anchor_chain.behavior
-# 原型：以 attack_rate 脉冲结算玩家周围范围伤害（视觉环绕链为 MVP 演进）
+# 可视化（2026-10-22）：持久环绕链视觉（跟随玩家的旋转链段，tick 时脉冲闪光）。
 # ============================================================================
 class_name WeaponAnchorChain
 extends WeaponBase
+
+const _ORBIT_VIS = preload("res://scripts/combat/orbit_chain_visual.gd")
+
+var _orbit_vis: OrbitChainVisual = null
 
 
 func fire(_target: EnemyBase) -> void:
@@ -26,6 +30,18 @@ func fire(_target: EnemyBase) -> void:
 		var inner: float = 0.0 if i == 0 else radius + spacing * float(i - 1)
 		var outer: float = radius + spacing * float(i)
 		_hit_annulus(spatial_hash, origin, inner, outer)
+	# 视觉：同步持久环绕链（半径/圈数/ tick 脉冲）
+	_sync_orbit_visual(radius, spacing, rings)
+	if _orbit_vis != null:
+		_orbit_vis.pulse()
+
+
+## 确保环绕链视觉存在且参数同步（首次 fire 时创建；挂武器下随武器回收）
+func _sync_orbit_visual(radius: float, spacing: float, rings: int) -> void:
+	if _orbit_vis == null or not is_instance_valid(_orbit_vis):
+		_orbit_vis = _ORBIT_VIS.create(get_owner_pos)
+		add_child(_orbit_vis)
+	_orbit_vis.setup(radius, spacing, rings, get_behavior_color("chain_color", "b8c4d4"), 2.4, get_owner_pos)
 
 
 ## 对距 origin 在 (inner, outer] 的敌人各造成一次命中（inner=0 含圆心）
