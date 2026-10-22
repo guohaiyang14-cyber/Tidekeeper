@@ -38,12 +38,18 @@ var _bind_move_mult: float = 0.5
 var _lh_center: Vector2 = Vector2.ZERO
 var _lh_radius_px: float = 0.0
 var _lh_enabled: bool = false
+## 竞技场边界（以灯塔/开局点为圆心的活动半径像素；≤0 不限制）
+var _arena_radius_px: float = 0.0
+var _arena_soft_push: bool = true
+## 每帧 resolve_arena_bounds 真正钳位时递增（供 Debug TestBot ACCEPT 1.2.5 观测）
+var arena_clamp_count: int = 0
 
 
 func _ready() -> void:
 	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
 	_apply_pickup_config()
+	_init_arena()
 	_ensure_gamepad_move_bindings()
 	if not GameState.player_damaged.is_connected(_on_player_damaged):
 		GameState.player_damaged.connect(_on_player_damaged)
@@ -131,17 +137,19 @@ func _handle_movement() -> void:
 	# get_vector 合成键盘与摇杆（死区走 InputMap）
 	var input_vector: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	# 移速 = 基础 × 加成（受软上限约束）× 事件移速（W14 灯塔共鸣），单位→像素换算
-	var speed: float = base_move_speed * _effective_move_mult()
+	var speed: float = base_move_speed * _effective_move_mult() * arena_speed_factor()
 	if _bind_timer > 0.0:
 		if _bind_move_mult <= 0.0:
 			velocity = Vector2.ZERO
 			move_and_slide()
 			resolve_lighthouse_collision()
+			resolve_arena_bounds()
 			return
 		speed *= _bind_move_mult
 	velocity = input_vector * speed * UNIT_TO_PIXEL
 	move_and_slide()
 	resolve_lighthouse_collision()
+	resolve_arena_bounds()
 
 
 ## 注入灯塔障碍（圆心世界坐标 + 碰撞半径像素；radius≤0 关闭）
@@ -173,6 +181,55 @@ func resolve_lighthouse_collision() -> void:
 	else:
 		offset = offset / dist
 	global_position = _lh_center + offset * min_dist
+
+
+## ---- 竞技场边界（config/map.json arena）----
+## 以灯塔/开局点为圆心限制活动半径；避免地图无限大 + 怪刷太近的割裂感。
+func _init_arena() -> void:
+	var units: float = ConfigLoader.get_arena_radius_units()
+	_arena_radius_px = units * UNIT_TO_PIXEL
+	_arena_soft_push = ConfigLoader.get_arena_soft_push()
+
+
+## 边界圆心（复用灯塔中心；未启用灯塔碰撞时 _lh_center 仍会被 set_lighthouse_obstacle 写入）
+func get_arena_center() -> Vector2:
+	return _lh_center
+
+
+## 活动半径（像素；≤0 = 不限制）
+func get_arena_radius() -> float:
+	return _arena_radius_px
+
+
+## 把玩家钳回竞技场内（几何钳位，非 Physics2D；每帧移动后调用）
+func resolve_arena_bounds() -> void:
+	if _arena_radius_px <= 0.0:
+		return
+	var limit: float = maxf(0.0, _arena_radius_px - BODY_RADIUS_PX)
+	var offset: Vector2 = global_position - _lh_center
+	var dist: float = offset.length()
+	if dist <= limit or dist < 0.001:
+		return
+	global_position = _lh_center + offset / dist * limit
+	arena_clamp_count += 1
+
+
+## 活动半径启用且玩家曾触发过钳位（供 Debug 观测）
+func has_arena_clamped() -> bool:
+	return arena_clamp_count > 0
+
+
+## 靠近边界时的移速衰减系数（soft_push=true 时生效；越界随距离线性衰减到 0.5）
+func arena_speed_factor() -> float:
+	if _arena_radius_px <= 0.0 or not _arena_soft_push:
+		return 1.0
+	var limit: float = maxf(1.0, _arena_radius_px - BODY_RADIUS_PX)
+	var dist: float = (global_position - _lh_center).length()
+	if dist <= limit:
+		return 1.0
+	# 越界后随超限距离线性衰减，取 60px 作为衰减宽度（约 1 秒跨越距离）
+	var overshoot: float = dist - limit
+	return clampf(1.0 - 0.5 * overshoot / 60.0, 0.5, 1.0)
 
 
 ## 设置移速加成（原始倍率；与角色&灯塔同乘区加算后在 _effective_move_mult 软衰减）

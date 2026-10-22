@@ -1,11 +1,18 @@
 {
   "metadata": {
-    "schema_version": 1,
+    "schema_version": 2,
     "doc_source": "主设计文档 §5.2 地图/灯塔居中；验收 1.2.4 灯塔碰撞",
     "note": "运行时只读；碰撞半径为游戏单位（× Player.UNIT_TO_PIXEL → 像素）"
   },
   "lighthouse": {
     "collision_radius_units": 0.5,
     "collision_radius_note": "0.5 单位 ≈ 30px；玩家本体半径另计"
+  },
+  "arena": {
+    "enabled": true,
+    "radius_units": 9.0,
+    "radius_note": "玩家活动范围半径（游戏单位，×60 → 540px）。以灯塔/开局点为圆心，超出即钳回；限制地图尺度，避免「地图太大 + 怪刷太近」的割裂感。设为 0 或 enabled=false 关闭",
+    "soft_push": true,
+    "soft_push_note": "true=到边界前减速（渐变提示）；false=硬钳回"
   }
 }

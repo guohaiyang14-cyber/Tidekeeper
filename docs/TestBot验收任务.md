@@ -104,9 +104,10 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 1.2.1 移速 | `base_move_speed` vs config | smoke / acceptance | 手感 |
 | 1.2.3 守望者 | 选角日志 | smoke+ | — |
 | 1.2.4 灯塔碰撞 | 采样距圆心 ≥ min（开局推出，不改写位） | smoke / full / acceptance | — |
+| 1.2.5 竞技场边界 | 玩家曾触发 `arena_clamp_count > 0` 且当前位置 ≤ `radius - BODY_RADIUS_PX + 2px`；未触发 → skip（证据不足）；配置禁用 → skip（N/A） | smoke / full / acceptance | soft_push 渐变减速（手感）；arena.radius_units 与 BODY_RADIUS_PX 数值对齐 |
 | 4.8 难度默认 | — | — | 人类默认 **watcher**（A2）；Bot suite 仍可强刷 `lighthouse`（硬档回归，与人类默认解耦） |
 | 4.8.6 Boss 档位倍率 | 采样 Boss `max_health` vs 表底×档位 | smoke / full / meta / acceptance | — |
-| 4.8.2 教学夜演示武器 | 教学窗结束首夜核对 `teaching_demo_grants`：id∈demo 表 / 夜∈[2,nights] / 无空 / ≥1 条；窗内死亡→skip（回归 N6 顺位越表致 Debug 中断·非 Debug 脏槽） | smoke / crash / full / meta / acceptance | 授予手感 |
+| 4.8.2 教学夜演示武器 | 教学窗结束首夜核对 `teaching_demo_grants`：id∈demo 表 / 夜∈[2,nights] / 无空 / ≥1 条；窗内死亡→skip；**demo 武器已被玩家/机器人全部自选持有（无「未拥有」可授）→ skip**（2026-10-22 meta 实测合法路径，非缺陷）（回归 N6 顺位越表致 Debug 中断·非 Debug 脏槽） | smoke / crash / full / meta / acceptance | 授予手感 |
 | 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |

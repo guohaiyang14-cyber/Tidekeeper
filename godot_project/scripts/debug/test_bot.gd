@@ -152,6 +152,7 @@ var _run_peak_night: int = 0
 var _move_speed_checked: bool = false
 var _skip_focus_checked: bool = false
 var _lh_collision_checked: bool = false
+var _arena_bounds_checked: bool = false
 var _refine_clicked: bool = false
 var _cutoff_restart_pending: bool = false
 var _run_outcome_recorded: bool = false
@@ -581,6 +582,7 @@ func _prepare_new_run_meta() -> void:
 	_move_speed_checked = false
 	_skip_focus_checked = false
 	_lh_collision_checked = false
+	_arena_bounds_checked = false
 	_refine_clicked = false
 	_cutoff_restart_pending = false
 	_run_outcome_recorded = false
@@ -2080,6 +2082,7 @@ func _accept_on_night_start(night: int) -> void:
 			"base=%.2f expect=%.2f" % [got, want]
 		)
 	_accept_lighthouse_collision_once(world)
+	_accept_arena_bounds_once(night, world)
 	_accept_affix_night_rules(night, world)
 	_accept_teaching_demo_once(night)
 
@@ -2117,6 +2120,48 @@ func _accept_lighthouse_collision_once(world: World) -> void:
 		"pass" if ok else "fail",
 		"dist=%.1f_min=%.1f" % [dist, min_dist]
 	)
+
+
+## 1.2.5：竞技场边界钳位生效（玩家曾触发钳位 + 当前位置仍在活动半径内）
+## 只观测，不改写玩家位置；night≥2 再记录（给足够时间让 Bot 走到边界触发钳位）
+func _accept_arena_bounds_once(night: int, world: World) -> void:
+	if _arena_bounds_checked:
+		return
+	# 延后到 night≥2 再判定（night 1 Bot 刚开局，不会走到 540px 外）
+	if night < 2:
+		return
+	if world == null or world.player == null:
+		return
+	var p: Player = world.player as Player
+	if p == null:
+		return
+	var radius_px: float = p.get_arena_radius()
+	var center: Vector2 = p.get_arena_center()
+	# 配置层：arena 未启用 → skip（N/A）
+	if radius_px <= 0.0:
+		_arena_bounds_checked = true
+		_record_accept("1.2.5", "skip", "arena_disabled")
+		return
+	var body_limit: float = maxf(0.0, radius_px - Player.BODY_RADIUS_PX)
+	var clamp_count: int = p.arena_clamp_count
+	var dist: float = p.global_position.distance_to(center)
+	var within_bounds: bool = dist <= body_limit + 2.0  # 2px 容差
+	_arena_bounds_checked = true
+	if clamp_count <= 0:
+		# Bot 从未触发过钳位（没走到边界）→ 证据不足 skip，不假装 pass
+		_record_accept("1.2.5", "skip", "no_clamp_event")
+		return
+	if within_bounds:
+		_record_accept(
+			"1.2.5", "pass",
+			"radius=%.0f_dist=%.1f_clamps=%d" % [radius_px, dist, clamp_count]
+		)
+	else:
+		# 曾钳位过但当前又跑出边界 → 钳位逻辑失效（理论上不可能，除非 resolve 路径没被调）
+		_record_accept(
+			"1.2.5", "fail",
+			"clamps=%d_yet_dist=%.1f>limit=%.0f" % [clamp_count, dist, body_limit]
+		)
 
 
 func _accept_on_night_end(night: int) -> void:

@@ -504,6 +504,20 @@ func get_lighthouse_collision_radius_units() -> float:
 	return float(lh.get("collision_radius_units", 0.5))
 
 
+## 玩家活动范围半径（游戏单位；缺省 9.0 ≈ 540px）。≤0 或未启用时返回 0（不限制）
+func get_arena_radius_units() -> float:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	if not bool(a.get("enabled", false)):
+		return 0.0
+	return maxf(0.0, float(a.get("radius_units", 9.0)))
+
+
+## 边界软推（渐变减速提示）；缺省 true
+func get_arena_soft_push() -> bool:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	return bool(a.get("soft_push", true))
+
+
 ## 全部灯塔节点（扁平）
 func get_all_lighthouse_nodes() -> Dictionary:
 	return _lighthouse_nodes
