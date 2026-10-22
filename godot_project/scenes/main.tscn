@@ -112,9 +112,12 @@ script = ExtResource("26_hud")
 [node name="DebugLabel" type="Label" parent="UI/HUD"]
 layout_mode = 0
 offset_left = 10.0
-offset_top = 88.0
-offset_right = 800.0
-offset_bottom = 118.0
+offset_top = 112.0
+offset_right = 330.0
+offset_bottom = 192.0
+theme_override_colors/font_color = Color(0.85, 0.92, 1, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.03, 0.06, 0.9)
+theme_override_constants/outline_size = 4
 text = "Tidekeeper W1 — 启动中..."
 horizontal_alignment = 0
 vertical_alignment = 0

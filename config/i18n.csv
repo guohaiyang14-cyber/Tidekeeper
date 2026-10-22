@@ -1,6 +1,5 @@
-﻿key,zh,en
+key,zh,en
 ui.difficulty,难度：,Difficulty: 
-ui.teaching,（教学夜）,(Tutorial)
 ui.boss_warn,⚠ 本夜有 Boss 出没,⚠ Boss appears this night
 ui.game_over,游戏结束,Game Over
 ui.early_retire,提前收工,Early Retire
@@ -74,7 +73,7 @@ difficulty.tier.watcher,守夜人,Night Watcher
 ui.difficulty_select,难度档位,Difficulty
 ui.hud.hp,HP %d / %d,HP %d / %d
 ui.hud.exp,Lv %d  经验 %d / %d,Lv %d  XP %d / %d
-ui.hud.night,第 %d / 20 夜%s,Night %d / 20 %s
+ui.hud.night,第 %d 夜,Night %d
 ui.result.stats_defeat,存活至第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s,Survived to night %d · Lv %d · Coins %d · %s
 ui.result.stats_victory,通关 · 第 %d 夜 · 等级 %d · 潮币 %d · 难度 %s,Victory · Night %d · Lv %d · Coins %d · %s
 ui.result.stardust,本局星尘 +%d（累计 %d）,Stardust +%d (Total %d)

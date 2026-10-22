@@ -95,8 +95,12 @@ func _test_hud_language() -> void:
 	hud._on_loadout_changed()
 	_assert(hud._exp_label.text.contains("XP"), "HUD en 经验文案")
 	_assert(hud._weapon_box.get_child_count() >= 1, "HUD 武器槽存在")
-	var chip: PanelContainer = hud._weapon_box.get_child(0) as PanelContainer
-	var wlbl: Label = chip.get_child(0) as Label
+	# 截图反馈返工后槽位无背景面板：HBoxContainer 直接子节点 = [TextureRect, Label]
+	var wlbl: Label = null
+	for c in hud._weapon_box.get_children():
+		if c is Label:
+			wlbl = c as Label
+			break
 	_assert(wlbl != null and wlbl.text.contains("Harpoon"), "HUD en 武器名 Harpoon")
 
 

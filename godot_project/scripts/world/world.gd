@@ -150,8 +150,9 @@ func _update_debug_label() -> void:
 	var bot_tag: String = ""
 	if TestBot.is_active():
 		bot_tag = "  |  BOT ×%.0f" % TestBot.get_speed_scale()
-	debug_label.text = "夜: %d / 20  |  阶段: %s  |  剩余: %.1fs  |  等级: %d  |  HP: %s  |  经验: %d  |  珠: %d%s" % [
-		day_night.get_current_night(),
+	# 竖排显示（截图反馈：原单行横排与左上角货币/夜数信息视觉重叠）；
+	# 每行两个字段；夜数只在 HUD 显示一次，调试行不再重复（截图反馈 2）
+	debug_label.text = "阶段: %s  剩余: %.1fs\n等级: %d  HP: %s\n经验: %d  珠: %d%s" % [
 		_phase_label(day_night.get_phase()),
 		day_night.get_night_remaining(),
 		GameState.player_level,
