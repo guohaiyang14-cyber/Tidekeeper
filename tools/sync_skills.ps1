@@ -1,12 +1,14 @@
 <#
 .SYNOPSIS
-  Sync tools/SKILL*.md to Trae + Cursor skill directories (hardlinks)
+  Sync tools/SKILL*.md to Trae + Cursor + WorkBuddy skill directories (hardlinks)
 
 .DESCRIPTION
   Scans tools/ for SKILL*.md files, reads frontmatter name field,
   creates hardlinks in:
     - .trae/skills/<name>/SKILL.md
     - .cursor/skills/<name>/SKILL.md
+    - .workbuddy-ai/skills/<name>/SKILL.md   (gitignore，本地再生，不进库)
+  The canonical source of truth is tools/SKILL*.md (version-controlled, agent-neutral).
   To add a new skill: create tools/SKILL_<name>.md, run this script.
 
 .EXAMPLE
@@ -18,7 +20,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $toolsDir = Join-Path $repoRoot "tools"
 $targets = @(
     (Join-Path $repoRoot ".trae\skills"),
-    (Join-Path $repoRoot ".cursor\skills")
+    (Join-Path $repoRoot ".cursor\skills"),
+    (Join-Path $repoRoot ".workbuddy-ai\skills")
 )
 
 Write-Output "=== Skill Sync ==="

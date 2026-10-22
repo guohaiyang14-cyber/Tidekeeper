@@ -60,7 +60,7 @@ Tidekeeper/
 │   │   └── player/player.gd     # 玩家节点（WASD 移动骨架）
 │   └── assets/                  # 资源目录（W1-W18 用占位图）
 │       ├── sprites/
-│       ├── audio/
+│       ├── audio/               # post-W20 程序化占位音频（config/audio.json 驱动）
 │       └── fonts/
 └── README.md
 ```

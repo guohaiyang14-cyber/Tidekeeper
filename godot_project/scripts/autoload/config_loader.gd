@@ -518,6 +518,18 @@ func get_arena_soft_push() -> bool:
 	return bool(a.get("soft_push", true))
 
 
+## 地面砖贴图 id（缺省 floor_0）
+func get_ground_tile_id() -> String:
+	var g: Dictionary = map_cfg.get("ground", {}) as Dictionary
+	return String(g.get("tile_id", "floor_0"))
+
+
+## 地面单次铺开范围（像素；缺省 4096）
+func get_ground_cover_px() -> float:
+	var g: Dictionary = map_cfg.get("ground", {}) as Dictionary
+	return maxf(512.0, float(g.get("cover_px", 4096.0)))
+
+
 ## 全部灯塔节点（扁平）
 func get_all_lighthouse_nodes() -> Dictionary:
 	return _lighthouse_nodes

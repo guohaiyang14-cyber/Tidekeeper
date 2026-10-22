@@ -9,7 +9,7 @@
       "4": "每 4 帧（小怪/召唤物：水母浮游/爆炸贝/鸦群）"
     },
     "difficulty": {
-      "health_per_night": 0.10,
+      "health_per_night": 0.1,
       "health_per_5nights": 0.15,
       "damage_per_night": 0.04,
       "region_coeff": 1.0
@@ -32,10 +32,10 @@
       "budget_slack_sec": 5.0,
       "budget_exp_redundancy": 1.25,
       "note_budget_pace": "even=有经验预算按（夜长−slack）均匀进度释放；落后时 pressure/burst 追赶；进度超前用无掉落 floor 顶压；slack=夜末捡珠空窗；进昼未拾珠/币丢弃（不全局入账）；屏外超时见 pickups.offscreen_despawn_sec；redundancy=预算数量成长冗余。约束：夜1预算(base×redundancy)≥约2×min_active，避免 even 超前窗口被无掉落 floor 稀释升级",
-      "ring_min": 140.0,
-      "ring_extra": 160.0,
-      "opening_grace_sec": 2.5,
-      "note_opening_grace": "每夜开局缓冲：此前不刷杂兵/精英波；预算时钟从缓冲结束后起算（无开局无敌，避免污染 enter_night/挫败感机检）",
+      "ring_min": 300.0,
+      "ring_extra": 260.0,
+      "opening_grace_sec": 6.0,
+      "note_opening_grace": "每夜开局缓冲（秒）：此前不刷杂兵/精英波；拉长到 6s 给玩家反应时间（反馈「开局很容易被打死」）。预算时钟从缓冲结束后起算",
       "elite_offset_y": -200.0,
       "boss_offset_y": -220.0,
       "retry_delay": 0.1,
@@ -44,7 +44,8 @@
       "max_floor_refill": 0,
       "floor_refill_burst": 8,
       "floor_refill_interval": 0.08,
-      "note_floor": "floor=min_active+min_active_per_night×(night-1)，封顶 max_enemies；active<floor 时补刷：预算已尽或 even 进度超前均可；max_floor_refill=0 不封顶；补刷怪无经验/潮币/进化/挣扎击杀；floor_refill_burst/interval 控制批量回补节奏；floor 略低于预算曲线以保留割草压感且不挤占有经验配额"
+      "note_floor": "floor=min_active+min_active_per_night×(night-1)，封顶 max_enemies；active<floor 时补刷：预算已尽或 even 进度超前均可；max_floor_refill=0 不封顶；补刷怪无经验/潮币/进化/挣扎击杀；floor_refill_burst/interval 控制批量回补节奏；floor 略低于预算曲线以保留割草压感且不挤占有经验配额",
+      "note_ring": "刷怪环半径（像素）：ring_min 起、ring_extra 随机增量；300~560px ≈ 视口(1280×720)对角线内，敌人从画面边缘走进来而非凭空出现在脸前"
     },
     "elite": {
       "base_enemy_id": "iron_crab",
@@ -67,7 +68,11 @@
       "teaching_nights_no_affix": 4,
       "elite_affix_min": 2,
       "elite_affix_max": 3,
-      "calamity_nights": [10, 15, 20],
+      "calamity_nights": [
+        10,
+        15,
+        20
+      ],
       "calamity_bonus_affixes": 1,
       "note": "§5.4 精英=基础×2~3词缀；§5.5 第10夜全场+1词缀（当夜统一抽取）；前4夜教学无词缀。侵蚀等级不进 MVP"
     },
@@ -91,7 +96,11 @@
       "move_speed": 275.0,
       "contact_radius": 18.0,
       "visual_size": 18.0,
-      "tint": [0.85, 0.28, 0.28],
+      "tint": [
+        0.85,
+        0.28,
+        0.28
+      ],
       "notes": "数量单位；移速≈玩家 109%（玩家≈252px/s），可追击围堵"
     },
     "iron_crab": {
@@ -109,7 +118,11 @@
       "move_speed": 130.0,
       "contact_radius": 22.0,
       "visual_size": 24.0,
-      "tint": [0.72, 0.42, 0.18],
+      "tint": [
+        0.72,
+        0.42,
+        0.18
+      ],
       "notes": "高血；破甲"
     },
     "jellyfish_drifter": {
@@ -129,7 +142,11 @@
       "move_speed": 95.0,
       "contact_radius": 16.0,
       "visual_size": 18.0,
-      "tint": [0.35, 0.85, 0.9],
+      "tint": [
+        0.35,
+        0.85,
+        0.9
+      ],
       "notes": "远程；接触伤害 6（弹幕）"
     },
     "deep_diver": {
@@ -150,7 +167,11 @@
       "move_speed": 280.0,
       "contact_radius": 18.0,
       "visual_size": 18.0,
-      "tint": [0.18, 0.28, 0.62],
+      "tint": [
+        0.18,
+        0.28,
+        0.62
+      ],
       "notes": "突袭；地表追击略快于玩家"
     },
     "bomb_shell": {
@@ -170,7 +191,11 @@
       "move_speed": 290.0,
       "contact_radius": 16.0,
       "visual_size": 16.0,
-      "tint": [0.95, 0.45, 0.12],
+      "tint": [
+        0.95,
+        0.45,
+        0.12
+      ],
       "notes": "低血；自爆；移速>玩家，需贴近爆炸"
     },
     "raven_flock": {
@@ -188,8 +213,15 @@
       "move_speed": 330.0,
       "contact_radius": 16.0,
       "visual_size": 16.0,
-      "tint": [0.22, 0.12, 0.32],
-      "flags": ["flying", "ignore_terrain"],
+      "tint": [
+        0.22,
+        0.12,
+        0.32
+      ],
+      "flags": [
+        "flying",
+        "ignore_terrain"
+      ],
       "notes": "飞行；最快追击单位（>小水鬼）"
     },
     "tide_summoner": {
@@ -211,7 +243,11 @@
       "move_speed": 90.0,
       "contact_radius": 16.0,
       "visual_size": 22.0,
-      "tint": [0.22, 0.72, 0.42],
+      "tint": [
+        0.22,
+        0.72,
+        0.42
+      ],
       "notes": "召唤为主"
     },
     "abyssal_pikeman": {
@@ -234,7 +270,11 @@
       "move_speed": 230.0,
       "contact_radius": 20.0,
       "visual_size": 22.0,
-      "tint": [0.45, 0.55, 0.72],
+      "tint": [
+        0.45,
+        0.55,
+        0.72
+      ],
       "notes": "冲锋；冲锋时免伤 50%；基础移速接近玩家，冲锋可追上"
     },
     "reef_giant": {
@@ -256,7 +296,11 @@
       "move_speed": 110.0,
       "contact_radius": 26.0,
       "visual_size": 36.0,
-      "tint": [0.42, 0.52, 0.38],
+      "tint": [
+        0.42,
+        0.52,
+        0.38
+      ],
       "notes": "分摊"
     }
   },

@@ -14,5 +14,11 @@
     "radius_note": "玩家活动范围半径（游戏单位，×60 → 540px）。以灯塔/开局点为圆心，超出即钳回；限制地图尺度，避免「地图太大 + 怪刷太近」的割裂感。设为 0 或 enabled=false 关闭",
     "soft_push": true,
     "soft_push_note": "true=到边界前减速（渐变提示）；false=硬钳回"
+  },
+  "ground": {
+    "tile_id": "floor_0",
+    "tile_note": "地面砖贴图 id（assets/sprites/ground/<tile_id>.png），平铺铺底",
+    "cover_px": 4096.0,
+    "cover_note": "单次铺开范围（像素），跟随玩家；须大于视口对角线"
   }
 }

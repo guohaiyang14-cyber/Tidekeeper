@@ -17,6 +17,8 @@ const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
 const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
 const _LH_BEACON = preload("res://scripts/world/lighthouse_beacon.gd")
+const _GROUND = preload("res://scripts/core/ground_backdrop.gd")
+const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -38,6 +40,8 @@ const _LH_BEACON = preload("res://scripts/world/lighthouse_beacon.gd")
 @onready var evolution_effect_ui: EvolutionEffectUI = $UI/EvolutionEffectUI
 @onready var hud: Control = $UI/HUD
 @onready var debug_label: Label = $UI/HUD/DebugLabel
+## 海底地面层（平铺像素地砖，跟随玩家）
+@onready var ground: Node2D = $Ground
 ## 视野遮罩（用 Node2D：class_name 未入 global cache 时 typed VisionOverlay 会解析失败）
 var vision_overlay: Node2D = null
 ## A5 灯塔视觉占位
@@ -62,6 +66,9 @@ func _ready() -> void:
 		# 视野遮罩挂在玩家下（跟随相机）；进夜刷新倍率
 		vision_overlay = _VISION_OVERLAY.new() as Node2D
 		p.add_child(vision_overlay)
+	# 地面层跟随玩家（海底地砖平铺）
+	if ground != null:
+		ground.call("set_target", player)
 	# 开局授予默认武器后，同步生成武器实例并触发自动开火（§4.2）
 	weapon_manager.sync_from_game_state()
 	UpgradeManager.reset()
@@ -107,6 +114,12 @@ func _ready() -> void:
 		pickup_system.active_gem_count() if pickup_system else 0,
 		spatial_hash_holder.get_hash().get_cell_size() if spatial_hash_holder else 0.0,
 	])
+
+
+func _exit_tree() -> void:
+	# 释放静态缓存（静态变量等脚本卸载才清；引擎纹理清理更早）。
+	# 同理释放精灵库缓存（敌人/玩家/地面/HUD 图标共用）
+	_SPRITE_LIB.release_cache()
 
 
 func _process(_delta: float) -> void:

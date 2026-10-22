@@ -12,6 +12,7 @@ groups = ["player"]
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 visible = true
+texture_filter = 1
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_1")

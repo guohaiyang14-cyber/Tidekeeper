@@ -7,6 +7,8 @@
 extends CharacterBody2D
 class_name Player
 
+const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
+
 ## 角色标识（watcher/blacksmith/stargazer）
 @export var character_id: String = "watcher"
 
@@ -19,8 +21,12 @@ class_name Player
 ## 单位→像素换算（§5.2：1 单位 = 60 像素，W2 调校）
 const UNIT_TO_PIXEL: float = 60.0
 
-## 玩家本体碰撞半径（像素；与 _draw 本体圆一致）
+## 玩家本体碰撞半径（像素；与精灵视觉尺寸一致）
 const BODY_RADIUS_PX: float = 14.0
+
+## 角色精灵的显示直径（像素）：精灵原生 48px（16 逻辑×3），缩放到略大于碰撞体，
+## 让角色在敌人中间显眼（用户反馈「看不到角色/开局分不清」）。
+const SPRITE_DISPLAY_PX: float = 40.0
 
 
 ## 移速软上限阈值（GDD §6.9 / passives.json soft_caps.move_speed；缺省 +60%）
@@ -44,11 +50,14 @@ var _arena_soft_push: bool = true
 ## 每帧 resolve_arena_bounds 真正钳位时递增（供 Debug TestBot ACCEPT 1.2.5 观测）
 var arena_clamp_count: int = 0
 
+@onready var _sprite: Sprite2D = $Sprite2D
+
 
 func _ready() -> void:
 	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
 	_apply_pickup_config()
+	_apply_sprite()
 	_init_arena()
 	_ensure_gamepad_move_bindings()
 	if not GameState.player_damaged.is_connected(_on_player_damaged):
@@ -56,6 +65,23 @@ func _ready() -> void:
 	print("[Player] 就绪: character=%s move_speed=%.1f pickup_radius=%.0f" % [
 		character_id, base_move_speed, base_pickup_radius,
 	])
+
+
+## 按 character_id 加载角色精灵（缺失时保留空 Sprite，靠 _draw 的圆兜底）
+func _apply_sprite() -> void:
+	if _sprite == null:
+		_sprite = get_node_or_null("Sprite2D") as Sprite2D
+	if _sprite == null:
+		return
+	var tex: Texture2D = _SPRITE_LIB.player(character_id)
+	if tex == null:
+		_sprite.texture = null
+		_sprite.visible = false
+		return
+	_sprite.texture = tex
+	_sprite.visible = true
+	var s: float = SPRITE_DISPLAY_PX / maxf(float(tex.get_width()), 1.0)
+	_sprite.scale = Vector2(s, s)
 
 
 ## 左摇杆绑定到 move_*（幂等；键盘事件已在 project.godot）
@@ -101,6 +127,7 @@ func _add_joy_button_if_missing(action: String, button: int) -> void:
 func apply_run_character(id: String) -> void:
 	character_id = id
 	_apply_character_stats()
+	_apply_sprite()
 
 
 func _physics_process(_delta: float) -> void:
@@ -109,6 +136,7 @@ func _physics_process(_delta: float) -> void:
 	_handle_movement()
 	if _hurt_flash > 0.0:
 		_hurt_flash = maxf(0.0, _hurt_flash - _delta)
+		_update_sprite_tint()
 		queue_redraw()
 
 
@@ -129,7 +157,17 @@ func _apply_pickup_config() -> void:
 ## 受击闪红反馈（GameState.player_damaged 触发，短时提示）
 func _on_player_damaged(_amount: int) -> void:
 	_hurt_flash = 0.18
+	_update_sprite_tint()
 	queue_redraw()
+
+
+## 受击闪红：精灵存在时给 modulate 染红（无精灵才由 _draw 画红圆）
+func _update_sprite_tint() -> void:
+	if _sprite == null:
+		return
+	if _sprite.texture == null:
+		return
+	_sprite.modulate = Color(1.0, 0.35, 0.35, 1.0) if _hurt_flash > 0.0 else Color(1, 1, 1, 1)
 
 
 ## 处理移动输入（WASD + 左摇杆，§5.2）；锁链等束缚期间按 bind_move_mult 减速（0 则定身）
@@ -285,11 +323,12 @@ func get_bind_move_mult() -> float:
 
 
 func _draw() -> void:
-	# W2 占位视觉：白色圆 + 蓝边 + 拾取半径圈（虚线感）
 	# 拾取半径范围（半透明圈，方便调试观察）
 	var radius: float = get_pickup_radius()
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(0.3, 0.85, 1.0, 0.15), 2.0)
-	# 玩家本体（受击闪红）
-	var body_color: Color = Color(0.9, 0.95, 1.0, 0.9) if _hurt_flash <= 0.0 else Color(1.0, 0.25, 0.25, 0.95)
-	draw_circle(Vector2.ZERO, BODY_RADIUS_PX, body_color)
-	draw_arc(Vector2.ZERO, BODY_RADIUS_PX, 0.0, TAU, 24, Color(0.3, 0.6, 1.0, 1.0), 2.0)
+	# 玩家本体：优先用 Sprite2D 精灵（见 _apply_sprite）；
+	# 仅当精灵缺失（如资源未生成 / headless 无导入）时，才退回画一个圆。
+	if _sprite == null or _sprite.texture == null:
+		var body_color: Color = Color(0.9, 0.95, 1.0, 0.9) if _hurt_flash <= 0.0 else Color(1.0, 0.25, 0.25, 0.95)
+		draw_circle(Vector2.ZERO, BODY_RADIUS_PX, body_color)
+		draw_arc(Vector2.ZERO, BODY_RADIUS_PX, 0.0, TAU, 24, Color(0.3, 0.6, 1.0, 1.0), 2.0)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/core/day_night_state_machine.gd" id="2_dnm"]
@@ -29,9 +29,13 @@
 [ext_resource type="PackedScene" path="res://scenes/weapon_effect.tscn" id="27_fx"]
 [ext_resource type="Script" path="res://scripts/core/chest_pool.gd" id="28_chest_pool"]
 [ext_resource type="PackedScene" path="res://scripts/pickup/chest.tscn" id="29_chest"]
+[ext_resource type="Script" path="res://scripts/core/ground_backdrop.gd" id="30_ground"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_world")
+
+[node name="Ground" type="Node2D" parent="."]
+script = ExtResource("30_ground")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(640, 360)

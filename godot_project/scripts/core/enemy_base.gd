@@ -11,6 +11,7 @@ extends Node2D
 
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
 const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
+const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
 ## Boss 技能表伤键：configure_boss 时乘 DifficultySystem 伤害档位
 const BOSS_TIER_DAMAGE_KEYS: Array[String] = [
 	"barrage_damage", "wave_damage", "ranged_projectile_damage", "self_destruct_damage",
@@ -106,7 +107,9 @@ var _summon_timer: float = 0.0
 var _move_speed_mult: float = 1.0
 var _slow_timer: float = 0.0
 
-@onready var _visual: ColorRect = $Visual
+@onready var _visual: Sprite2D = $Visual
+## 当前精灵贴图（池复用时按 id 重新载入并缓存到 SpriteLib 全局字典，避免重复 IO）
+var _sprite_tex: Texture2D = null
 
 
 # ============================================================================
@@ -361,17 +364,34 @@ func _has_flag(raw: Variant, flag: String) -> bool:
 
 
 func _apply_visual(size_mult: float) -> void:
-	var vis: ColorRect = _visual
+	var vis: Sprite2D = _visual
 	if vis == null:
-		vis = get_node_or_null("Visual") as ColorRect
+		vis = get_node_or_null("Visual") as Sprite2D
 	if vis == null:
 		return
-	var s: float = _visual_size * size_mult
-	vis.offset_left = -s * 0.5
-	vis.offset_top = -s * 0.5
-	vis.offset_right = s * 0.5
-	vis.offset_bottom = s * 0.5
-	vis.color = _tint
+	# 按当前 id（分裂子代用 prototype_id）加载对应像素精灵；缺失则保持上一帧贴图
+	_load_sprite_tex()
+	if _sprite_tex != null:
+		vis.texture = _sprite_tex
+		vis.visible = true
+		# 精灵按其原生尺寸绘制，用 scale 把可视尺寸对齐 config 的 visual_size
+		# （碰撞半径仍用 contact_radius，与视觉解耦）
+		var tex_size: float = maxf(float(_sprite_tex.get_width()), 1.0)
+		var s: float = _visual_size * size_mult / tex_size
+		vis.scale = Vector2(s, s)
+		# 精灵自带配色，不再叠加 config 的 tint（那是给纯色方块占位用的）
+		vis.modulate = Color(1, 1, 1, 1)
+	else:
+		# 无精灵资源：留空（不画方块），保持节点存在供机检断言 has_node("Visual")
+		vis.texture = null
+		vis.visible = false
+
+
+## 载入当前敌人的精灵贴图（enemy_id 优先，回退 prototype_id，如分裂子代）
+func _load_sprite_tex() -> void:
+	_sprite_tex = _SPRITE_LIB.enemy(enemy_id)
+	if _sprite_tex == null and prototype_id != "":
+		_sprite_tex = _SPRITE_LIB.enemy(prototype_id)
 
 
 # ============================================================================
