@@ -37,6 +37,8 @@ var difficulty: Dictionary = {}
 var combat_log: Dictionary = {}
 # 音频总表（总线音量 / SFX / BGM；缺省时 AudioManager 静默）
 var audio: Dictionary = {}
+# 卡通像素风 UI 皮肤（九宫格边距 / 贴图 / 主题映射；缺省时保持原扁平样式）
+var ui_skin: Dictionary = {}
 # A5 地图 / 灯塔碰撞
 var map_cfg: Dictionary = {}
 
@@ -84,6 +86,8 @@ func _load_all() -> void:
 	combat_log = _load_json("combat_log.json", false)
 	# 音频总表（缺文件时 AudioManager 不启用）
 	audio = _load_json("audio.json", false)
+	# 像素风 UI 皮肤（缺文件时保持原扁平样式）
+	ui_skin = _load_json("ui_skin.json", false)
 	# A5 地图（缺文件用内置默认半径）
 	map_cfg = _load_json("map.json", false)
 
@@ -95,7 +99,7 @@ func _load_all() -> void:
 	_validate_counts()
 
 	is_loaded = true
-	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s combat_log=%s audio=%s" % [
+	print("[ConfigLoader] 配置加载完成: weapons=%d enemies=%d bosses=%d events=%d affixes=%d passives=%d evolutions=%d pickups=%s upgrade=%s combat_log=%s audio=%s ui_skin=%s" % [
 		weapons.get("weapons", {}).size(),
 		enemies.get("enemies", {}).size(),
 		bosses.get("bosses", {}).size(),
@@ -107,6 +111,7 @@ func _load_all() -> void:
 		"ok" if upgrade.has("reroll_cost") else "missing",
 		"ok" if combat_log.has("max_runs") else "default",
 		"ok" if audio.has("sfx") else "off",
+		"ok" if ui_skin.has("styles") else "off",
 	])
 
 
@@ -563,3 +568,8 @@ func get_frustration_config() -> Dictionary:
 ## 音频总表（config/audio.json；AudioManager 唯一数据源）
 func get_audio_config() -> Dictionary:
 	return audio
+
+
+## 像素风 UI 皮肤（config/ui_skin.json；PixelSkin 唯一数据源）
+func get_ui_skin_config() -> Dictionary:
+	return ui_skin

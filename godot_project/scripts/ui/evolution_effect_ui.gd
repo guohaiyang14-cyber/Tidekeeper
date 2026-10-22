@@ -28,10 +28,8 @@ func _ready() -> void:
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay)
 
-	_panel = _UI.make_panel(_UI.accent_panel_style(
-		Color(0.10, 0.08, 0.04, 0.92),
-		Color(0.95, 0.82, 0.40, 0.90)
-	))
+	# 金色面板（共鸣是稀有庆祝感，与事件卡的青色区分）；皮肤启用时取 panel_gold 贴图
+	_panel = _UI.make_panel(_UI.gold_panel_style())
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_panel.custom_minimum_size = Vector2(520.0, 140.0)
 	_panel.size = Vector2(520.0, 140.0)

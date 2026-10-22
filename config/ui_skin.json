@@ -1,0 +1,46 @@
+{
+  "_note": "卡通像素风 UI 皮肤（唯一数据源）。资源由 tools/generate_ui_pixel_assets.py 程序化生成，可整批替换为美术资源（保持文件名即可，本文件无需改动）。九宫格边距单位为像素，须与生成脚本的 BLOCK 倍率对应。",
+  "version": 1,
+  "enabled": true,
+  "asset_dir": "res://assets/ui/pixel/",
+  "nine_patch": {
+    "panel": 21,
+    "button": 18,
+    "chip": 12,
+    "slot": 15,
+    "bar": 6
+  },
+  "styles": {
+    "panel_dark":   { "texture": "panel_dark.png",   "patch": "panel",  "content_margin": 12 },
+    "panel_accent": { "texture": "panel_accent.png", "patch": "panel",  "content_margin": 12 },
+    "panel_death":  { "texture": "panel_death.png",  "patch": "panel",  "content_margin": 14 },
+    "panel_gold":   { "texture": "panel_gold.png",   "patch": "panel",  "content_margin": 12 },
+    "chip":         { "texture": "chip.png",         "patch": "chip",   "content_margin": 6 },
+    "slot":         { "texture": "slot_frame.png",   "patch": "slot",   "content_margin": 4 },
+    "btn_normal":   { "texture": "btn_normal.png",   "patch": "button", "content_margin": 10 },
+    "btn_hover":    { "texture": "btn_hover.png",    "patch": "button", "content_margin": 10 },
+    "btn_pressed":  { "texture": "btn_pressed.png",  "patch": "button", "content_margin": 10 },
+    "btn_disabled": { "texture": "btn_disabled.png", "patch": "button", "content_margin": 10 },
+    "btn_lit":      { "texture": "btn_lit.png",      "patch": "button", "content_margin": 10, "font_disabled_color": "#B4E8C4" },
+    "bar_bg":       { "texture": "bar_bg.png",       "patch": "bar",    "stretch": "tile" },
+    "bar_hp":       { "texture": "bar_hp.png",       "patch": "bar",    "stretch": "tile" },
+    "bar_exp":      { "texture": "bar_exp.png",      "patch": "bar",    "stretch": "tile" },
+    "bar_boss":     { "texture": "bar_boss.png",     "patch": "bar",    "stretch": "tile" }
+  },
+  "theme": {
+    "Button": {
+      "normal": "btn_normal",
+      "hover": "btn_hover",
+      "pressed": "btn_pressed",
+      "disabled": "btn_disabled",
+      "focus": "btn_hover"
+    },
+    "Panel": { "panel": "panel_dark" },
+    "PanelContainer": { "panel": "panel_dark" },
+    "ProgressBar": { "background": "bar_bg", "fill": "bar_hp" }
+  },
+  "font_colors": {
+    "Button": { "font_color": "#F4F0FF", "font_hover_color": "#FFE08A", "font_pressed_color": "#C9BEF0", "font_disabled_color": "#7A7390" },
+    "Label": { "font_color": "#EDE8FF" }
+  }
+}

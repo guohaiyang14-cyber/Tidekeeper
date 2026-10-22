@@ -4,6 +4,7 @@
 extends Control
 
 const _UI := preload("res://scripts/ui/ui_chrome.gd")
+const _SKIN := preload("res://scripts/ui/pixel_skin.gd")
 const VIEW_W: float = 1280.0
 const MAIN_SCENE := "res://scenes/main.tscn"
 const CHARACTER_SCENE := "res://scenes/character_select.tscn"
@@ -18,6 +19,8 @@ var _node_data_cache: Dictionary = {}  # node_id -> Dictionary
 
 
 func _ready() -> void:
+	# 像素风 UI 皮肤（config/ui_skin.json）
+	_SKIN.apply_to(self)
 	_build()
 	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
 		LanguageSystem.language_changed.connect(_on_language_changed)
@@ -161,6 +164,11 @@ func _node_summary(node: Dictionary) -> String:
 
 
 func _apply_btn_chrome(btn: Button, state: String) -> void:
+	# 像素皮肤三态：已点亮→绿色 btn_lit，可购买→紫色 btn_normal，未解锁→灰色 btn_disabled
+	# （配色沿用原扁平样式语义：lit=绿 / available=蓝紫 / locked=灰）
+	var px_state: String = "btn_lit" if state == "lit" else ("btn_normal" if state == "available" else "btn_disabled")
+	if _SKIN.apply_button_state(btn, px_state):
+		return
 	var style := StyleBoxFlat.new()
 	match state:
 		"lit":

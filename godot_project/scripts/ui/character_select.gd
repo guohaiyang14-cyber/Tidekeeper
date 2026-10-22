@@ -7,6 +7,7 @@
 extends Control
 
 const _UI := preload("res://scripts/ui/ui_chrome.gd")
+const _SKIN := preload("res://scripts/ui/pixel_skin.gd")
 
 const VIEW_W: float = 1280.0
 const MAIN_SCENE := "res://scenes/main.tscn"
@@ -24,10 +25,18 @@ var _char_cards: Array[Dictionary] = []  # {id, btn, name_l, desc_l, trait_l}
 
 
 func _ready() -> void:
+	# 像素风 UI 皮肤（config/ui_skin.json）
+	_SKIN.apply_to(self)
 	_build()
 	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
 		LanguageSystem.language_changed.connect(_on_language_changed)
 	print("[CharacterSelect] 就绪")
+
+
+func _exit_tree() -> void:
+	# 释放像素皮肤静态缓存（静态变量等脚本卸载才清；引擎纹理清理更早）。
+	# 顶层场景各自 release，互不依赖（本场景只用 PixelSkin；SpriteLib 由 World 释放）。
+	_SKIN.release_cache()
 
 
 func _build() -> void:

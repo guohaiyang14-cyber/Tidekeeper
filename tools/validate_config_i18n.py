@@ -183,6 +183,77 @@ stg = frustration.get("struggle") or {}
 ok(isinstance(stg.get("kills_to_revive"), int), "frustration.struggle.kills_to_revive 为数值")
 
 # ---------------------------------------------------------------------------
+# 1b) 像素风 UI 皮肤（config/ui_skin.json ↔ assets/ui/pixel/*.png）
+# ---------------------------------------------------------------------------
+print("== UI 皮肤资源一致性 ==")
+skin = load_json("ui_skin.json")
+SKIN_DIR = os.path.join(REPO, "godot_project", "assets", "ui", "pixel")
+
+
+def png_size(path):
+    """零依赖读取 PNG IHDR 宽高（前 24 字节：8 sig + 4 len + 4 'IHDR' + 4 w + 4 h）。"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+        if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+            return None
+        return (int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big"))
+    except OSError:
+        return None
+
+
+ok(isinstance(skin.get("enabled"), bool), "ui_skin.enabled 为布尔")
+skin_dir_cfg = str(skin.get("asset_dir") or "")
+ok(skin_dir_cfg.startswith("res://") and skin_dir_cfg.endswith("/"),
+   "ui_skin.asset_dir 为 res:// 目录 (%s)" % skin_dir_cfg)
+skin_rel = skin_dir_cfg.replace("res://", "", 1).rstrip("/")
+skin_abs = os.path.join(REPO, "godot_project", skin_rel.replace("/", os.sep))
+ok(os.path.isdir(skin_abs), "ui_skin.asset_dir 磁盘存在 (%s)" % skin_rel)
+
+nine = skin.get("nine_patch") or {}
+styles = skin.get("styles") or {}
+ok(len(styles) > 0, "ui_skin.styles 非空 (%d 条)" % len(styles))
+
+for sid, sdef in styles.items():
+    tex_name = str((sdef or {}).get("texture") or "")
+    tex_path = os.path.join(skin_abs, tex_name)
+    ok(tex_name != "" and os.path.isfile(tex_path), "样式 %s 贴图存在 (%s)" % (sid, tex_name))
+    patch_key = str((sdef or {}).get("patch") or "")
+    ok(patch_key in nine, "样式 %s 的 patch 键 %s 在 nine_patch 中" % (sid, patch_key))
+    if not os.path.isfile(tex_path):
+        continue
+    size = png_size(tex_path)
+    ok(size is not None, "样式 %s 贴图为合法 PNG (%s)" % (sid, tex_name))
+    if size is None:
+        continue
+    margin = nine.get(patch_key)
+    if not isinstance(margin, int):
+        ok(False, "样式 %s 的 nine_patch.%s 为整数" % (sid, patch_key))
+        continue
+    # 九宫格四边边距之和必须小于贴图边长，否则中段被挤成负宽（Godot 会静默画成纯色块）
+    ok(0 < margin * 2 < size[0] and 0 < margin * 2 < size[1],
+       "样式 %s 九宫格边距 %d×2 < 贴图 %d×%d" % (sid, margin, size[0], size[1]))
+
+# 反向：目录内每个 PNG 要么被 styles 引用，要么是图标类（icon_/cursor_）
+if os.path.isdir(skin_abs):
+    referenced = {str((s or {}).get("texture") or "") for s in styles.values()}
+    orphans = []
+    for fn in sorted(os.listdir(skin_abs)):
+        if not fn.endswith(".png"):
+            continue
+        if fn.startswith("icon_") or fn.startswith("cursor_"):
+            continue
+        if fn not in referenced:
+            orphans.append(fn)
+    ok(len(orphans) == 0, "ui_skin 目录无孤儿贴图 (孤儿=%s)" % (orphans if orphans else "无"))
+
+# theme 段引用的 style id 必须存在于 styles
+for type_name, slots in (skin.get("theme") or {}).items():
+    for slot_name, style_id in (slots or {}).items():
+        ok(str(style_id) in styles,
+           "theme.%s.%s 引用样式 %s 存在" % (type_name, slot_name, style_id))
+
+# ---------------------------------------------------------------------------
 # 2) i18n.csv 覆盖
 # ---------------------------------------------------------------------------
 print("== i18n.csv 覆盖 ==")

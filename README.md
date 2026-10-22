@@ -61,6 +61,7 @@ Tidekeeper/
 │   └── assets/                  # 资源目录（W1-W18 用占位图）
 │       ├── sprites/
 │       ├── audio/               # post-W20 程序化占位音频（config/audio.json 驱动）
+│       ├── ui/pixel/            # post-W20 卡通像素风 UI 贴图（config/ui_skin.json 驱动）
 │       └── fonts/
 └── README.md
 ```

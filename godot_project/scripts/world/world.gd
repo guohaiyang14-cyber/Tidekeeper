@@ -10,6 +10,7 @@ class_name World
 # 显式预加载 EnemyBase，确保 headless 下 class_name 注册（刷怪类型依赖）
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 const _AFFIX_SYSTEM = preload("res://scripts/combat/affix_system.gd")
+const _SKIN = preload("res://scripts/ui/pixel_skin.gd")
 const _BOSS_BRAIN = preload("res://scripts/combat/boss_brain.gd")
 # 显式预加载 UI 脚本，确保 headless 下 class_name 可用（新脚本可能尚未写入 global_script_class_cache）
 const _DAY_PHASE_UI = preload("res://scripts/core/day_phase_ui.gd")
@@ -52,6 +53,9 @@ var _day_skip_busy: bool = false
 
 func _ready() -> void:
 	print("[World] 初始化中...")
+	# 像素风 UI 皮肤（config/ui_skin.json）：挂在 UI 子树最上层的 Control 上
+	# （$UI 是 CanvasLayer，会截断继承，所以不能挂根 Window）
+	_SKIN.apply_to(self)
 	# 验证配置加载
 	_verify_config()
 	# 开局：重置局内状态后再进昼夜循环（角色来自 MetaSystem 选择，回退守望者）
@@ -118,6 +122,9 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	# 释放静态缓存（静态变量等脚本卸载才清；引擎纹理清理更早）。
+	# 每个顶层场景（World / CharacterSelect）各自 release，互不依赖——
+	# 它们的贴图使用范围独立（World 用 SpriteLib + PixelSkin，CharacterSelect 只用 PixelSkin）。
+	_SKIN.release_cache()
 	# 同理释放精灵库缓存（敌人/玩家/地面/HUD 图标共用）
 	_SPRITE_LIB.release_cache()
 
