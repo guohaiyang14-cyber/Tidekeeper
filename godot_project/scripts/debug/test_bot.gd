@@ -2368,6 +2368,8 @@ func _accept_boss_tier_scaling(enemy: EnemyBase) -> void:
 ## 4.8.2：教学窗结束首夜（N nights+1）核对窗内演示武器授予记录。
 ## 合法 = 每条 weapon ∈ demo 表、夜次 ∈ [2, nights]、无空；且 ≥1 条（槽满跳过允许少于表项）。
 ## 回归 N6 顺位越表（修复前 Debug 必断、非 Debug 脏槽）。
+## 例外（2026-10-22 meta 套件实测）：机器人/玩家在窗内自选持有**全部**演示武器时，
+## 无「未拥有」可授、授予记录为空是合法路径 → 记 skip（demo_all_owned），不打 fail。
 func _accept_teaching_demo_once(night: int) -> void:
 	if _teaching_demo_checked:
 		return
@@ -2387,6 +2389,16 @@ func _accept_teaching_demo_once(night: int) -> void:
 		if gw == "" or gw not in demo or gn < 2 or gn > teach_n:
 			bad.append("n%d:%s" % [gn, gw])
 	var ok: bool = grants.size() > 0 and bad.is_empty()
+	if not ok and grants.is_empty():
+		# 无授予记录时分两种：合法（demo 已全自选持有）vs 真缺陷（该授没授）
+		var all_owned: bool = true
+		for w in demo:
+			if String(w) not in GameState.weapon_slots:
+				all_owned = false
+				break
+		if all_owned:
+			_record_accept("4.8.2", "skip", "demo_all_owned_no_grant_needed")
+			return
 	_record_accept_keep_fail(
 		"4.8.2",
 		"pass" if ok else "fail",
