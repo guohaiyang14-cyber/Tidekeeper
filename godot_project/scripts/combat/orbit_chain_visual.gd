@@ -9,6 +9,11 @@ extends Node2D
 
 const LINKS_PER_RING: int = 10
 
+## 绘制层级：玩家侧视觉画在黑夜雾罩（VisionOverlay z=80）**之上**（2026-10-23 方案 B）
+## 层级栈：雾罩 80 < 玩家弹道/特效/召唤物/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
 var _radius: float = 60.0
 var _spacing: float = 15.0
 var _rings: int = 1
@@ -68,5 +73,7 @@ func _draw() -> void:
 ## 工厂（与 SummonEntity 同策略：程序化构建）
 static func create(get_owner_pos: Callable) -> OrbitChainVisual:
 	var v := OrbitChainVisual.new()
+	# 环绕锁链属于玩家侧视觉：抬到黑夜雾罩（VisionOverlay z=80）之上（方案 B 同层）
+	v.z_index = Z_ABOVE_FOG
 	v._get_owner_pos = get_owner_pos
 	return v

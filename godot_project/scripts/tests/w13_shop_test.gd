@@ -19,6 +19,8 @@ func _ready() -> void:
 	print("============================================================")
 	_test_buy_deducts()
 	_test_slot_full_no_deduct()
+	_test_visit_limit_and_sold_out()
+	_test_stale_item_rejected()
 	_test_reroll_passive()
 	_test_reroll_weapon()
 	_test_reroll_last_weapon_blocked()
@@ -87,14 +89,93 @@ func _test_slot_full_no_deduct() -> void:
 	print("[槽满退款]")
 	_reset_run()
 	GameState.add_tidecoins(1000)
-	for pid in ["pearl", "amulet", "tide_bell", "lamp_core", "tide_compass", "lamp_oil"]:
-		GameState.add_passive(pid)
-	_assert(GameState.passive_slot_usage() == 6, "被动槽满 6")
 	var shop: ShopManager = _SHOP.new()
+	shop.open_shop()
+	# 2026-10-23：buy() 按 id 命中在售列表（自构任意 id 不再被接受），
+	# 故先选一件「未持有」的在售被动当目标，再用其余被动把槽填满 → 必走槽满退款
+	var target: Dictionary = {}
+	for it in shop.get_current_items():
+		if it.get("kind") == "passive" and not GameState.passive_slots.has(it.get("id", "")):
+			target = it
+			break
+	_assert(not target.is_empty(), "商店有未持有的在售被动")
+	if target.is_empty():
+		shop.free()
+		return
+	for pid in ConfigLoader.get_all_passive_ids():
+		if GameState.passive_slot_usage() >= 6:
+			break
+		if pid != target.get("id", "") and not GameState.passive_slots.has(pid):
+			GameState.add_passive(pid)
+	_assert(GameState.passive_slot_usage() == 6, "被动槽满 6")
 	var before: int = GameState.tidecoins
-	var ok: bool = shop.buy({"id": "iron_chain", "kind": "passive", "cost": _paid("passive")})
+	var ok: bool = shop.buy(target)
 	_assert(not ok, "槽满购买失败")
 	_assert(GameState.tidecoins == before, "槽满不扣币（退款）")
+	shop.free()
+
+
+## 2026-10-23 用户反馈「成长太快」→ 售出即下架 + 每次开店购买上限
+func _test_visit_limit_and_sold_out() -> void:
+	print("[售出下架 + 开店购买上限]")
+	_reset_run()
+	GameState.add_tidecoins(5000)
+	var shop: ShopManager = _SHOP.new()
+	shop.open_shop()
+	var cap: int = ConfigLoader.get_shop_max_purchases()
+	_assert(cap > 0, "开店购买上限 >0（%d）" % cap)
+	var items: Array = shop.get_current_items()
+	var n0: int = items.size()
+	_assert(n0 > 0, "开商店有在售项（%d）" % n0)
+	if n0 == 0:
+		shop.free()
+		return
+	var first: Dictionary = items[0]
+	var bought: bool = shop.buy(first)
+	_assert(bought, "首件购买成功")
+	_assert(not shop.get_current_items().has(first), "售出项已下架（不可回购）")
+	_assert(shop.get_current_items().size() == n0 - 1, "在售数 -1（%d→%d）" % [n0, shop.get_current_items().size()])
+	# 买到上限后再买必须失败
+	var guard: int = 0
+	while shop.get_purchases_this_visit() < cap and guard < 20:
+		guard += 1
+		var cur: Array = shop.get_current_items()
+		if cur.is_empty():
+			break
+		shop.buy(cur[0])
+	_assert(shop.get_purchases_this_visit() == cap, "本次开店买满上限（%d）" % shop.get_purchases_this_visit())
+	var before: int = GameState.tidecoins
+	var extra: Dictionary = {}
+	var rest: Array = shop.get_current_items()
+	if not rest.is_empty():
+		extra = rest[0]
+	if not extra.is_empty():
+		_assert(not shop.buy(extra), "超过上限购买失败")
+		_assert(GameState.tidecoins == before, "超限不扣币")
+	# 重新开店后计数归零
+	shop.open_shop()
+	_assert(shop.get_purchases_this_visit() == 0, "重新开店计数归零")
+	shop.free()
+
+
+## 过期句柄拒绝：已售出商品的缓存引用再次 buy() 必须失败（2026-10-23 code-review P1：
+## buy() 原先不校验在售，TestBot 循环开头缓存的 items 列表可在售出后重复购买，绕过「售出即下架」）
+func _test_stale_item_rejected() -> void:
+	print("[过期句柄拒绝]")
+	_reset_run()
+	GameState.add_tidecoins(5000)
+	var shop: ShopManager = _SHOP.new()
+	shop.open_shop()
+	var items: Array = shop.get_current_items()
+	if items.is_empty():
+		shop.free()
+		return
+	var stale: Dictionary = items[0]
+	_assert(shop.buy(stale), "首件购买成功（建立过期句柄）")
+	var coins_after_first: int = GameState.tidecoins
+	_assert(not shop.buy(stale), "已售出商品的过期句柄再次购买被拒绝")
+	_assert(GameState.tidecoins == coins_after_first, "拒绝时不扣币")
+	_assert(shop.get_purchases_this_visit() == 1, "拒绝时不计入本次购买数")
 	shop.free()
 
 
@@ -169,8 +250,17 @@ func _test_buy_emits_loadout() -> void:
 		emitted[0] = true
 	GameState.loadout_changed.connect(on_loadout)
 	var shop: ShopManager = _SHOP.new()
-	var paid: int = _paid("weapon")
-	var ok: bool = shop.buy({"id": "holy_fire", "kind": "weapon", "cost": paid})
+	shop.open_shop()
+	# 2026-10-23：购买在售列表中的真实武器（buy() 按 id 命中在售）
+	var w_item: Dictionary = {}
+	for it in shop.get_current_items():
+		if it.get("kind") == "weapon":
+			w_item = it
+			break
+	_assert(not w_item.is_empty(), "商店含在售武器")
+	var ok: bool = false
+	if not w_item.is_empty():
+		ok = shop.buy(w_item)
 	_assert(ok, "购买武器成功")
 	_assert(emitted[0], "购买后发射 loadout_changed（供 World 同步）")
 	GameState.loadout_changed.disconnect(on_loadout)
@@ -217,9 +307,18 @@ func _test_economy_no_exploit() -> void:
 	# 完整闭环：给币 → 买(扣 paid) → 重铸(退 refund)，净变化 = -paid + refund（净减少，无刷币）
 	GameState.add_tidecoins(1000)
 	var shop: ShopManager = _SHOP.new()
+	shop.open_shop()
+	# 2026-10-23：购买在售列表中的真实被动（buy() 按 id 命中在售）
+	var item: Dictionary = {}
+	for it in shop.get_current_items():
+		if it.get("kind") == "passive":
+			item = it
+			break
+	var pid: String = String(item.get("id", ""))
+	_assert(pid != "", "商店含在售被动")
 	var before: int = GameState.tidecoins
-	shop.buy({"id": "exp_sac", "kind": "passive", "cost": paid})
+	shop.buy(item)
 	_assert(GameState.tidecoins == before - paid, "购买扣 paid")
-	GameState.reroll_passive("exp_sac")
+	GameState.reroll_passive(pid)
 	_assert(GameState.tidecoins == before - paid + refund, "买+重铸净 = -paid + refund（净减少）")
 	shop.free()

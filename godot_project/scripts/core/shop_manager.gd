@@ -12,9 +12,16 @@ extends Node
 signal shop_opened(items: Array)
 signal purchase_made(item: Dictionary)
 signal purchase_failed(reason: String)
+## 已售出/已达上限后刷新在售列表（只重绘，不抢焦点）
+## 2026-10-23 code-review：参数类型化为 Array[Dictionary]（与 _items 一致；shop_opened 保持
+## 无类型 Array——UI 侧 _on_shop_opened 传入的就是未类型化数组，双向都会破坏）
+signal shop_items_changed(items: Array[Dictionary])
 
 ## 当前在售列表（每项：{id, name, kind, cost}）
 var _items: Array[Dictionary] = []
+
+## 本次开店已购买件数（2026-10-23 用户反馈「成长太快」：加每次开店购买上限）
+var _purchases_this_visit: int = 0
 
 var _shop_ui: ShopUI
 
@@ -42,18 +49,32 @@ func _connect_ui() -> void:
 		purchase_made.connect(_shop_ui._on_purchase_made)
 	if not purchase_failed.is_connected(_shop_ui._on_purchase_failed):
 		purchase_failed.connect(_shop_ui._on_purchase_failed)
+	if _shop_ui.has_method("_on_shop_items_changed") and not shop_items_changed.is_connected(_shop_ui._on_shop_items_changed):
+		shop_items_changed.connect(_shop_ui._on_shop_items_changed)
 
 
 ## 开商店：构建在售列表并发信号
 func open_shop() -> void:
+	_purchases_this_visit = 0
 	_items = _build_items()
-	print("[ShopManager] 开商店：%d 件在售" % _items.size())
+	print("[ShopManager] 开商店：%d 件在售（本次上限 %d 件）" % [_items.size(), get_max_purchases()])
 	shop_opened.emit(_items)
 
 
 ## 关闭商店（清列表）
 func close_shop() -> void:
 	_items = []
+	_purchases_this_visit = 0
+
+
+## 本次开店已购买件数（机检/UI 用）
+func get_purchases_this_visit() -> int:
+	return _purchases_this_visit
+
+
+## 本次开店购买上限（upgrade.json shop.max_purchases_per_visit）
+func get_max_purchases() -> int:
+	return ConfigLoader.get_shop_max_purchases()
 
 
 ## 当前在售列表（UI / 测试用）
@@ -65,11 +86,27 @@ func get_current_items() -> Array[Dictionary]:
 func buy(item: Dictionary) -> bool:
 	if item.is_empty():
 		return false
-	var cost: int = int(item.get("cost", 0))
-	var kind: String = item.get("kind", "")
+	var cap: int = get_max_purchases()
+	if cap > 0 and _purchases_this_visit >= cap:
+		purchase_failed.emit("visit_limit")
+		return false
 	var id: String = item.get("id", "")
 	if id == "":
 		return false
+	# 过期句柄防护（2026-10-23 code-review P1）：按 id 在「当前在售列表」中查找。
+	# 调用方可能持有已售出项的缓存引用或自构字典——整体相等性判断会漏判/误伤；
+	# id 在在售列表中唯一，售出即 erase → 旧句柄/不在售的 id 自然被拒（sold_out）
+	var live: Dictionary
+	for it in _items:
+		if String(it.get("id", "")) == id:
+			live = it
+			break
+	if live.is_empty():
+		purchase_failed.emit("sold_out")
+		return false
+	# 成交价/类型以在售列表为准（防调用方篡改 cost；与 config 单价一致）
+	var cost: int = int(live.get("cost", 0))
+	var kind: String = String(live.get("kind", ""))
 	if not GameState.spend_tidecoins(cost):
 		purchase_failed.emit("insufficient_funds")
 		return false
@@ -79,11 +116,15 @@ func buy(item: Dictionary) -> bool:
 	else:
 		ok = GameState.add_passive(id)
 	if not ok:
-		# 槽满 / 重复被动 → 退款，不扣币
+		# 槽满 / 已满级 → 退款，不扣币
 		GameState.add_tidecoins(cost)
 		purchase_failed.emit("slot_full")
 		return false
-	purchase_made.emit(item)
+	_purchases_this_visit += 1
+	# 售出即下架（一件商品一次开店只卖一次），并刷新在售列表
+	_items.erase(live)
+	shop_items_changed.emit(_items)
+	purchase_made.emit(live)
 	# add_weapon / add_passive 成功时已 emit loadout_changed
 	return true
 

@@ -29,7 +29,7 @@
 | `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 / 2.4.2 / 4.3.12 / 4.8.2 |
 | `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2 |
 | `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.8.6 / 4.8.2 / 4.3.12 |
-| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 / 4.11.1 |
+| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 / 4.11.1 / **4.4.10** |
 
 显式 CLI / 环境变量 **覆盖** suite 默认值。
 
@@ -121,8 +121,10 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 2.5.3 / 4.10.1 | 通关 win | full | — |
 | 4.6 / 4.8 | 角色 cycle / 难度 | meta | UI |
 | 4.11.1 音频就绪与发声 | `AudioManager.is_enabled()` 且局末 `play_count` 增量>0（开局记基线、局末比增量；headless/关闭 → skip） | acceptance | 音色/音量平衡（4.11.3 人工试听） |
+| 4.4.10 商店限购/售出即下架 | 开店后 `buy()` 返回 false 且 `purchases_this_visit ≥ get_shop_max_purchases()` → pass（visit_limit 归因：buy 先查上限）；失败但购买数未达上限且该项已不在在售列表 → pass（sold_out 过期句柄被拒）；整店未触发购买 → skip（证据不足） | acceptance | 限购件数/是否恢复「可回购」属平衡决策 |
 | 5.1 / 5.3 | — | — | Profiler |
 | 4.1.4 / 4.4.9 / 4.5.9 / 4.6.13 / 4.7.11 / 4.13.1–4.13.6 | — | — | 视觉（4.13 武器特效/弹道/召唤物/系色 HUD 为纯视觉，无局内行为变更；观感见 4.13.6 人工试玩，机检 `w21_weapon_fx_test` 105 断言） |
+| W22/W23 地图·灯塔·视线·散落光源·命中闪光（1.2.6–1.2.9 / 4.14.x） | — | — | **N/A（纯视觉+配置驱动，无局内行为变更）**：视野/光晕/层级/命中闪光均不改变战斗数值与胜负路径，观感见 `docs/人工验收清单.md` F 组（F.1–F.25），机检 `w22_map_vision_test` 128 断言；Bot 走位约束 `_bias_toward_light` 为 Debug 机器人策略（非玩法规则），其行为量化见 CombatLog 位置采样 |
 
 ---
 

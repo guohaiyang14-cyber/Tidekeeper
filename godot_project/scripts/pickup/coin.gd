@@ -26,8 +26,14 @@ var _target_pos: Vector2 = Vector2.ZERO
 var _offscreen_time: float = 0.0
 
 
+## 绘制层级：抬到黑夜雾罩（VisionOverlay z=80）之上，暗处也看得见潮币（原为 4）
+## 层级栈：雾罩 80 < 玩家弹道/特效/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
+
 func _ready() -> void:
-	z_index = 4
+	z_index = Z_ABOVE_FOG
 
 
 func _draw() -> void:

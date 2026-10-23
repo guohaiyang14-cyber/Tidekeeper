@@ -50,6 +50,12 @@ const GEM_RADIUS: float = 8.0
 ## 光晕基础半径（飞行时外圈发光）
 const GLOW_RADIUS: float = 14.0
 
+## 绘制层级：画在黑夜雾罩（VisionOverlay z=80）**之上**——暗处也看得见掉落的经验珠、
+## 不会漏捡（2026-10-23 用户选方案 B；仍高于敌人本体 z=0，敌人继续藏黑）
+## 层级栈：雾罩 80 < 玩家弹道/特效/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
 ## 经验值（由 PickupSystem.spawn_exp_gem 设置，已含品质倍率）
 var exp_value: int = 1
 
@@ -73,7 +79,8 @@ var _offscreen_time: float = 0.0
 
 
 func _ready() -> void:
-	z_index = 5  # 经验珠画在敌人之上
+	# 抬到雾罩之上（详见 Z_ABOVE_FOG）；原为 5（画在敌人之上）
+	z_index = Z_ABOVE_FOG
 
 
 func _draw() -> void:

@@ -1,6 +1,6 @@
 """
 经验表生成脚本
-用途：根据设计文档公式 E(n) = floor(22 × 1.11^(n-1) + 3×(n-1)) 生成预生成经验表
+用途：根据公式 E(n) = floor(BASE × RATIO^(n-1) + LINEAR×(n-1)) 生成预生成经验表
 用法：python generate_exp_table.py
 输出：控制台打印经验表 + 生成 config/exp_table.json（配置表目录）
 
@@ -12,6 +12,17 @@ import json
 import math
 import os
 from typing import Dict, Any, List, Tuple
+
+# ---- 曲线参数（唯一调参入口）----
+# 2026-10-23 用户反馈「成长太快，10 夜左右所有武器 7 级、被动 5 级」：
+# 实测一局 11 夜到 Lv27（累计 3064 经验 @ 第 10 夜），曲线过平。
+# 保持曲线形状不变（同样的相对节奏），整体上抬约 1.9x：
+#   BASE 22 → 42，LINEAR 3 → 6
+# 结果：第 10 夜 ≈ Lv18（原 Lv24），第 20 夜 ≈ Lv25（原封顶 Lv30）。
+BASE: int = 42
+RATIO: float = 1.11
+LINEAR: int = 6
+FORMULA: str = "E(n) = floor(%d * %s^(n-1) + %d*(n-1))" % (BASE, RATIO, LINEAR)
 
 
 def generate_exp_table(max_level: int = 30) -> Dict[int, Dict[str, int]]:
@@ -28,11 +39,8 @@ def generate_exp_table(max_level: int = 30) -> Dict[int, Dict[str, int]]:
     cumulative: int = 0
     
     for n in range(1, max_level + 1):
-        # E(n) = floor(22 × 1.11^(n-1) + 3×(n-1))
-        if n == 1:
-            exp = 22
-        else:
-            exp = int(math.floor(22 * (1.11 ** (n - 1)) + 3 * (n - 1)))
+        # E(n) = floor(BASE × RATIO^(n-1) + LINEAR×(n-1))
+        exp = int(math.floor(BASE * (RATIO ** (n - 1)) + LINEAR * (n - 1)))
         
         cumulative += exp
         exp_table[n] = {
@@ -47,7 +55,7 @@ def generate_exp_table(max_level: int = 30) -> Dict[int, Dict[str, int]]:
 def main() -> None:
     print("=" * 60)
     print("经验表生成器")
-    print("公式: E(n) = floor(22 × 1.11^(n-1) + 3×(n-1))")
+    print("公式: " + FORMULA)
     print("=" * 60)
     print()
     
@@ -64,17 +72,15 @@ def main() -> None:
     
     print()
     print("关键校验：")
-    print(f"  第 1 级: {exp_table[1]['exp_required']} (预期 22)")
-    print(f"  第 10 级: {exp_table[10]['exp_required']} (预期 83)")
-    print(f"  第 20 级: {exp_table[20]['exp_required']} (预期 216)")
-    print(f"  第 30 级: {exp_table[30]['exp_required']} (预期 540)")
+    for lv in (1, 10, 20, 30):
+        print(f"  第 {lv} 级: {exp_table[lv]['exp_required']} (累计 {exp_table[lv]['cumulative_exp']})")
     
     # 校验
     checks = [
-        (1, 22),
-        (10, 83),
-        (20, 216),
-        (30, 540),
+        (1, BASE),
+        (10, int(math.floor(BASE * (RATIO ** 9) + LINEAR * 9))),
+        (20, int(math.floor(BASE * (RATIO ** 19) + LINEAR * 19))),
+        (30, int(math.floor(BASE * (RATIO ** 29) + LINEAR * 29))),
     ]
     
     all_pass = True
@@ -88,7 +94,7 @@ def main() -> None:
     # 导出 JSON
     output = {
         "metadata": {
-            "formula": "E(n) = floor(22 * 1.11^(n-1) + 3*(n-1))",
+            "formula": FORMULA,
             "max_level": 30,
             "generated_by": "generate_exp_table.py",
             "note": "Do not edit by hand; regenerate via this script"

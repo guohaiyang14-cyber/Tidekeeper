@@ -80,6 +80,11 @@ static func summon(id: String) -> Texture2D:
 	return sprite("summons", id)
 
 
+## 世界装饰精灵（灯塔塔楼 / 竞技场礁石界桩；assets/sprites/world/）
+static func world(id: String) -> Texture2D:
+	return sprite("world", id)
+
+
 ## 释放静态缓存（顶层场景 _exit_tree 调用；同 PixelSkin.release_cache 的理由）
 static func release_cache() -> void:
 	_tex_cache.clear()

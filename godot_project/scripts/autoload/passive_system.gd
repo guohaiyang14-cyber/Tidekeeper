@@ -8,7 +8,7 @@
 # ============================================================================
 extends Node
 
-## 8 类通用数值桶（per-level 百分比，由 PassiveSystem 累加后转倍率/概率）
+## 9 类通用数值桶（per-level 百分比/单位，由 PassiveSystem 累加后转倍率/概率/半径）
 const _BUCKETS: Array[String] = [
 	"damage_pct",
 	"attack_speed_pct",
@@ -18,6 +18,7 @@ const _BUCKETS: Array[String] = [
 	"crit_chance_pct",
 	"area_pct",
 	"cd_reduction_pct",
+	"vision_radius_units",
 ]
 
 ## 软上限配置缓存（从 passives.json metadata.soft_caps 加载）
@@ -125,6 +126,12 @@ func get_crit_chance() -> float:
 
 func get_cd_reduction() -> float:
 	return clampf(_total_pct("cd_reduction_pct") / 100.0, 0.0, 0.8)
+
+
+## 夜间随身视野半径（游戏单位；×60=像素）
+## 来源：被动 pearl（夜明珠）每级 +1.5 单位；全局成长可后续扩展
+func get_vision_radius_units() -> float:
+	return _total_pct("vision_radius_units")
 
 
 ## 对单次命中伤害掷暴击（每目标/每弹道命中各自调用；chance=0 不耗 RNG）

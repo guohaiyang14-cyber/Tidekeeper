@@ -216,6 +216,15 @@ func _on_purchase_made(_item: Dictionary) -> void:
 	_refresh_fusion()
 
 
+## 在售列表变化（售出下架 / 达上限）：只重绘，不抢焦点
+func _on_shop_items_changed(items: Array[Dictionary]) -> void:
+	if not visible:
+		return
+	_render(items)  # _render 收无类型 Array：Array[Dictionary] 向上转型安全，shop_opened 路径不变
+	_refresh_coins()
+	_refresh_fusion()
+
+
 func _on_purchase_failed(_reason: String) -> void:
 	_refresh_coins()
 

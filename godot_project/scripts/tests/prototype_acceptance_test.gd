@@ -134,7 +134,7 @@ func _test_three_choice_trigger() -> void:
 	print("[1.3.1 升级触发三选一]")
 	GameState.start_new_run("watcher", 20260813)
 	UpgradeManager.reset()
-	GameState.add_exp(22)  # 跨 1 级
+	GameState.add_exp(ExpTable.get_exp(1))  # 跨 1 级（读表，勿硬编码）
 	_assert(UpgradeManager.is_presenting(), "经验足够后弹出三选一")
 	UpgradeManager.skip()
 	if get_tree().paused:
@@ -148,7 +148,7 @@ func _test_three_choice_categories() -> void:
 	print("[1.3.2 武器/被动分类]")
 	GameState.start_new_run("watcher", 20260813)
 	UpgradeManager.reset()
-	GameState.add_exp(22)
+	GameState.add_exp(ExpTable.get_exp(1))  # 读表：E(1) 随平衡调整
 	var offers: Array = UpgradeManager.get_current_offers()
 	var has_weapon: bool = false
 	var has_passive: bool = false
@@ -175,7 +175,7 @@ func _test_free_reroll() -> void:
 	print("[1.3.3 免费重铸 1 次/级]")
 	GameState.start_new_run("watcher", 20260813)
 	UpgradeManager.reset()
-	GameState.add_exp(22)
+	GameState.add_exp(ExpTable.get_exp(1))  # 读表：E(1) 随平衡调整
 	var coins_before: int = GameState.tidecoins
 	var ok: bool = UpgradeManager.reroll()
 	_assert(ok, "首次重铸成功")

@@ -1,24 +1,128 @@
 {
   "metadata": {
-    "schema_version": 2,
-    "doc_source": "主设计文档 §5.2 地图/灯塔居中；验收 1.2.4 灯塔碰撞",
-    "note": "运行时只读；碰撞半径为游戏单位（× Player.UNIT_TO_PIXEL → 像素）"
+    "schema_version": 3,
+    "doc_source": "主设计文档 §5.2 地图/灯塔居中；2026-10-22 用户反馈：灯塔=有高度的塔+光束、黑夜视线限制、边界需明确障碍物、界外击杀经验不可拾、地图应大于默认窗口",
+    "note": "运行时只读；单位：游戏单位（×60 → 像素），像素值字段带 _px 后缀"
   },
   "lighthouse": {
     "collision_radius_units": 0.5,
-    "collision_radius_note": "0.5 单位 ≈ 30px；玩家本体半径另计"
+    "collision_radius_note": "0.5 单位 ≈ 30px；玩家本体半径另计",
+    "sprite_id": "lighthouse_tower",
+    "sprite_note": "塔楼精灵（assets/sprites/world/lighthouse_tower.png，96×168px，底部中心对齐塔基圆心）",
+    "lamp_height_px": 138.0,
+    "lamp_height_note": "灯室距塔基高度（像素，≈塔高 168×0.82）；光束原点与辉光位置共用此值",
+    "lamp_glow_radius_px": 60.0,
+    "lamp_glow_note": "夜间灯室辉光半径（像素）；脉冲呼吸（2026-10-23：46→60，用户反馈「灯塔附近一圈应该是亮的」）",
+    "beam": {
+      "enabled": true,
+      "length_units": 14.0,
+      "half_angle_deg": 20.0,
+      "rotation_speed_deg": 26.0,
+      "color": [
+        1.0,
+        0.93,
+        0.7
+      ],
+      "alpha": 0.5,
+      "beam_note": "夜间旋转光束：length_units×60=840px；half_angle_deg 为半角（2026-10-23：10→20，用户反馈「光束需要加宽一倍左右」）；rotation_speed_deg 度/秒（0=不旋转）；光束穿雾照明（见 night.json vision）"
+    }
   },
   "arena": {
-    "enabled": true,
-    "radius_units": 12.0,
-    "radius_note": "玩家活动范围半径（游戏单位，×60 → 720px）。以灯塔/开局点为圆心，超出即钳回；限制地图尺度，避免「地图太大 + 怪刷太近」的割裂感。2026-10-22：9.0(540px) → 12.0(720px)——540px 直径≈屏宽，叠加 floor 密度(18+6×夜)与超玩家速的敌弹道(260px/s)导致无处可躲（bot 0/6 活过第8夜；A/B 关竞技场 4/6 胜）；720px > 刷怪环上限(560px)，保留限幅意图同时还走位空间。设为 0 或 enabled=false 关闭",
+    "enabled": false,
+    "radius_units": 16.0,
+    "radius_note": "玩家活动范围半径（游戏单位，×60 → 960px）。2026-10-23 用户反馈「去掉地图范围限制」→ enabled=false（玩家可自由探索，靠视野光源引导而非硬边界）；保留参数与实现以便随时恢复。历史：2026-10-22 由 9.0(540px)→12.0(720px)→16.0(960px)。设为 0 或 enabled=false 关闭",
     "soft_push": true,
-    "soft_push_note": "true=到边界前减速（渐变提示）；false=硬钳回"
+    "soft_push_note": "true=到边界前减速（渐变提示）；false=硬钳回（arena.enabled=false 时不生效）",
+    "spawn_clamp_margin_px": 70.0,
+    "spawn_clamp_note": "刷怪位置钳入 (radius-margin) 内（arena 关闭时不钳位，刷怪环以玩家为圆心自由展开）",
+    "enemy_leash": {
+      "enabled": true,
+      "margin_px": 40.0,
+      "leash_note": "敌人（Boss 除外）超过 radius-margin 被柔和推回界内（arena 关闭时不生效）"
+    },
+    "boundary": {
+      "enabled": false,
+      "post_ids": [
+        "reef_post_0",
+        "reef_post_1",
+        "reef_post_2"
+      ],
+      "post_spacing_px": 130.0,
+      "post_scale": 1.0,
+      "energy_arc": {
+        "enabled": true,
+        "color": [
+          0.45,
+          0.85,
+          1.0
+        ],
+        "alpha": 0.35,
+        "width": 3.0,
+        "dash_px": 26.0
+      },
+      "outer_tint": {
+        "enabled": true,
+        "color": [
+          0.03,
+          0.06,
+          0.12
+        ],
+        "alpha": 0.55
+      },
+      "boundary_note": "边界可视化三件套（arena 关闭后默认不生成）：礁石界桩 + 能量虚线弧 + 界外深色海域"
+    }
   },
   "ground": {
     "tile_id": "floor_0",
     "tile_note": "地面砖贴图 id（assets/sprites/ground/<tile_id>.png），平铺铺底",
     "cover_px": 4096.0,
     "cover_note": "单次铺开范围（像素），跟随玩家；须大于视口对角线"
+  },
+  "scattered_lights": {
+    "enabled": true,
+    "chunk_px": 560.0,
+    "lights_per_chunk": 2,
+    "chunk_radius": 2,
+    "radius_units": 1.2,
+    "intensity": 1.0,
+    "core_ratio": 0.4,
+    "min_gap_units": 2.5,
+    "halo_scale": 2.2,
+    "halo_scale_note": "光晕半径 = 素材半边长 × 该系数（沿素材边缘向外扩散，不再外扩成大盘）",
+    "sprite_scale": 0.75,
+    "kinds": [
+      {
+        "id": "glow_algae",
+        "weight": 3,
+        "color": [
+          0.35,
+          0.95,
+          0.72
+        ],
+        "radius_mult": 1.0
+      },
+      {
+        "id": "glow_shell",
+        "weight": 2,
+        "color": [
+          1.0,
+          0.72,
+          0.5
+        ],
+        "radius_mult": 0.85
+      },
+      {
+        "id": "glow_pearl",
+        "weight": 1,
+        "color": [
+          0.85,
+          0.92,
+          1.0
+        ],
+        "radius_mult": 1.35
+      }
+    ],
+    "radius_note": "单光源视野照明半径（单位×60→px）；2026-10-23 第二轮维持 1.2 不变——只减数量，不削弱单个光源",
+    "scatter_note": "2026-10-23 用户反馈「在地图上随机生成一些荧光藻类、贝类、夜明珠一类的小型散落光源」「野生光源应该是常亮的」「跑一会会出现页面内全黑什么都没有」：按**区块程序化生成**——把地图切成 chunk_px 见方的区块，每个区块用「区块坐标哈希」作 RNG 种子确定性放 lights_per_chunk 个微型光源（同坐标必得同位置，来回走动不会闪跳），玩家跨区块时重建周边 (2×chunk_radius+1)² 个区块内的光源——地图无范围限制也永远有光。每个光源向 VisionOverlay 提供 radius_units×60 的照明（intensity/core_ratio 控制亮圈），由 VisionOverlay 统一计入多光源；min_gap_units 为同区块内光源最小间距；恒定亮度（原 pulse_speed 已停用移除）。 2026-10-23 第二轮（用户反馈「野外光源不发出扇形光，只需要沿着素材边缘发出扩散光即可，并且不要挡住下方的视野，还要减少数量，现在野外光源太多了，素材也要减小」）：① **扇形→圆形均匀扩散**：曾试 GradientTexture2D 径向渐变纹理（运行时 new 的渐变纹理首帧未上传渲染服务器、queue_redraw 只在跨区块触发一次 → 节点不再变脏、光晕永久不显示）与多顶点同心环带 draw_polygon（窗口里整个不显示），**最终回退 fan 路径**——单扇形 draw_polygon（中心顶点 + HALO_RING_SEGS=32 段圆周，顶点色 alpha 0.55→0 径向渐隐），并定位「扇形感」真因=**圆周细分不足**（v3.22 用 20 段画 115px 大光晕每段弧长 36px）：现半径 = max(素材半边长 × halo_scale, 0) 即紧贴素材边缘向外渐隐，不再像原来那样按 ×1.6 扩成 200+px 大光斑，每段弧长 ≈6.9px 肉眼不可辨；② **不遮挡下方视野**：LightScatter 节点 material 改用 **CanvasItemMaterial BLEND_MODE_ADD**（加色混合，只提亮不覆盖），地面/雾罩细节仍透出来；光晕 alpha 上限 HALO_MAX_ALPHA=0.55 防糊成亮斑；子精灵是独立 CanvasItem（material 不向子节点继承）用默认 MIX 材质，保留原调色板；③ **减量**：chunk_px 480→560、lights_per_chunk 3→2，光源面密度 1.30e-5 → 6.38e-6 /px²（约减半）；④ **素材缩小**：新增 sprite_scale=0.75（Sprite2D.scale，原按原生 48/42/30px 直绘）；radius_units 维持 1.2、intensity 维持 1.0——只减数量与改外观，不削弱单个光源的照亮能力。"
   }
 }

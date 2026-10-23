@@ -139,6 +139,8 @@ enemy_died.emit(self)
 
 - 武器/敌人/Boss/事件配置：`config/*.json`
 - 夜长/夜型映射：`config/night.json`（昼夜状态机唯一时长来源）
+- **夜间视线**：`config/night.json` `vision` 段（`night_restricted` / `radius_units` / `fog_color` / `fog_alpha`）——**视野基准唯一数据源**（W22 起 events.json 只留 per-event `vision_radius_mult` 倍率；`ConfigLoader.get_base_vision_radius()` 已改为委派 night.json）
+- **地图/竞技场/灯塔**：`config/map.json`（schema 3，五合一）——arena（`radius_units` 玩家活动半径 ×60px + `spawn_clamp_margin_px` 刷怪钳界 + `enemy_leash.margin_px` 敌人牵引，Boss 豁免）+ boundary（`post_ids` 礁石界桩 / `post_spacing_px` / `energy_arc` 虚线弧 / `outer_tint` 界外暗环）+ lighthouse（`sprite_id` 塔楼 / `lamp_height_px` / `lamp_glow_radius_px` / `beam` 五参数）+ ground
 - 经验表：`config/exp_table.json`（由 `tools/generate_exp_table.py` 生成）
 - 精炼数据：`config/refine_data.py`
 
@@ -205,6 +207,18 @@ var damage: int = 12  # 鱼叉枪伤害
 | 100 敌 60fps | W8 达标 | W8 |
 | 内存 | ≤ 512MB | W19 |
 | draw call | ≤ 100 | W19 |
+
+### 6.1 视觉验证：视口定时截图（ViewportCapture）
+
+`ViewportCapture` autoload 默认关闭、零开销。命令行启用后按间隔直接把根视口纹理存 PNG 到 `user://`：
+
+```bash
+"$GODOT" --path godot_project --debug --test-bot --bot-suite=acceptance --bot-speed=3 \
+  --bot-max-runs=1 --capture-interval=5 --capture-dir=w22shots
+# 产物：%APPDATA%/Godot/app_userdata/Tidekeeper/w22shots/shot_XXX.png
+```
+
+适用：塔楼/光束/雾罩/边界等**必须真渲染才能看**的项。**不要**用外部整屏截图或 `PrintWindow`——Godot 的 GPU 窗口前者会拍到别的窗口、后者截到全黑；引擎内取 `get_viewport().get_texture().get_image()` 才是确定性最高的途径。
 
 ## 七、agent 协作分工
 

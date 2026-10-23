@@ -268,17 +268,50 @@ func _spawn_one(floor_refill: bool = false) -> bool:
 		return false
 	var pos: Vector2
 	if _pincer_mode:
-		pos = _pincer_spawn_pos()
+		pos = _clamp_into_arena(_pincer_spawn_pos())
 	else:
-		var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
-		var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
-		var angle: float = RNG.randf_range(0.0, TAU)
-		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
-		pos = target.global_position + Vector2(cos(angle), sin(angle)) * dist
+		pos = _ring_spawn_pos()
 	var spawned: EnemyBase = spawn_enemy(def, pos, [], false, false, floor_refill)
 	if spawned != null and floor_refill:
 		_floor_refills_used += 1
 	return spawned != null
+
+
+## 刷怪环位置（2026-10-22：射线-圆求交保证界内，杜绝「小怪死在地图外经验不可拾」）
+## 玩家贴边时朝界外的角度会截断到边界内；截断后离玩家太近（<ring_min×0.75）则重采样，
+## 6 次都不行才退回径向钳位。arena 关闭时维持原随机环行为。
+func _ring_spawn_pos() -> Vector2:
+	var ring_min: float = float(_spawn_meta.get("ring_min", 180.0))
+	var ring_extra: float = float(_spawn_meta.get("ring_extra", 220.0))
+	var from: Vector2 = target.global_position
+	var limit: float = -1.0
+	if ConfigLoader.get_arena_enabled():
+		limit = ConfigLoader.get_arena_radius_units() * Player.UNIT_TO_PIXEL - ConfigLoader.get_spawn_clamp_margin_px()
+	for _try in 6:
+		var angle: float = RNG.randf_range(0.0, TAU)
+		var dir := Vector2(cos(angle), sin(angle))
+		var dist: float = ring_min + RNG.randf_range(0.0, ring_extra)
+		if limit <= 0.0:
+			return from + dir * dist
+		var exit_d: float = _ray_exit_distance(from, dir, limit)
+		if exit_d >= dist:
+			return from + dir * dist
+		if exit_d >= ring_min * 0.75:
+			return from + dir * exit_d
+	# 玩家紧贴边界且四周都挤：径向钳位保底（仍在界内）
+	var ang: float = RNG.randf_range(0.0, TAU)
+	return _clamp_into_arena(from + Vector2(cos(ang), sin(ang)) * ring_min)
+
+
+## 射线 from+t*dir（t≥0）与圆(lighthouse_position, radius) 的前向交点距离；不相交返回 INF
+func _ray_exit_distance(from: Vector2, dir: Vector2, radius: float) -> float:
+	var oc: Vector2 = from - lighthouse_position
+	var b: float = 2.0 * oc.dot(dir)
+	var c: float = oc.length_squared() - radius * radius
+	var disc: float = b * b - 4.0 * c
+	if disc < 0.0:
+		return INF
+	return (-b + sqrt(disc)) * 0.5
 
 
 func _pincer_spawn_pos() -> Vector2:
@@ -288,6 +321,21 @@ func _pincer_spawn_pos() -> Vector2:
 	var side: int = _pincer_side
 	_pincer_side = -_pincer_side
 	return target.global_position + Vector2(float(side) * ox, RNG.randf_range(-jy, jy))
+
+
+## 刷怪位置钳入竞技场内（2026-10-22 用户反馈「小怪死在地图外经验无法收集」）
+## 以灯塔圆心为原点限制在 (radius - spawn_clamp_margin_px) 内；arena 关闭时原样返回
+func _clamp_into_arena(pos: Vector2) -> Vector2:
+	if not ConfigLoader.get_arena_enabled():
+		return pos
+	var radius: float = ConfigLoader.get_arena_radius_units() * Player.UNIT_TO_PIXEL - ConfigLoader.get_spawn_clamp_margin_px()
+	if radius <= 0.0:
+		return pos
+	var offset: Vector2 = pos - lighthouse_position
+	var d: float = offset.length()
+	if d <= radius or d < 0.001:
+		return pos
+	return lighthouse_position + offset / d * radius
 
 
 func _is_pincer_night(night: int) -> bool:
@@ -360,9 +408,7 @@ func _spawn_elite_wave(count: int = -1) -> void:
 			break
 		var def: Dictionary = _pick_enemy_def()
 		var extra: Array[String] = AffixSystem.pick(RNG.randi_range(amin, amax))
-		var angle: float = RNG.randf_range(0.0, TAU)
-		var dist: float = float(_spawn_meta.get("ring_min", 180.0)) + RNG.randf_range(0.0, float(_spawn_meta.get("ring_extra", 220.0)))
-		var pos: Vector2 = target.global_position + Vector2(cos(angle), sin(angle)) * dist
+		var pos: Vector2 = _ring_spawn_pos()
 		var e: EnemyBase = spawn_enemy(def, pos, extra, false)
 		if e != null:
 			e.is_elite = true

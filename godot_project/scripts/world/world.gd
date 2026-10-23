@@ -18,8 +18,12 @@ const _RESULT_UI = preload("res://scripts/core/result_ui.gd")
 const _EVO_EFFECT = preload("res://scripts/ui/evolution_effect_ui.gd")
 const _VISION_OVERLAY = preload("res://scripts/core/vision_overlay.gd")
 const _LH_BEACON = preload("res://scripts/world/lighthouse_beacon.gd")
+const _ARENA_BOUNDARY = preload("res://scripts/world/arena_boundary.gd")
+const _LIGHT_SCATTER = preload("res://scripts/world/light_scatter.gd")
 const _GROUND = preload("res://scripts/core/ground_backdrop.gd")
 const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
+## 渲染层级单一来源（雾罩 80 / 雾上 81 / 塔身 82 / 散落光源 83 / 玩家 84）
+const _RENDER_Z = preload("res://scripts/core/render_z.gd")
 
 # 子节点引用
 @onready var player: Node2D = $Player
@@ -45,8 +49,12 @@ const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
 @onready var ground: Node2D = $Ground
 ## 视野遮罩（用 Node2D：class_name 未入 global cache 时 typed VisionOverlay 会解析失败）
 var vision_overlay: Node2D = null
-## A5 灯塔视觉占位
+## A5 灯塔视觉占位（2026-10-22 起重做为塔楼 + 灯室辉光）
 var _lighthouse_beacon: Node2D = null
+## 竞技场边界可视化（礁石界桩 + 能量弧 + 界外暗环）
+var _arena_boundary: Node2D = null
+## 散落光源（荧光藻/贝类/夜明珠；2026-10-23）
+var _light_scatter: Node2D = null
 ## 防连点重复跳昼
 var _day_skip_busy: bool = false
 
@@ -70,6 +78,8 @@ func _ready() -> void:
 		# 视野遮罩挂在玩家下（跟随相机）；进夜刷新倍率
 		vision_overlay = _VISION_OVERLAY.new() as Node2D
 		p.add_child(vision_overlay)
+		# 命中闪光：敌人（对象池，拿不到 World 字段）通过 group 找遮罩申请瞬态光源
+		vision_overlay.add_to_group("vision_overlay")
 	# 地面层跟随玩家（海底地砖平铺）
 	if ground != null:
 		ground.call("set_target", player)
@@ -132,6 +142,9 @@ func _exit_tree() -> void:
 func _process(_delta: float) -> void:
 	_update_debug_label()
 	hud.refresh()
+	# 散落光源按区块跟随玩家（跨区块才重建，开销可忽略）
+	if _light_scatter != null and player != null and _light_scatter.has_method("update_around"):
+		_light_scatter.call("update_around", player.global_position)
 
 
 ## 刷新调试 HUD（玩家血量/等级/经验等）。游戏结束/通关时树被暂停、_process 停跑，
@@ -174,7 +187,11 @@ func _verify_config() -> void:
 	assert(not ConfigLoader.pickups.is_empty(), "[World] pickups.json 未加载")
 	assert(ConfigLoader.get_upgrade_config().has("reroll_cost"), "[World] upgrade.json 未加载")
 	assert(ExpTable.get_table_max_level() == 30, "[World] 经验表未加载或 table_max != 30")
-	assert(ExpTable.get_exp(1) == 22, "[World] E(1) 异常")
+	# 只校验「表已加载且曲线有效」，不钉死具体数值——
+	# 数值随平衡调整（2026-10-23 用户反馈成长过快，E(1) 22→42），
+	# 钉死会让调平衡时游戏直接启动断言失败。
+	assert(ExpTable.get_exp(1) > 0, "[World] E(1) 异常")
+	assert(ExpTable.get_exp(20) > ExpTable.get_exp(10), "[World] 经验曲线未递增")
 	assert(ExpTable.get_exp(30) == ExpTable.get_exp(31), "[World] n≥30 时 E(n)=E(30)")
 	assert(not ExpTable.has_player_level_cap(), "[World] 人物无等级硬顶")
 	print("[World] 配置自检通过 [OK]")
@@ -188,25 +205,32 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 	match phase:
 		DayNightStateMachine.Phase.NIGHT:
 			print("[World] → 夜晚阶段 (第 %d 夜)" % day_night.get_current_night())
-			# 昼阶段 pick 只 arm 即时效果；进夜再加载战斗倍率（避免商店阶段吃到移速/攻速等）
 			EventSystem.begin_night()
 			if vision_overlay != null:
+				if vision_overlay.has_method("set_night"):
+					vision_overlay.call("set_night", true)
 				vision_overlay.call("refresh_from_event")
-			enemy_spawner.start_night(day_night.get_current_night())
-			# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
-			GameState.grant_teaching_demo_weapon(day_night.get_current_night())
-			# 夜场宝箱：灯塔外环 0~2（× 事件宝箱倍率）；主动触碰开启
-			if pickup_system != null:
-				# 保证灯塔圆心已写入 spawner（避免 ZERO 哨兵误判合法原点）
-				if enemy_spawner.lighthouse_position == Vector2.ZERO and player != null:
-					enemy_spawner.lighthouse_position = player.global_position
-				pickup_system.spawn_night_chests(enemy_spawner.lighthouse_position)
-				if not pickup_system.chest_opened.is_connected(_on_chest_opened):
-					pickup_system.chest_opened.connect(_on_chest_opened)
+				# 传递被动/全局成长提供的随身视野半径（像素）
+				_push_player_vision_radius()
+				if _lighthouse_beacon != null and _lighthouse_beacon.has_method("set_night"):
+					_lighthouse_beacon.call("set_night", true)
+				enemy_spawner.start_night(day_night.get_current_night())
+				# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
+				GameState.grant_teaching_demo_weapon(day_night.get_current_night())
+				# 夜场宝箱：灯塔外环 0~2（× 事件宝箱倍率）；主动触碰开启
+				if pickup_system != null:
+					# 保证灯塔圆心已写入 spawner（避免 ZERO 哨兵误判合法原点）
+					if enemy_spawner.lighthouse_position == Vector2.ZERO and player != null:
+						enemy_spawner.lighthouse_position = player.global_position
+					pickup_system.spawn_night_chests(enemy_spawner.lighthouse_position)
+					if not pickup_system.chest_opened.is_connected(_on_chest_opened):
+						pickup_system.chest_opened.connect(_on_chest_opened)
 		DayNightStateMachine.Phase.DAY:
 			print("[World] → 抉择之昼（按 skip 跳过；开商店）")
 			if vision_overlay != null:
 				vision_overlay.call("clear_overlay")
+			if _lighthouse_beacon != null and _lighthouse_beacon.has_method("set_night"):
+				_lighthouse_beacon.call("set_night", false)
 			# 进昼清场：未拾经验珠/潮币直接丢弃（不全局入账；屏外超时亦会回收）
 			_clear_night_entities()
 			# 上夜事件结算：星尘雨结束额外星尘（数量来自 config，§5.6）
@@ -299,7 +323,7 @@ func _clear_day_skip_busy() -> void:
 	_day_skip_busy = false
 
 
-## A5：灯塔圆心 + config 半径注入玩家推出；轻量视觉占位
+## A5：灯塔圆心 + config 半径注入玩家推出；2026-10-22 起挂塔楼精灵 + 边界可视化 + 光束注入
 func _setup_lighthouse_collision() -> void:
 	var p: Player = player as Player
 	if p == null or enemy_spawner == null:
@@ -310,11 +334,49 @@ func _setup_lighthouse_collision() -> void:
 	p.set_lighthouse_obstacle(center, radius_px)
 	if _lighthouse_beacon == null:
 		_lighthouse_beacon = _LH_BEACON.new() as Node2D
-		_lighthouse_beacon.z_index = -2
+		# 2026-10-23 用户反馈「人物有的时候会投射出光束，是哪里来的」——实机截图确认：
+		# 塔身原 z_index=-2 被雾罩（VisionOverlay z=80）压住，而**光束由 VisionOverlay 画在雾罩之上**，
+		# 于是玩家跑到灯塔辉光边缘时只看得到一条无源头的暖色光锥，误以为是自己在打手电。
+		# 灯塔本身是光源（灯室有灯），把塔身抬到雾罩之上，让光束有明确的源头与地标作用。
+		# 层级栈：雾罩 80（绝对）< 灯塔塔身 82 < 散落光源 83 < 玩家 84
+		_lighthouse_beacon.z_index = _RENDER_Z.LIGHTHOUSE_BODY
 		add_child(_lighthouse_beacon)
 	# 与 VisionOverlay 同：class_name 可能未入 cache，走 preload 脚本方法
 	if _lighthouse_beacon.has_method("setup"):
-		_lighthouse_beacon.call("setup", center, radius_px)
+		var tex: Texture2D = _SPRITE_LIB.world(ConfigLoader.get_lighthouse_sprite_id())
+		_lighthouse_beacon.call("setup", center, radius_px, tex)
+	# 竞技场边界可视化（礁石界桩 + 能量弧 + 界外暗环）
+	if _arena_boundary == null:
+		_arena_boundary = _ARENA_BOUNDARY.new() as Node2D
+		add_child(_arena_boundary)
+	if _arena_boundary.has_method("setup") and ConfigLoader.get_arena_enabled():
+		_arena_boundary.call("setup", center, ConfigLoader.get_arena_radius_units() * Player.UNIT_TO_PIXEL)
+	# 光束参数注入视野遮罩（雾罩开洞 + 楔形光带）
+	if vision_overlay != null and vision_overlay.has_method("set_light_source"):
+		vision_overlay.call("set_light_source", center, ConfigLoader.get_lighthouse_beam_config())
+	# 散落光源（荧光藻/贝类/夜明珠）：生成 + 注入视野遮罩参与照明
+	if _light_scatter == null:
+		_light_scatter = _LIGHT_SCATTER.new() as Node2D
+		# 2026-10-23 用户反馈「野生光源应该是常亮的」：
+		# z_index 提到视野遮罩（VisionOverlay z=80）之上，生物荧光在纯黑里也看得见，
+		# 兼作路标——避免走到无照明区时整屏全黑、连参照物都没有。
+		# 层级栈：雾罩 80 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+		# （光源压在玩家之下，光晕不会盖在角色身上把人染蓝）
+		_light_scatter.z_index = _RENDER_Z.SCATTERED_LIGHT
+		add_child(_light_scatter)
+	if _light_scatter.has_method("setup"):
+		_light_scatter.call("setup", center)
+	# 跨区块重建后须重新注入视野遮罩（地图无范围限制，光源跟着玩家走）
+	if _light_scatter.has_signal("lights_changed") and not _light_scatter.is_connected("lights_changed", Callable(self, "_on_scattered_lights_changed")):
+		_light_scatter.connect("lights_changed", Callable(self, "_on_scattered_lights_changed"))
+	if vision_overlay != null and vision_overlay.has_method("set_scattered_lights"):
+		vision_overlay.call("set_scattered_lights", _light_scatter.call("get_light_data"))
+
+
+## 散落光源区块重建 → 同步给视野遮罩
+func _on_scattered_lights_changed(lights: Array[Dictionary]) -> void:
+	if vision_overlay != null and vision_overlay.has_method("set_scattered_lights"):
+		vision_overlay.call("set_scattered_lights", lights)
 
 
 ## 抉择之昼「点亮信号」→ 按进度结算离场（GDD §8.4 P1；非通关）
@@ -351,6 +413,15 @@ func _on_evolution_fused(_weapon_id: String) -> void:
 func _on_loadout_changed() -> void:
 	weapon_manager.sync_from_game_state()
 	_update_debug_label()
+	# 局内获取/升级视野被动（如 pearl 夜明珠）时立即刷新随身视野半径——
+	# 原先仅在进夜推送一次，夜内升级要等下一夜才生效（2026-10-23 code-review P1）
+	_push_player_vision_radius()
+
+
+## 把被动/全局成长提供的随身视野半径（像素）同步给视野遮罩（进夜与 loadout 变化均调用）
+func _push_player_vision_radius() -> void:
+	if vision_overlay != null and vision_overlay.has_method("set_player_vision_radius"):
+		vision_overlay.call("set_player_vision_radius", PassiveSystem.get_vision_radius_units() * Player.UNIT_TO_PIXEL)
 
 
 func _unhandled_input(event: InputEvent) -> void:
