@@ -49,8 +49,8 @@ func _fresh_run() -> void:
 
 # 升级到触发一次三选一，返回当前 offers（已暂停）
 func _level_up_once() -> Array:
-	# 加足够经验跨越 1 级（E(1)=22）
-	GameState.add_exp(22)
+	# 加足够经验跨越 1 级（读表：E(1) 随平衡调整）
+	GameState.add_exp(ExpTable.get_exp(1))  # 读表：E(1) 随平衡调整
 	return UpgradeManager.get_current_offers()
 
 
@@ -197,7 +197,7 @@ func _test_empty_pool_auto_skip() -> void:
 	]
 	for pid in GameState.passive_slots:
 		GameState.passive_levels[pid] = GameState.max_passive_level
-	GameState.add_exp(22)
+	GameState.add_exp(ExpTable.get_exp(1))  # 读表：E(1) 随平衡调整
 	_assert(UpgradeManager.is_presenting(), "满级后仍弹出三选一（溢出奖励）")
 	var offers: Array = UpgradeManager.get_current_offers()
 	_assert(offers.size() >= 2, "溢出奖励至少 2 项")

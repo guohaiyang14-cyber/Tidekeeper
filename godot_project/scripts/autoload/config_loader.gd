@@ -251,6 +251,15 @@ func get_rest_interval_nights() -> int:
 	return int(get_upgrade_config().get("rest_interval_nights", 5))
 
 
+## 商店每次开店最多购买件数（upgrade.json shop.max_purchases_per_visit）
+## 2026-10-23 用户反馈「成长太快」：原实现同一件商品可无限回购，
+## 一局实测买了 50 次（升级只有 26 次），商店成了主要成长来源。
+func get_shop_max_purchases() -> int:
+	var shop: Dictionary = (get_upgrade_config().get("shop", {}) as Dictionary)
+	# 下限 1（与 validate_config_i18n.py 的 [1,6] 口径一致；0=禁止购买无配置出口）
+	return maxi(1, int(shop.get("max_purchases_per_visit", 2)))
+
+
 ## 获取全部敌人 id 列表
 func get_all_enemy_ids() -> Array:
 	return enemies.get("enemies", {}).keys()
@@ -282,9 +291,11 @@ func get_event(event_id: String) -> Dictionary:
 	return events.get("events", {}).get(event_id, {})
 
 
-## 事件视野基准半径（像素；events.json metadata.base_vision_radius）
+## 事件视野基准半径（像素；night.json vision.lighthouse_glow_units×60，即灯塔灯室固定辉光半径）
+## W22 起唯一数据源为 config/night.json vision；W23 改为多光源模型后，
+## 本函数返回灯塔灯室辉光半径（作为始终存在的光源基准，事件倍率乘此值）。
 func get_base_vision_radius() -> float:
-	return float(events.get("metadata", {}).get("base_vision_radius", 320.0))
+	return float(get_night_vision_config().get("lighthouse_glow_radius_px", 120.0))
 
 ## 获取第 N 夜可用事件池（排除 excluded_nights 命中的事件）
 ## 注意：JSON 数值解析为 float，需 int 比较（否则 15 in [15.0] 判定为 false，导致第 15 夜排除失效）
@@ -527,6 +538,120 @@ func get_arena_soft_push() -> bool:
 	return bool(a.get("soft_push", true))
 
 
+## 竞技场是否启用（radius_units ≤0 或 enabled=false 均视为关闭）
+func get_arena_enabled() -> bool:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	return bool(a.get("enabled", false)) and get_arena_radius_units() > 0.0
+
+
+## 刷怪钳位边距（像素）：刷怪位置限制在 (arena 半径 - 本值) 内，杜绝界外击杀掉不可拾经验珠
+func get_spawn_clamp_margin_px() -> float:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	return maxf(0.0, float(a.get("spawn_clamp_margin_px", 70.0)))
+
+
+## 散落光源配置（荧光藻/贝类/夜明珠等小型光源）
+## 返回 { enabled, chunk_px, lights_per_chunk, chunk_radius, radius_px, intensity, core_ratio,
+##        min_gap_px, sprite_scale, halo_scale, kinds:[{id, weight, color, radius_mult}] }
+## （2026-10-23 已改按区块程序化生成：count/spawn_min_px/spawn_max_px/pulse_speed 均移除）
+func get_scattered_lights_config() -> Dictionary:
+	var s: Dictionary = map_cfg.get("scattered_lights", {}) as Dictionary
+	var kinds_out: Array = []
+	for k in (s.get("kinds", []) as Array):
+		if not (k is Dictionary):
+			continue
+		var kd: Dictionary = k as Dictionary
+		kinds_out.append({
+			"id": String(kd.get("id", "glow_algae")),
+			"weight": maxf(0.0, float(kd.get("weight", 1.0))),
+			"color": _parse_color(kd.get("color", [0.6, 0.9, 0.9]), Color(0.6, 0.9, 0.9)),
+			"radius_mult": maxf(0.05, float(kd.get("radius_mult", 1.0))),
+		})
+	return {
+		"enabled": bool(s.get("enabled", false)) and not kinds_out.is_empty(),
+		# 2026-10-23：改为按区块程序化生成（地图无范围限制，固定环带撒点走远就没光）
+		# 2026-10-23 code-review：默认值曾与 map.json 实际值漂移（480/0.9/1.0 vs 560/1.0/0.75），
+		# 字段误删会静默降级——已对齐，并建议改动此段默认值时同步 map.json 与校验器
+		"chunk_px": maxf(64.0, float(s.get("chunk_px", 560.0))),
+		"lights_per_chunk": maxi(0, int(s.get("lights_per_chunk", 2))),
+		"chunk_radius": maxi(1, int(s.get("chunk_radius", 2))),
+		"radius_px": maxf(6.0, float(s.get("radius_units", 1.2)) * 60.0),
+		"intensity": clampf(float(s.get("intensity", 1.0)), 0.0, 1.0),
+		"core_ratio": clampf(float(s.get("core_ratio", 0.4)), 0.0, 1.0),
+		"min_gap_px": maxf(0.0, float(s.get("min_gap_units", 2.5)) * 60.0),
+		# 2026-10-23 第二轮：素材缩放（用户反馈「素材也要减小」）
+		"sprite_scale": clampf(float(s.get("sprite_scale", 0.75)), 0.25, 2.0),
+		# 光晕半径 = 素材半边长 × halo_scale（沿素材边缘向外扩散，不再扩成大光斑）
+		"halo_scale": clampf(float(s.get("halo_scale", 2.2)), 1.0, 6.0),
+		"kinds": kinds_out,
+	}
+
+
+## 敌人界内牵引（ EnemyBase 用）：enabled / margin_px；Boss 豁免
+func get_enemy_leash_config() -> Dictionary:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	var leash: Dictionary = a.get("enemy_leash", {}) as Dictionary
+	return {
+		"enabled": bool(leash.get("enabled", true)),
+		"margin_px": maxf(0.0, float(leash.get("margin_px", 40.0))),
+	}
+
+
+## 边界可视化配置（ArenaBoundary 用）：post_ids / post_spacing_px / post_scale / energy_arc / outer_tint
+func get_arena_boundary_config() -> Dictionary:
+	var a: Dictionary = map_cfg.get("arena", {}) as Dictionary
+	var b: Dictionary = a.get("boundary", {}) as Dictionary
+	var ids: Array = []
+	var raw: Variant = b.get("post_ids", [])
+	if raw is Array:
+		for v in raw:
+			var s: String = String(v)
+			if s != "":
+				ids.append(s)
+	if ids.is_empty():
+		ids.append("reef_post_0")
+	return {
+		"enabled": bool(b.get("enabled", true)),
+		"post_ids": ids,
+		"post_spacing_px": maxf(24.0, float(b.get("post_spacing_px", 130.0))),
+		"post_scale": clampf(float(b.get("post_scale", 1.0)), 0.25, 4.0),
+		"energy_arc": b.get("energy_arc", {}) as Dictionary,
+		"outer_tint": b.get("outer_tint", {}) as Dictionary,
+	}
+
+
+## 灯塔光束配置（VisionOverlay/LighthouseBeacon 用）
+func get_lighthouse_beam_config() -> Dictionary:
+	var lh: Dictionary = map_cfg.get("lighthouse", {}) as Dictionary
+	var beam: Dictionary = lh.get("beam", {}) as Dictionary
+	return {
+		"enabled": bool(beam.get("enabled", true)),
+		"length_px": maxf(0.0, float(beam.get("length_units", 14.0)) * 60.0),
+		"half_angle_rad": deg_to_rad(clampf(float(beam.get("half_angle_deg", 10.0)), 0.5, 80.0)),
+		"rotation_speed": deg_to_rad(maxf(0.0, float(beam.get("rotation_speed_deg", 26.0)))),
+		"color": _parse_color(beam.get("color", [1.0, 0.93, 0.7]), Color(1.0, 0.93, 0.7)),
+		"alpha": clampf(float(beam.get("alpha", 0.5)), 0.05, 1.0),
+	}
+
+
+## 灯塔塔楼精灵 id（assets/sprites/world/<id>.png；缺失时回退纯色占位）
+func get_lighthouse_sprite_id() -> String:
+	var lh: Dictionary = map_cfg.get("lighthouse", {}) as Dictionary
+	return String(lh.get("sprite_id", "lighthouse_tower"))
+
+
+## 灯塔灯室辉光半径（像素）
+func get_lighthouse_glow_radius_px() -> float:
+	var lh: Dictionary = map_cfg.get("lighthouse", {}) as Dictionary
+	return maxf(8.0, float(lh.get("lamp_glow_radius_px", 46.0)))
+
+
+## 灯室距塔基高度（像素）：光束原点/辉光位置共用（塔楼精灵 96×168 → ≈138）
+func get_lighthouse_lamp_height_px() -> float:
+	var lh: Dictionary = map_cfg.get("lighthouse", {}) as Dictionary
+	return maxf(0.0, float(lh.get("lamp_height_px", 138.0)))
+
+
 ## 地面砖贴图 id（缺省 floor_0）
 func get_ground_tile_id() -> String:
 	var g: Dictionary = map_cfg.get("ground", {}) as Dictionary
@@ -539,9 +664,50 @@ func get_ground_cover_px() -> float:
 	return maxf(512.0, float(g.get("cover_px", 4096.0)))
 
 
-## 昼夜循环配置（config/night.json：durations 夜长表 / night_types 夜型映射）
+## 昼夜循环配置（config/night.json：durations 夜长表 / night_types 夜型映射 / vision 夜间视线）
 func get_night_config() -> Dictionary:
 	return night_cfg
+
+
+## 夜间视线限制配置（VisionOverlay 用）：
+## night_restricted 进夜即起效 / fog_color+fog_alpha 雾色（边缘极致漆黑）/
+## player_base_vision_radius_px 玩家基础随身视野（默认 0=完全黑暗）/
+## lighthouse_glow_radius_px 灯塔灯室固定辉光半径 /
+## lighthouse_glow_intensity 灯室辉光强度 /
+## falloff 衰减曲线（linear/smooth/inverse_square）/
+## radial_segments 径向渐变分段数
+## 配置里的颜色统一写成 [r, g, b] 数组；解析失败回退 fallback（不报错，保持可玩）
+func _parse_color(raw: Variant, fallback: Color) -> Color:
+	if raw is Array and (raw as Array).size() >= 3:
+		var a: Array = raw as Array
+		return Color(float(a[0]), float(a[1]), float(a[2]))
+	return fallback
+
+
+func get_night_vision_config() -> Dictionary:
+	var v: Dictionary = night_cfg.get("vision", {}) as Dictionary
+	var fog: Color = _parse_color(v.get("fog_color", [0.01, 0.02, 0.05]), Color(0.01, 0.02, 0.05))
+	var glow_units: float = float(v.get("lighthouse_glow_units", 2.0))
+	var glow_px: float = maxf(60.0, glow_units * 60.0)
+	return {
+		"night_restricted": bool(v.get("night_restricted", true)),
+		"radius_px": glow_px,
+		"fog_color": fog,
+		"fog_alpha": clampf(float(v.get("fog_alpha", 0.98)), 0.0, 1.0),
+		"player_base_vision_radius_px": maxf(0.0, float(v.get("player_base_vision_units", 0.0)) * 60.0),
+		"lighthouse_glow_radius_px": glow_px,
+		"lighthouse_glow_intensity": clampf(float(v.get("lighthouse_glow_intensity", 0.8)), 0.0, 1.0),
+		"lighthouse_glow_core_ratio": clampf(float(v.get("lighthouse_glow_core_ratio", 0.55)), 0.0, 1.0),
+		"falloff": String(v.get("falloff", "smooth")),
+		"radial_segments": maxi(3, int(v.get("radial_segments", 8))),
+		# 命中闪光（瞬态光源）：命中点短暂开雾，让雾下的敌人显形
+		"hit_flash_radius_px": maxf(0.0, float(v.get("hit_flash_units", 1.8)) * 60.0),
+		"hit_flash_intensity": clampf(float(v.get("hit_flash_intensity", 1.0)), 0.0, 1.0),
+		"hit_flash_duration": maxf(0.02, float(v.get("hit_flash_duration", 0.3))),
+		"hit_flash_max": clampi(int(v.get("hit_flash_max", 12)), 1, 64),
+		"hit_flash_core_ratio": clampf(float(v.get("hit_flash_core_ratio", 0.45)), 0.0, 1.0),
+		"hit_flash_color": _parse_color(v.get("hit_flash_color", [1.0, 0.86, 0.55]), Color(1.0, 0.86, 0.55)),
+	}
 
 
 ## 夜型时长（秒；normal/elite/calamity/final）。缺省 45.0 与设计文档 §5.1 常规夜一致

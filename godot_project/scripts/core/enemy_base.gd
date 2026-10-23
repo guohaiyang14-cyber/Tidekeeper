@@ -143,6 +143,7 @@ func _on_acquire() -> void:
 	affix_state.clear()
 	aura_speed_bonus = 0.0
 	aura_timer = 0.0
+	_leash_cfg = {}
 	spawn_position = Vector2.ZERO
 	spawn_distance_to_target = -1.0
 	_ensure_hash()
@@ -233,6 +234,7 @@ func configure(data: Dictionary, night_value: int) -> void:
 	_charge_cd = 0.0
 	_summon_timer = 0.0
 
+
 	var diff: Dictionary = ConfigLoader.get_enemy_difficulty()
 	var region_coeff: float = float(diff.get("region_coeff", 1.0))
 	var hp_per_night: float = float(diff.get("health_per_night", 0.10))
@@ -285,6 +287,40 @@ func configure(data: Dictionary, night_value: int) -> void:
 	_tint = _parse_tint(data.get("tint", [0.85, 0.25, 0.25]))
 	is_flying = _has_flag(data.get("flags", []), "flying")
 	_apply_visual(1.0)
+
+
+## ---- 竞技场界内牵引（config/map.json arena.enemy_leash；Boss 豁免）----
+## 2026-10-22 用户反馈「小怪死在地图外经验无法收集」：敌人越过 (arena 半径-margin)
+## 被推回界内，保证击杀与掉落发生在玩家可达范围。lighthouse_position 为圆心
+## （由 EnemySpawner.spawn_enemy 注入；兜底 Vector2.ZERO 时由 World 开局写入）。
+var _leash_cfg: Dictionary = {}
+
+func _apply_arena_leash() -> void:
+	if is_boss or _dead:
+		return
+	if _leash_cfg.is_empty():
+		_leash_cfg = ConfigLoader.get_enemy_leash_config()
+		# 竞技场开关/半径一并缓存（config 运行时只读；池复用由 _on_acquire 重置 _leash_cfg），
+		# 避免每帧每敌两次字典查找（350 敌 × 60fps）
+		_leash_cfg["arena_enabled"] = ConfigLoader.get_arena_enabled()
+		_leash_cfg["arena_radius_px"] = ConfigLoader.get_arena_radius_units() * Player.UNIT_TO_PIXEL
+	if not bool(_leash_cfg.get("arena_enabled", false)):
+		return
+	if not bool(_leash_cfg.get("enabled", true)):
+		return
+	var radius: float = float(_leash_cfg.get("arena_radius_px", 0.0)) - float(_leash_cfg.get("margin_px", 40.0))
+	if radius <= 0.0:
+		return
+	var offset: Vector2 = global_position - lighthouse_position
+	var d: float = offset.length()
+	if d <= radius or d < 0.001:
+		return
+	var old_pos: Vector2 = global_position
+	global_position = lighthouse_position + offset / d * radius
+	# 与 _move_in_dir / boss_teleport 一致：瞬移后必须同步 SpatialHash，
+	# 否则敌人在旧哈希格里残留最长 update_group 帧，弹道/分离查询按旧位置命中落空
+	if _hash != null:
+		_hash.update(self, old_pos)
 
 
 ## Boss 配置（W9）：不走 §8.2 夜数公式；仍乘 W18 难度档位（守夜人/教学）；挂载 BossBrain
@@ -449,6 +485,9 @@ func _process(delta: float) -> void:
 	# 接触伤害（潜地中无敌且不可接触）
 	if not _burrowed:
 		_try_contact_damage(player_pos)
+
+	# 界内牵引：杜绝界外击杀导致经验珠不可拾（2026-10-22）
+	_apply_arena_leash()
 
 
 func _effective_speed() -> float:
@@ -665,6 +704,23 @@ func _explode() -> void:
 # 受伤 / 死亡
 # ============================================================================
 
+## 视野遮罩引用（命中闪光用；懒查找 group，敌人由对象池管理拿不到 World 字段）
+var _vision_overlay: Node = null
+
+
+## 命中闪光：向视野遮罩申请一个瞬态光源，让**藏在雾下的敌人**被打中时亮一下显形。
+## 2026-10-23 用户反馈「子弹击中敌人时应该给亮度显示出来」。
+func _request_hit_flash() -> void:
+	if _vision_overlay != null and not is_instance_valid(_vision_overlay):
+		_vision_overlay = null
+	if _vision_overlay == null:
+		if not is_inside_tree():
+			return
+		_vision_overlay = get_tree().get_first_node_in_group("vision_overlay")
+	if _vision_overlay != null and _vision_overlay.has_method("add_hit_flash"):
+		_vision_overlay.call("add_hit_flash", global_position)
+
+
 ## 受伤（潜地中免伤）；is_melee 供荆棘反伤；from_share 避免分摊递归/重入分裂
 ## source_id：武器 id（TestBot 伤害归因；空串跳过记账）
 func take_damage(amount: int, is_melee: bool = false, from_share: bool = false, source_id: String = "") -> bool:
@@ -681,6 +737,9 @@ func take_damage(amount: int, is_melee: bool = false, from_share: bool = false, 
 	if not from_share and behavior_type == "damage_share":
 		amount = _share_damage(amount, source_id)
 	health -= amount
+	# 命中闪光：只有直接命中的目标才亮（分摊伤害 from_share 不闪，否则一次命中亮一片）
+	if not from_share:
+		_request_hit_flash()
 	_notify_bot_damage(source_id, amount)
 	if is_boss and _boss_brain != null:
 		_boss_brain.on_health_changed()

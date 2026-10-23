@@ -45,7 +45,7 @@ func _load_table() -> void:
 
 
 ## 查询在 level 级升到下一级所需经验 E(level)（§6.2 / §9.2）
-## 玩家从 1 级开始：首次升级需 E(1)=22；n ≥ table_max 时返回 E(table_max)（可继续升级）
+## 玩家从 1 级开始：首次升级需 E(1)（当前表值见 config/exp_table.json）；n ≥ table_max 时返回 E(table_max)（可继续升级）
 func get_exp(level: int) -> int:
 	if level < 1:
 		return 0

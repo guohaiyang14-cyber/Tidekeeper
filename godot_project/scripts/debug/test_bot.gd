@@ -39,7 +39,20 @@ const BOT_RUNS_PER_CONFIG_DEFAULT: int = 1
 
 # 夜间走位（仅 Debug 机器人；非玩法数值表）
 # N15 执政官：潮汐波在灯塔光晕外受伤（bosses.json aura_radius）；远距风筝=吃波致死。
+#
+# 2026-10-23 用户反馈「机器人测试的时候大多数时间都是灯塔范围外，这不符合实际玩家
+# 视野受限的情况」：真人玩家视野只来自光源（默认随身视野=0），**待在灯塔亮圈内
+# 才看得见**，所以会围着灯塔作战。机器人此前只有 N15 执政官夜受此约束，其余夜
+# 一路风筝/逃跑漂到光圈外，等于用一个「全图透视」的玩家在测难度。
+# 下面的 LIGHT_STAY_* 把「不出亮圈」变成**所有夜通用**的软约束：
+# 出圈后叠加回拉力，净外向的方向被钳成「切向 + 回拉」，不再一边逃一边往外跑。
 const ORBIT_SPEED: float = 1.85
+## 亮圈半径的该比例内视为「有光」（留一点余量，贴边也算）
+const LIGHT_STAY_RATIO: float = 0.85
+## 出圈回拉力权重（出圈越远越大，到 2×stay_r 封顶）
+const LIGHT_PULL_WEIGHT: float = 2.6
+## 出圈后被钳方向里的切向权重（保留走位能力，不会站桩）
+const LIGHT_TANGENT_WEIGHT: float = 1.6
 const STRUGGLE_HUNT_RADIUS: float = 520.0
 const STRUGGLE_SAFE_ELITE: float = 420.0
 const STRUGGLE_SAFE_THORNS: float = 140.0
@@ -1158,6 +1171,14 @@ func _bot_buy_shop_items(world: World) -> void:
 		if world.shop_manager.buy(best):
 			_bot_file_only("[TestBot] 购买 %s" % best.get("name", "?"))
 		else:
+			# 4.4.10 商店限购/售出即下架（2026-10-23 商店新规的局内可观测证据）：
+			# buy() 先查开店上限、再查在售，故可按「已达上限」精确归因 visit_limit
+			var purchased: int = world.shop_manager.get_purchases_this_visit()
+			if purchased >= ConfigLoader.get_shop_max_purchases():
+				_record_accept("4.4.10", "pass", "visit_limit 达上限 %d 件后再购被拒" % purchased)
+				break
+			if not world.shop_manager.get_current_items().has(best):
+				_record_accept("4.4.10", "pass", "sold_out 已下架项（过期句柄）再购被拒")
 			var fail_key: String = _shop_item_key(best)
 			if fail_key == "":
 				break
@@ -1352,6 +1373,57 @@ func _tick_night_movement(world: World, delta: float) -> void:
 
 
 func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
+	var dir: Vector2 = _compute_raw_move_direction(world, pos, delta)
+	return _bias_toward_light(dir, world, pos)
+
+
+## 视野受限约束：**所有夜通用**（不止 N15 执政官）。
+## 真人玩家默认随身视野=0，只有灯塔亮圈内看得见，因此会围着灯塔打；
+## 机器人原先任意风筝，大多数时间在光圈外，测出来的难度与真人无关。
+func _bias_toward_light(dir: Vector2, world: World, pos: Vector2) -> Vector2:
+	# 挣扎窗口是无敌期凑杀，与视野无关，不约束
+	if GameState.is_struggling():
+		return dir
+	var light: Vector2 = _lighthouse_position(world)
+	if light == Vector2.INF:
+		return dir
+	var to_light: Vector2 = light - pos
+	var dist: float = to_light.length()
+	var stay_r: float = _lighthouse_glow_radius() * LIGHT_STAY_RATIO
+	if stay_r <= 1.0 or dist <= stay_r:
+		return dir
+	var inward: Vector2 = to_light / dist if dist > 1.0 else Vector2.ZERO
+	if inward.length_squared() < 0.0001:
+		return dir
+	# 出圈越远，回拉越强（线性，到 2×stay_r 封顶）
+	var over: float = clampf((dist - stay_r) / maxf(stay_r, 1.0), 0.0, 1.0)
+	var pull: float = LIGHT_PULL_WEIGHT * (0.6 + 1.4 * over)
+	var d: Vector2 = dir if dir.length_squared() > 0.0001 else _last_move_dir
+	if d.length_squared() < 0.0001:
+		return inward
+	# 净外向（还在往外跑）→ 钳成「切向 + 回拉」，保留绕圈走位但不再远离光源
+	if d.normalized().dot(inward) < 0.0:
+		var tangent: Vector2 = Vector2(-inward.y, inward.x)
+		if d.normalized().dot(tangent) < 0.0:
+			tangent = -tangent
+		return (tangent * LIGHT_TANGENT_WEIGHT + inward * pull).normalized()
+	# 已经朝里走：只是加一把力
+	return (d.normalized() + inward * pull).normalized()
+
+
+## 灯塔灯室辉光半径（像素）；ConfigLoader 由 night.json vision.lighthouse_glow_units × 60 换算
+## 2026-10-23 code-review：原每次调用新建整个 vision 字典，而 _bias_toward_light 每帧调用 →
+## 懒缓存（config 运行时只读，night.json 不会在局间变动；<0 为未计算哨兵）
+var _glow_radius_cache: float = -1.0
+
+func _lighthouse_glow_radius() -> float:
+	if _glow_radius_cache < 0.0:
+		var vis: Dictionary = ConfigLoader.get_night_vision_config()
+		_glow_radius_cache = maxf(0.0, float(vis.get("lighthouse_glow_radius_px", 0.0)))
+	return _glow_radius_cache
+
+
+func _compute_raw_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
 	_orbit_angle += delta * ORBIT_SPEED
 	var kite: Vector2 = Vector2(cos(_orbit_angle), sin(_orbit_angle))
 	if _panic_timer > 0.0:

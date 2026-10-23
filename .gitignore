@@ -118,6 +118,9 @@ saves/
 .agent_tmp/
 *.agent_diff
 
+# 人工试玩/截图等运行产物（日志、PNG）
+tool-results/
+
 # 本地 Debug 启动脚本覆盖（每人 Godot 安装路径不同）
 debug.local.bat
 

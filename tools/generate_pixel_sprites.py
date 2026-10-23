@@ -770,6 +770,179 @@ PASSIVE_ICONS = {
 # 公共工具 API（供其他 AI agent / 脚本导入或经 CLI 调用）
 # ----------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------
+# 世界装饰（灯塔塔楼 / 竞技场礁石边界）— 2026-10-22 用户反馈：
+# 「灯塔应是有高度的塔+光束」「边界要有明确障碍物」。塔楼 32×56 逻辑
+# （≈玩家 3 倍高），底部中心对齐（碰撞圆心即塔基）；礁石 20×28 逻辑，
+# 底部对齐，沿竞技场圆周实例化。
+# ----------------------------------------------------------------------------
+_STONE = ((198, 202, 216, 255), (96, 102, 128, 255), (240, 243, 252, 255))
+_BAND = ((188, 76, 68, 255), (108, 38, 36, 255), (230, 132, 120, 255))
+_IRON = ((86, 94, 118, 255), (40, 46, 68, 255), (142, 152, 182, 255))
+_LAMP = ((255, 216, 122, 255), (198, 130, 42, 255), (255, 248, 214, 255))
+_ROOF = ((98, 110, 142, 255), (44, 52, 80, 255), (152, 164, 198, 255))
+_REEF = ((112, 132, 106, 255), (54, 70, 52, 255), (170, 192, 154, 255))
+_REEF2 = ((120, 128, 158, 255), (58, 66, 96, 255), (182, 192, 220, 255))
+_GLOW = ((120, 220, 255, 255), (40, 120, 180, 255), (210, 248, 255, 255))
+# 散落光源调色板（2026-10-23：荧光藻/贝类/夜明珠）
+_ALGAE = ((72, 196, 150, 255), (26, 96, 78, 255), (176, 255, 216, 255))
+_SHELL = ((236, 168, 118, 255), (128, 74, 48, 255), (255, 228, 190, 255))
+_PEARL = ((198, 216, 246, 255), (86, 108, 156, 255), (246, 252, 255, 255))
+
+
+def w_lighthouse() -> Canvas:
+    """灯塔塔楼 32×56 逻辑（96×168px）：石塔身 + 双红带 + 铁艺灯室 + 锥顶。"""
+    c = Canvas(32, 56)
+    cx = 16
+    # 避雷针 + 顶珠
+    c.vline(cx, 0, 2, _IRON[1])
+    c.px(cx, 3, _IRON[2])
+    # 锥形屋顶（上窄下宽）
+    for y in range(4, 10):
+        hw = 1 + (y - 4)          # y=4 → 1, y=9 → 6
+        col = _ROOF[0]
+        if y >= 8:
+            col = _ROOF[1]
+        for x in range(cx - hw, cx + hw + 1):
+            c.px(x, y, col)
+        c.px(cx - hw, y, _ROOF[2])
+        c.px(cx + hw, y, _ROOF[1])
+    # 屋顶檐口（铁）
+    c.fill_rect(cx - 8, 10, cx + 8, 11, _IRON[1])
+    c.hline(cx - 8, cx + 8, 10, _IRON[2])
+    # 灯室：玻璃 + 竖梃
+    c.fill_rect(cx - 6, 12, cx + 6, 20, _LAMP[0])
+    for x in range(cx - 6, cx + 7):
+        c.px(x, 12, _LAMP[2])
+        c.px(x, 20, _LAMP[1])
+    for x in (cx - 3, cx, cx + 3):
+        c.vline(x, 12, 20, _IRON[1])
+    c.frame(cx - 6, 12, cx + 6, 20, _IRON[1])
+    # 灯室下平台 + 围栏
+    c.fill_rect(cx - 9, 21, cx + 9, 22, _IRON[1])
+    c.hline(cx - 9, cx + 9, 21, _IRON[2])
+    for x in range(cx - 8, cx + 9, 4):
+        c.vline(x, 19, 20, _IRON[2])  # 围栏短柱（灯室两侧）
+    # 塔身（下宽上窄）：hw 6→11
+    for y in range(23, 53):
+        t = float(53 - y) / 30.0     # 0 顶 → 1 底
+        hw = int(round(6.0 + 5.0 * t))
+        in_band = (27 <= y <= 31) or (41 <= y <= 45)
+        for x in range(cx - hw, cx + hw + 1):
+            col = _BAND[0] if in_band else _STONE[0]
+            c.px(x, y, col)
+        # 受光/落影
+        for x in range(cx - hw, cx - hw + 2):
+            c.px(x, y, _BAND[2] if in_band else _STONE[2])
+        for x in range(cx + hw - 1, cx + hw + 1):
+            c.px(x, y, _BAND[1] if in_band else _STONE[1])
+        c.px(cx - hw, y, OUTLINE)
+        c.px(cx + hw, y, OUTLINE)
+    # 砖缝纹理（两条暗线）
+    for y in (35, 47):
+        for x in range(cx - 8, cx + 9):
+            c.px(x, y, _STONE[1])
+    # 门（拱形洞口）
+    c.fill_rect(cx - 2, 49, cx + 2, 55, OUTLINE)
+    c.px(cx - 2, 48, OUTLINE)
+    c.px(cx + 2, 48, OUTLINE)
+    c.hline(cx - 2, cx + 2, 48, OUTLINE)
+    # 基座（加宽两级台阶）
+    c.fill_rect(cx - 12, 53, cx + 12, 54, _STONE[1])
+    c.fill_rect(cx - 13, 55, cx + 13, 55, _STONE[1])
+    c.hline(cx - 13, cx + 13, 53, _STONE[2])
+    return c
+
+
+def _reef_post(variant: int) -> Canvas:
+    """礁石界桩 20×28 逻辑（60×84px），底部对齐；3 个变体。"""
+    c = Canvas(20, 28)
+    base = _REEF if variant != 2 else _REEF2
+    blob(c, 10.0, 19.0, 7.5, 7.0, base)
+    blob(c, 10.0, 12.0, 4.5, 5.5, base)     # 上凸岩柱
+    if variant == 0:
+        spike(c, 13, 4, 1, -1, 5, _REEF[2])   # 岩尖
+        spike(c, 6, 8, -1, -1, 4, _REEF[1])
+    elif variant == 1:
+        # 能量符文（与代码绘制的能量弧同色系）
+        c.vline(10, 6, 16, _GLOW[0])
+        c.px(8, 9, _GLOW[2])
+        c.px(12, 12, _GLOW[2])
+        c.px(9, 14, _GLOW[2])
+        c.frame(7, 5, 13, 17, _GLOW[1])
+    else:
+        spike(c, 8, 6, -1, -1, 6, base[2])    # 珊瑚双角
+        spike(c, 12, 6, 1, -1, 6, base[2])
+        blob(c, 4.0, 22.0, 3.0, 2.5, base)
+        blob(c, 16.0, 22.0, 3.0, 2.5, base)
+    return c
+
+
+def _glow_algae() -> Canvas:
+    """荧光藻 16×14 逻辑（48×42px）：三根发光水草 + 顶端荧光球 + 底部礁石基座。"""
+    c = Canvas(16, 14)
+    # 底部礁石基座
+    c.fill_rect(2, 12, 13, 13, _ALGAE[1])
+    c.hline(2, 13, 12, _ALGAE[0])
+    # 左茎（向左弯）
+    for x, y in [(4, 11), (3, 10), (3, 9), (2, 8), (2, 7), (1, 6)]:
+        c.px(x, y, _ALGAE[0])
+    # 中茎（直立微右）
+    for x, y in [(8, 11), (8, 10), (8, 9), (8, 8), (9, 7), (9, 6)]:
+        c.px(x, y, _ALGAE[0])
+    # 右茎（向右弯）
+    for x, y in [(12, 11), (12, 10), (13, 9), (13, 8), (13, 7), (14, 6)]:
+        c.px(x, y, _ALGAE[0])
+    # 顶端荧光球（2×2 亮）
+    for tx, ty in [(1, 5), (9, 5), (13, 5)]:
+        c.px(tx, ty, _ALGAE[2])
+        c.px(tx + 1, ty, _ALGAE[2])
+        c.px(tx, ty + 1, _ALGAE[2])
+    return c
+
+
+def _glow_shell() -> Canvas:
+    """荧光贝类 14×10 逻辑（42×30px）：扇形贝壳 + 放射纹 + 顶端荧光。"""
+    c = Canvas(14, 10)
+    cx = 7
+    # 扇形壳体：底部尖、向上展开
+    for y in range(3, 10):
+        t = float(9 - y) / 6.0  # 0 底 → 1 顶
+        hw = int(round(1.0 + 4.5 * t))
+        for x in range(cx - hw, cx + hw + 1):
+            c.px(x, y, _SHELL[0])
+        c.px(cx - hw, y, _SHELL[1])
+        c.px(cx + hw, y, _SHELL[1])
+    # 放射纹（4 条亮线）
+    for dx in (-3, -1, 1, 3):
+        for y in range(4, 9):
+            x = cx + int(round(dx * (9 - y) / 5.0))
+            c.px(x, y, _SHELL[2])
+    # 顶端荧光（贝壳开口处的光点）
+    c.px(cx - 1, 2, _SHELL[2])
+    c.px(cx, 2, _SHELL[2])
+    c.px(cx + 1, 2, _SHELL[2])
+    c.px(cx, 1, _SHELL[2])
+    return c
+
+
+def _glow_pearl() -> Canvas:
+    """夜明珠 10×10 逻辑（30×30px）：发光圆珠 + 左上高光 + 贝壳托座。"""
+    c = Canvas(10, 10)
+    # 贝壳托座
+    c.fill_rect(2, 8, 7, 9, _SHELL[1])
+    c.hline(2, 7, 8, _SHELL[0])
+    # 珠体（圆形，带描边与受光/落影）
+    blob(c, 5.0, 5.0, 3.6, 3.6, _PEARL)
+    # 左上高光
+    c.px(3, 3, _PEARL[2])
+    c.px(4, 3, _PEARL[2])
+    c.px(3, 4, _PEARL[2])
+    # 底部反光
+    c.px(6, 7, _PEARL[2])
+    return c
+
+
 def save_sprite(category: str, sprite_id: str, cv) -> None:
     """把一张 Canvas 写成 godot_project/assets/sprites/<category>/<id>.png。"""
     d = os.path.join(SPRITES, category)
@@ -926,6 +1099,14 @@ def _build_registry() -> dict:
         reg[("weapons", name)] = fn
     for name, fn in PASSIVE_ICONS.items():
         reg[("passives", name)] = fn
+    # 世界装饰（灯塔塔楼 / 竞技场礁石边界 / 散落光源）
+    reg[("world", "lighthouse_tower")] = w_lighthouse
+    for i in range(3):
+        reg[("world", f"reef_post_{i}")] = (lambda i=i: _reef_post(i))
+    # 散落光源（config/map.json scattered_lights.kinds[].id）
+    reg[("world", "glow_algae")] = _glow_algae
+    reg[("world", "glow_shell")] = _glow_shell
+    reg[("world", "glow_pearl")] = _glow_pearl
     return reg
 
 

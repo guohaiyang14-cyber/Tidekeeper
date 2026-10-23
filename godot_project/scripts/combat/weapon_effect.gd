@@ -16,6 +16,12 @@ extends Node2D
 var _tween: Tween = null
 var _pool: ObjectPool = null
 
+## 绘制层级：玩家武器攻击特效画在黑夜雾罩（VisionOverlay z=80）**之上**，
+## 暗处也能看见攻击动作（2026-10-23 用户选方案 B；敌人本体仍藏黑）。
+## 层级栈：雾罩 80 < 玩家弹道/特效/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
 ## 播放参数（play() 注入）
 var _kind: String = "ring"
 var _radius: float = 40.0
@@ -28,6 +34,7 @@ var _rng: RandomNumberGenerator = null
 
 
 func _on_acquire() -> void:
+	z_index = Z_ABOVE_FOG
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
 	_tween = null

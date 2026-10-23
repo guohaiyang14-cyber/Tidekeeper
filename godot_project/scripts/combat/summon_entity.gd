@@ -11,6 +11,11 @@
 class_name SummonEntity
 extends Node2D
 
+## 绘制层级：玩家侧攻击单位画在黑夜雾罩（VisionOverlay z=80）**之上**
+## 层级栈：雾罩 80 < 玩家弹道/特效/召唤物/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
 const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
 
 ## 俯冲状态机
@@ -181,6 +186,9 @@ func is_orbiting() -> bool:
 ## 工厂：程序化构建一个召唤物（Sprite2D 子节点 + setup），供武器挂载
 static func create(cfg: Dictionary, angle_offset: float, get_owner_pos: Callable) -> SummonEntity:
 	var e := SummonEntity.new()
+	# 召唤物属于玩家侧攻击单位：抬到黑夜雾罩（VisionOverlay z=80）之上，
+	# 暗处也能看见信天翁/孢子等同伴（2026-10-23 用户选方案 B，与弹道/特效同层）
+	e.z_index = Z_ABOVE_FOG
 	var sp := Sprite2D.new()
 	sp.name = "Sprite2D"
 	e.add_child(sp)

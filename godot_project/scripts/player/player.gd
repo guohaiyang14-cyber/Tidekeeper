@@ -28,6 +28,15 @@ const BODY_RADIUS_PX: float = 14.0
 ## 让角色在敌人中间显眼（用户反馈「看不到角色/开局分不清」）。
 const SPRITE_DISPLAY_PX: float = 40.0
 
+## 绘制层级：**必须高于黑夜雾罩**（VisionOverlay z_index=80）。
+## 2026-10-23 用户反馈「跑一会会出现页面内全黑什么都没有」——实机截图确认：
+## 玩家默认 z_index=0，被 fog_alpha=0.98 的雾罩压成一片深蓝剪影，**连自己都看不见**。
+## 注意：这里只抬高**精灵**的绘制层级，**不**给玩家任何视野半径（player_base_vision_units=0
+## 保持不变）——地面依旧是黑的，能看见的只有自己，符合「人物不应有光圈」的诉求。
+## 层级栈：雾罩 80（绝对）< 灯塔塔身 82 < 散落光源 83 < 玩家 84（见 RenderZ）
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.PLAYER
+
 
 ## 移速软上限阈值（GDD §6.9 / passives.json soft_caps.move_speed；缺省 +60%）
 static func move_speed_soft_cap() -> float:
@@ -54,6 +63,8 @@ var arena_clamp_count: int = 0
 
 
 func _ready() -> void:
+	# 夜间可读性：抬高到雾罩之上（详见 Z_ABOVE_FOG 注释）
+	z_index = Z_ABOVE_FOG
 	# 从配置加载角色基础属性（§9.4 角色表）与拾取半径（pickups.json）
 	_apply_character_stats()
 	_apply_pickup_config()
@@ -323,9 +334,10 @@ func get_bind_move_mult() -> float:
 
 
 func _draw() -> void:
-	# 拾取半径范围（半透明圈，方便调试观察）
-	var radius: float = get_pickup_radius()
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(0.3, 0.85, 1.0, 0.15), 2.0)
+	# 2026-10-23：移除原来的「拾取半径半透明调试圈」。
+	# 该圈 alpha=0.15 本为调试用，过去被夜里 0.98 的雾罩盖住看不见；
+	# 角色抬到雾罩之上（Z_ABOVE_FOG）后它会在纯黑里显出一圈淡青光环，
+	# 正好撞上用户明确否掉的「人物身上有光圈」——故直接去掉。
 	# 玩家本体：优先用 Sprite2D 精灵（见 _apply_sprite）；
 	# 仅当精灵缺失（如资源未生成 / headless 无导入）时，才退回画一个圆。
 	if _sprite == null or _sprite.texture == null:

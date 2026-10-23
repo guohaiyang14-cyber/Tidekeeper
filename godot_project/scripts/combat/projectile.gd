@@ -18,6 +18,14 @@ const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 ##   约 12s 寿命 → 32 容量池几秒内耗尽 → 武器停火 → 玩家无敌防御被秒杀）
 const MAX_LIFE: float = 2.0
 
+## 绘制层级：玩家弹道画在黑夜雾罩（VisionOverlay z=80）**之上**。
+## 2026-10-23 用户反馈「跑一会整屏全黑什么都没有」+ 选择方案 B：
+## 拾取物与玩家侧弹道/特效抬到雾上（暗处也能看见自己打出的弹道，战斗有反馈），
+## **敌人本体与其弹道仍留在雾下**（黑暗压迫感保留）。
+## 层级栈：雾罩 80 < 玩家弹道/特效/拾取物 81 < 灯塔塔身 82 < 散落光源 83 < 玩家 84
+const _RENDER_Z := preload("res://scripts/core/render_z.gd")
+const Z_ABOVE_FOG: int = _RENDER_Z.ABOVE_FOG
+
 var _direction: Vector2 = Vector2.RIGHT
 var _damage: int = 0
 var _pierce: int = 0
@@ -39,6 +47,7 @@ var _vis_loaded_for: String = ""  # 已加载视觉配置的武器 id（避免�
 
 
 func _on_acquire() -> void:
+	z_index = Z_ABOVE_FOG
 	_active = true
 	_life = 0.0
 	_slow_factor = 1.0

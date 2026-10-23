@@ -2,7 +2,7 @@
   "metadata": {
     "schema_version": 1,
     "doc_source": "主设计文档 §5.1 昼夜循环；SKILL.md §5.1 / §4.2（禁止硬编码数值）",
-    "note": "运行时只读；单位秒。夜长与夜型映射的唯一数据源：DayNightStateMachine.duration_for_night() 读本表（原状态机 NIGHT_DURATION_* 常量已移除，调参改表不改脚本）"
+    "note": "运行时只读；单位秒。夜长与夜型映射的唯一数据源：DayNightStateMachine.duration_for_night() 读本表（原状态机 NIGHT_DURATION_* 常量已移除，调参改表不改脚本）；vision 段为夜间视线限制（雾罩半径/颜色）唯一数据源"
   },
   "durations": {
     "normal": 45.0,
@@ -17,5 +17,24 @@
     "final_night": 20,
     "default_type": "normal",
     "note": "夜次→夜型映射：命中 elite_nights=精英夜、calamity_nights=天灾夜、final_night=终局夜；其余按 default_type。天灾夜判定含终局夜（与 enemies.json affix_rules.calamity_nights + final 一致）；Boss 夜 = calamity_nights + final_night"
+  },
+  "vision": {
+    "night_restricted": true,
+    "fog_color": [0.01, 0.02, 0.05],
+    "fog_alpha": 0.98,
+    "player_base_vision_units": 0.0,
+    "lighthouse_glow_units": 4.0,
+    "lighthouse_glow_intensity": 1.0,
+    "lighthouse_glow_core_ratio": 0.55,
+    "falloff": "smooth",
+    "radial_segments": 14,
+    "hit_flash_units": 1.8,
+    "hit_flash_intensity": 1.0,
+    "hit_flash_duration": 0.3,
+    "hit_flash_max": 12,
+    "hit_flash_core_ratio": 0.45,
+    "hit_flash_color": [1.0, 0.86, 0.55],
+    "hit_flash_note": "2026-10-23 用户反馈「子弹击中敌人时应该给亮度显示出来」：命中瞬间在命中点开一个**瞬态光源**（1.8 单位=108px，强度 1.0，寿命 0.3s，最多同时 12 个，超出丢最旧的），让藏在雾下的敌人被短暂照亮、显形一下——只画亮斑是没用的，敌人本体在雾罩之下会被亮斑盖住，必须真的在照明计算里开雾。core_ratio=0.45 即中心 49px 内全亮形成明确亮核，外圈按 falloff 渐隐；颜色偏暖白（受击火花感）。",
+    "vision_note": "2026-10-23 用户反馈「人物本身不应有光圈，视野只能来自外部光源；光线由近及远渐变，边缘极致漆黑」+「灯塔附近一圈应该是亮的」+「光束需要加宽一倍左右」：移除默认玩家视野（player_base_vision_units=0），改为多光源叠加模型——① 灯塔灯室固定辉光（lighthouse_glow_units=4.0=240px，intensity=1.0 中心全亮，core_ratio=0.55 即 132px 内全亮形成明确亮圈，132~240px 按 smooth 渐变）② 灯塔旋转光束（half_angle_deg=20°，见 map.json）③ 玩家随身视野（被动/全局成长提供，如 pearl 夜明珠）。衰减曲线 falloff=smooth（二次缓出：中心亮→边缘漆黑）。fog_alpha=0.98（极致漆黑），fog_color 调暗。radial_segments=14（径向分段数；VisionOverlay 按 t² **平方律内密外疏**分布——原均匀 8 段下 240px 亮圈只落在 1 个径向带内会被压成三角面片，出现放射状细条）。事件视野倍率（月食等）等比缩放所有光源半径。"
   }
 }

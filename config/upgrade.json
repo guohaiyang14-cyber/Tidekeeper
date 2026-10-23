@@ -31,5 +31,9 @@
       "amount": 30,
       "weight": 10
     }
-  ]
+  ],
+  "shop": {
+    "max_purchases_per_visit": 2,
+    "shop_note": "2026-10-23 用户反馈「成长太快，10 夜左右所有武器 7 级、被动 5 级，等级+商店是否导致成长太快」：实测一局 11 夜，升级 26 次但**商店买了 50 次**——原实现同一件商品可无限回购，商店成了主要成长来源。现改为：① 售出即下架（一件商品一次开店只卖一次）② 每次开店最多买 max_purchases_per_visit 件 ③ 单价上调（武器 30→50、被动 20→34，见 weapons.json / passives.json metadata.shop.cost）。配合经验表整体上抬 ~1.9x（tools/generate_exp_table.py BASE 22→42、LINEAR 3→6）。"
+  }
 }
