@@ -65,7 +65,9 @@ var _beam_angle: float = 0.0
 var _beam_length: float = 0.0
 var _beam_half_angle: float = 0.0
 var _beam_rotation_speed: float = 0.0
-var _beam_color := Color(1.0, 0.93, 0.70, 0.5)
+## 光束颜色（2026-10-23 用户反馈「光束不需要有颜色……加了颜色又看不清了」：
+## 暖白改中性白——光效层是加色混合，暖色会把下方内容染糊；中性白只提亮不染色）
+var _beam_color := Color(1.0, 1.0, 1.0, 0.5)
 
 var _player_vision_radius: float = 0.0
 
@@ -215,7 +217,7 @@ func _beacon_from_cfg(beam_cfg: Dictionary) -> void:
 	_beam_length = maxf(0.0, float(beam_cfg.get("length_px", 0.0)))
 	_beam_half_angle = maxf(0.0, float(beam_cfg.get("half_angle_rad", 0.0)))
 	_beam_rotation_speed = maxf(0.0, float(beam_cfg.get("rotation_speed", 0.0)))
-	var col: Variant = beam_cfg.get("color", Color(1.0, 0.93, 0.70))
+	var col: Variant = beam_cfg.get("color", Color(1.0, 1.0, 1.0))
 	if col is Color:
 		_beam_color = (col as Color)
 	var alpha: float = clampf(float(beam_cfg.get("alpha", 0.5)), 0.05, 1.0)

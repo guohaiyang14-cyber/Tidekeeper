@@ -54,6 +54,8 @@
       "health_mult": 3,
       "exp_mult": 3,
       "contact_damage_mult": 2,
+      "visual_size_mult": 1.5,
+      "visual_note": "2026-10-23 用户反馈「怪物模型太小了……其他等级怪物可以递增」：精英视觉=基础敌人 visual_size×1.5（44→66px），仍小于暗礁巨人(80)与 Boss(≈200)；碰撞半径不随视觉放大（与视觉解耦，不改难度）",
       "note": "倍率在 configure() 后仍叠 §8.2 夜晚缩放，实战为正常缩放后约 health_mult×；W8 另附 2~3 词缀"
     },
     "combat": {
@@ -95,7 +97,7 @@
       "update_group": 2,
       "move_speed": 275.0,
       "contact_radius": 18.0,
-      "visual_size": 18.0,
+      "visual_size": 40.0,
       "tint": [
         0.85,
         0.28,
@@ -117,7 +119,7 @@
       "update_group": 2,
       "move_speed": 130.0,
       "contact_radius": 22.0,
-      "visual_size": 24.0,
+      "visual_size": 44.0,
       "tint": [
         0.72,
         0.42,
@@ -143,7 +145,7 @@
       "update_group": 4,
       "move_speed": 95.0,
       "contact_radius": 16.0,
-      "visual_size": 18.0,
+      "visual_size": 42.0,
       "tint": [
         0.35,
         0.85,
@@ -168,7 +170,7 @@
       "burrow_initial_delay": 1.0,
       "move_speed": 280.0,
       "contact_radius": 18.0,
-      "visual_size": 18.0,
+      "visual_size": 48.0,
       "tint": [
         0.18,
         0.28,
@@ -192,7 +194,7 @@
       "update_group": 4,
       "move_speed": 290.0,
       "contact_radius": 16.0,
-      "visual_size": 16.0,
+      "visual_size": 40.0,
       "tint": [
         0.95,
         0.45,
@@ -214,7 +216,7 @@
       "update_group": 4,
       "move_speed": 330.0,
       "contact_radius": 16.0,
-      "visual_size": 16.0,
+      "visual_size": 46.0,
       "tint": [
         0.22,
         0.12,
@@ -244,7 +246,7 @@
       "keep_distance": 180.0,
       "move_speed": 90.0,
       "contact_radius": 16.0,
-      "visual_size": 22.0,
+      "visual_size": 56.0,
       "tint": [
         0.22,
         0.72,
@@ -271,7 +273,7 @@
       "charge_trigger_range": 160.0,
       "move_speed": 230.0,
       "contact_radius": 20.0,
-      "visual_size": 22.0,
+      "visual_size": 58.0,
       "tint": [
         0.45,
         0.55,
@@ -297,7 +299,7 @@
       "damage_share_max_allies": 8,
       "move_speed": 110.0,
       "contact_radius": 26.0,
-      "visual_size": 36.0,
+      "visual_size": 80.0,
       "tint": [
         0.42,
         0.52,

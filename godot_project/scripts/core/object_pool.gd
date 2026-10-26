@@ -121,6 +121,13 @@ func get_active() -> Array[Node]:
 	return _active.duplicate()
 
 
+## 读取指定活跃节点；倒序遍历时可在读取后 release 当前节点而不复制整个数组
+func get_active_at(index: int) -> Node:
+	if index < 0 or index >= _active.size():
+		return null
+	return _active[index]
+
+
 ## 可用节点数
 func available_count() -> int:
 	return _pool.size()

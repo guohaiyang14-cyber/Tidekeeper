@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/tests/w5_weapon_test.gd" id="1_test"]
 [ext_resource type="Script" path="res://scripts/core/spatial_hash_holder.gd" id="2_hash"]
@@ -9,6 +9,8 @@
 [ext_resource type="PackedScene" path="res://scenes/projectile.tscn" id="7_proj"]
 [ext_resource type="Script" path="res://scripts/core/particle_pool.gd" id="8_partpool"]
 [ext_resource type="PackedScene" path="res://scenes/weapon_effect.tscn" id="9_fx"]
+[ext_resource type="Script" path="res://scripts/core/enemy_projectile_pool.gd" id="10_eprojpool"]
+[ext_resource type="PackedScene" path="res://scripts/combat/enemy_projectile.tscn" id="11_eproj"]
 
 [node name="W5WeaponTest" type="Node2D"]
 script = ExtResource("1_test")
@@ -37,3 +39,9 @@ pool_size = 32
 script = ExtResource("8_partpool")
 scene = ExtResource("9_fx")
 pool_size = 16
+
+[node name="EnemyProjectilePool" type="Node" parent="."]
+script = ExtResource("10_eprojpool")
+scene = ExtResource("11_eproj")
+pool_size = 24
+groups = ["enemy_projectile_pool"]

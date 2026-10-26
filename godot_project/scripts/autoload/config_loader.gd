@@ -629,7 +629,8 @@ func get_lighthouse_beam_config() -> Dictionary:
 		"length_px": maxf(0.0, float(beam.get("length_units", 14.0)) * 60.0),
 		"half_angle_rad": deg_to_rad(clampf(float(beam.get("half_angle_deg", 10.0)), 0.5, 80.0)),
 		"rotation_speed": deg_to_rad(maxf(0.0, float(beam.get("rotation_speed_deg", 26.0)))),
-		"color": _parse_color(beam.get("color", [1.0, 0.93, 0.7]), Color(1.0, 0.93, 0.7)),
+		# 2026-10-23 用户反馈「光束不需要有颜色」：默认值与 config 一致为中性白（防字段误删静默漂回暖色）
+		"color": _parse_color(beam.get("color", [1.0, 1.0, 1.0]), Color(1.0, 1.0, 1.0)),
 		"alpha": clampf(float(beam.get("alpha", 0.5)), 0.05, 1.0),
 	}
 

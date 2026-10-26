@@ -95,11 +95,15 @@ func _test_config_values() -> void:
 	_assert(bool(beam.get("enabled", false)), "lighthouse.beam.enabled=true")
 	_assert(float(beam.get("length_px", 0.0)) > 0.0, "光束长度 >0（%.0fpx）" % float(beam.get("length_px", 0.0)))
 	_assert(float(beam.get("half_angle_rad", 0.0)) > 0.0, "光束半角 >0")
-	# 2026-10-23 用户反馈：光束需要加宽一倍左右（10°→20°）
-	_assert(rad_to_deg(float(beam.get("half_angle_rad", 0.0))) >= 18.0,
-		"光束半角 ≥18°（加宽后 %.0f°）" % rad_to_deg(float(beam.get("half_angle_rad", 0.0))))
+	# 2026-10-23 用户反馈：光束需要加宽（10°→20°→40°，第二轮「还是太窄了」）
+	_assert(rad_to_deg(float(beam.get("half_angle_rad", 0.0))) >= 35.0,
+		"光束半角 ≥35°（加宽后 %.0f°）" % rad_to_deg(float(beam.get("half_angle_rad", 0.0))))
 	_assert(float(beam.get("rotation_speed", -1.0)) >= 0.0, "旋转速度 ≥0")
-	_assert((beam.get("color", Color.BLACK) as Color).r > 0.5, "光束为暖色")
+	# 2026-10-23 用户反馈「光束不需要有颜色……加了颜色又看不清了」：中性白（r=g=b），
+	# 加色混合下只提亮不染色，下方内容保持原色可读
+	var bc: Color = beam.get("color", Color.BLACK) as Color
+	_assert(absf(bc.r - bc.g) < 0.01 and absf(bc.g - bc.b) < 0.01 and bc.r >= 0.99,
+		"光束为中性白（不加色）：r=g=b=%.2f" % bc.r)
 
 	# 2026-10-23 用户反馈「去掉地图范围限制」：arena 关闭，边界可视化不生成
 	_assert(not ConfigLoader.get_arena_enabled(), "arena.enabled=false（无活动范围限制）")
@@ -187,7 +191,7 @@ func _test_vision_overlay() -> void:
 	# W23：玩家默认无随身视野——站在灯塔辉光外（且不在光束方向上）应不被照亮
 	var player_world: Vector2 = player.global_position
 	var glow_r: float = float(vis.get("lighthouse_glow_radius_px", 0.0))
-	# 放在灯塔正上方（90°），避开光束初始方向（0°向右，半角 10°）
+	# 放在灯塔正上方（90°），避开光束初始方向（0°向右，半角 40°）
 	var outside_glow: Vector2 = lamp + Vector2(0.0, glow_r + 50.0)
 	player.global_position = outside_glow
 	await get_tree().process_frame

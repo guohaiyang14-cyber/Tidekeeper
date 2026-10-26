@@ -23,7 +23,7 @@ const _ORBIT_VIS = preload("res://scripts/combat/orbit_chain_visual.gd")
 const _HUD = preload("res://scripts/core/hud.gd")
 const _SPRITE_LIB = preload("res://scripts/core/sprite_lib.gd")
 
-const _KNOWN_FX_KINDS: Array[String] = ["ring", "bolt", "slam", "muzzle", "sting", "dive", "burst", "orbit"]
+const _KNOWN_FX_KINDS: Array[String] = ["ring", "bolt", "slam", "muzzle", "sting", "dive", "burst", "orbit", "deflect"]
 
 @onready var spatial_hash_holder: SpatialHashHolder = $SpatialHashHolder
 @onready var player: Node2D = $Player
@@ -189,11 +189,11 @@ func _test_projectile_visuals() -> void:
 			enemy_pool.release(e)
 
 
-# ---- V3 攻击动作特效六连播 ---------------------------------------------------
+# ---- V3 攻击动作特效连播 -----------------------------------------------------
 func _test_fx_kinds() -> void:
-	print("[assert] V3 攻击动作特效（七 kind）")
+	print("[assert] V3 攻击动作特效（八 kind，含 deflect 近战清弹火花）")
 	particle_pool.release_all()  # 清场，确保 active 里只有本次特效
-	for kind in ["ring", "bolt", "slam", "muzzle", "sting", "dive", "burst"]:
+	for kind in ["ring", "bolt", "slam", "muzzle", "sting", "dive", "burst", "deflect"]:
 		var before: int = particle_pool.active_count()
 		weapon_manager.spawn_area_effect(player.global_position, 60.0, Color(0.5, 0.8, 1.0),
 			kind, Vector2.RIGHT, {"height": 200.0})

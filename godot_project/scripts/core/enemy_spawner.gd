@@ -377,6 +377,11 @@ func _spawn_elite() -> void:
 	edata["base_health"] = int(base.get("base_health", 55)) * hp_m
 	edata["base_exp"] = int(base.get("base_exp", 5)) * exp_m
 	edata["base_contact_damage"] = int(base.get("base_contact_damage", 12)) * dmg_m
+	# 视觉尺寸阶梯（2026-10-23 用户反馈「其他等级怪物可以递增」）：精英=基础 visual_size×倍率；
+	# 只改外观，碰撞半径（contact_radius）保持基础值不变，不暗中改难度
+	var vis_mult: float = float(elite.get("visual_size_mult", 1.0))
+	if vis_mult > 0.0:
+		edata["visual_size"] = float(base.get("visual_size", 20.0)) * vis_mult
 	var offset_y: float = float(_spawn_meta.get("elite_offset_y", -200.0))
 	var pos: Vector2 = target.global_position + Vector2(0.0, offset_y)
 	var rules: Dictionary = ConfigLoader.get_affix_rules()

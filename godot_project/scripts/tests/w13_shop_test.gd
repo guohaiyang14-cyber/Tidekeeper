@@ -2,11 +2,13 @@
 # W13ShopTest — 商店完善 + 经济闭环（逻辑 + 机检）
 # 运行：godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/w13_shop_test.tscn
 # 覆盖：购买扣实付价 / 槽满退款不扣币 / 重铸退 80% / 未持有退 0 /
-#       休息夜判定 / 灯塔回血 / 经济闭环无刷币
+#       休息夜判定 / 灯塔回血 / 经济闭环无刷币 /
+#       商店 UI 置灰（潮币不足/达上限时商品行渲染即禁用）
 # ============================================================================
 extends Node
 
 const _SHOP = preload("res://scripts/core/shop_manager.gd")
+const _SHOP_UI = preload("res://scripts/core/shop_ui.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -31,6 +33,7 @@ func _ready() -> void:
 	_test_rest_heal()
 	_test_rest_try_apply()
 	_test_economy_no_exploit()
+	await _test_shop_ui_disabled_rows()
 	print("------------------------------------------------------------")
 	print("W13 机检通过=%d 失败=%d" % [_passed, _failed])
 	print("============================================================")
@@ -322,3 +325,70 @@ func _test_economy_no_exploit() -> void:
 	GameState.reroll_passive(pid)
 	_assert(GameState.tidecoins == before - paid + refund, "买+重铸净 = -paid + refund（净减少）")
 	shop.free()
+
+
+# ---- 商店 UI 置灰（2026-10-23 用户反馈「限制购买的应该在购买之后不能再交互了，而不是点击没有反应」）----
+# 商品行在渲染时就地判定禁用原因并 disabled=true：潮币不足/达每次开店上限/槽满/已满级
+func _test_shop_ui_disabled_rows() -> void:
+	print("[商店 UI 置灰]")
+	_reset_run()
+	var shop: ShopManager = _SHOP.new()
+	add_child(shop)
+	var ui: ShopUI = _SHOP_UI.new()
+	add_child(ui)
+	await get_tree().process_frame
+	ui.setup(shop)   # UI→Manager（潮币信号 / 上限查询）
+	shop.setup(ui)   # Manager→UI（shop_opened / shop_items_changed 等）
+	# ① 潮币不足：全部行置灰（点击前即可读，而非点击无反应）
+	GameState.tidecoins = 0
+	GameState.tidecoins_changed.emit(0)
+	shop.open_shop()
+	await get_tree().process_frame
+	var rows: Array[Button] = _item_row_buttons(ui)
+	_assert(rows.size() > 0, "商品行已渲染（%d 行）" % rows.size())
+	var all_blocked: bool = true
+	for btn in rows:
+		if not btn.disabled:
+			all_blocked = false
+	_assert(all_blocked, "潮币不足时全部商品行置灰")
+	# ② 给足潮币：恢复可点（_on_tidecoins_changed 重绘）
+	GameState.add_tidecoins(1000)
+	await get_tree().process_frame
+	rows = _item_row_buttons(ui)
+	var any_enabled: bool = false
+	for btn in rows:
+		if not btn.disabled:
+			any_enabled = true
+	_assert(any_enabled, "潮币足够时商品行恢复可点")
+	# ③ 买到达每次开店上限：剩余行全部置灰（shop_items_changed 逐次重绘）
+	var cap: int = shop.get_max_purchases()
+	var bought: int = 0
+	for it in shop.get_current_items().duplicate():
+		if bought >= cap:
+			break
+		if shop.buy(it):
+			bought += 1
+	_assert(bought == cap, "已买到本次开店上限（%d 件）" % bought)
+	await get_tree().process_frame
+	rows = _item_row_buttons(ui)
+	var remaining_all_disabled: bool = true
+	for btn in rows:
+		if not btn.disabled:
+			remaining_all_disabled = false
+	_assert(remaining_all_disabled, "达购买上限后剩余商品行全部置灰")
+	# 清理（入树节点：queue_free + 一帧，避免退出段错误）
+	ui.queue_free()
+	shop.queue_free()
+	await get_tree().process_frame
+
+
+## 商品行按钮（VBox 下不带 shop_tail 标记的 Button；尾部融合/精炼/重铸控件除外）
+func _item_row_buttons(ui: ShopUI) -> Array[Button]:
+	var rows: Array[Button] = []
+	var vbox: Variant = ui.get("_vbox")
+	if vbox == null:
+		return rows
+	for child in (vbox as VBoxContainer).get_children():
+		if child is Button and not child.has_meta("shop_tail"):
+			rows.append(child as Button)
+	return rows

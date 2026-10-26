@@ -7,6 +7,7 @@
 #   muzzle 枪口火光（鱼叉）：沿 dir 的锥形闪光 + 小环
 #   sting  叮刺（水母孢子）：命中点针刺 + 麻痹圈
 #   dive   俯冲扬尘（信天翁）：冲击环 + 羽毛碎屑
+#   deflect 弹幕销毁火花（近战）：四射星芒 + 微缩冲击环（2026-10-23 用户反馈）
 # 红线：纯视觉、不参与任何伤害/索敌；走 ParticlePool（禁止运行时 instantiate）；
 #       视觉抖动用本地 RNG 实例（不得消耗游戏 RNG，保持局内确定性）。
 # ============================================================================
@@ -70,8 +71,9 @@ func play(radius: float, color: Color, lifetime: float, pool: ObjectPool,
 		_rng = RandomNumberGenerator.new()
 		_rng.randomize()
 	# bolt 折线按竖直方向生成（自顶向下落），固定不旋转；
+	# deflect 火花四射对称，也不需要朝向旋转；
 	# 其余 kind 的本地 +X 对齐动作朝向（muzzle/slam 依赖 dir，ring/sting/dive/burst 对称）
-	rotation = 0.0 if _kind == "bolt" else _dir.angle()
+	rotation = 0.0 if _kind == "bolt" or _kind == "deflect" else _dir.angle()
 	# bolt：预生成锯齿折线（从顶部落到地面），每段横向抖动
 	if _kind == "bolt":
 		var h: float = float(params.get("height", 260.0))
@@ -125,6 +127,8 @@ func _draw() -> void:
 			_draw_sting(t, col, col_hi)
 		"dive":
 			_draw_dive(t, col, col_hi)
+		"deflect":
+			_draw_deflect(t, col, col_hi)
 		"burst":
 			_draw_burst(t, col, col_hi)
 		_:
@@ -233,6 +237,22 @@ func _draw_dive(t: float, col: Color, col_hi: Color) -> void:
 		var d1: float = d0 + 10.0 * (1.0 - t)
 		draw_line(Vector2(cos(a), sin(a)) * d0, Vector2(cos(a), sin(a)) * d1,
 			Color(col_hi.r, col_hi.g, col_hi.b, 0.6 * alpha), 2.0)
+
+
+## deflect：近战销毁敌方弹幕的火花（2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」）
+## 四射星芒 + 微缩冲击环：短促、不抢戏，读得出「弹幕被敲掉了」
+func _draw_deflect(t: float, col: Color, col_hi: Color) -> void:
+	var alpha: float = 1.0 - t
+	# 星芒随进度微微外张后收束
+	var r: float = _radius * (0.55 + 0.45 * (1.0 - t))
+	for i in 4:
+		var a: float = PI * 0.25 + PI * 0.5 * float(i)
+		draw_line(Vector2.ZERO, Vector2(cos(a), sin(a)) * r,
+			Color(col_hi.r, col_hi.g, col_hi.b, 0.9 * alpha), 2.0)
+	draw_arc(Vector2.ZERO, r * 0.55, 0.0, TAU, 12,
+		Color(col.r, col.g, col.b, 0.7 * alpha), 1.5)
+	draw_circle(Vector2.ZERO, 2.5 * (1.0 - t) + 1.0,
+		Color(col_hi.r, col_hi.g, col_hi.b, 0.8 * alpha))
 
 
 ## burst：环形弹幕齐射（玩家身处径向光环 + 8 辐条，水母炮）

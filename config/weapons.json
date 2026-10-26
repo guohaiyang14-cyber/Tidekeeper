@@ -101,7 +101,9 @@
         "base_radius": 70.0,
         "l1_radius_mult": 1.6,
         "radius_per_level": 0.15,
-        "effect_color": "cfd8e0"
+        "effect_color": "cfd8e0",
+        "clear_enemy_projectiles": true,
+        "clear_note": "2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」：近战爆发时把打击范围内的敌方弹道全部回收（弹道是试玩第一大伤害源 40%）"
       },
       "evolution": {
         "name": "风暴之锚",
@@ -239,7 +241,9 @@
       "behavior": {
         "base_radius": 60.0,
         "radius_per_level": 15.0,
-        "chain_color": "b8c4d4"
+        "chain_color": "b8c4d4",
+        "clear_enemy_projectiles": true,
+        "clear_note": "环绕 tick 时销毁环绕半径内的敌方弹道（与锚锤同口径；数据驱动，关掉改 false 即可）"
       },
       "evolution": {
         "name": "永恒锚轮",

@@ -10,6 +10,7 @@ extends Control
 const _UI := preload("res://scripts/ui/ui_chrome.gd")
 
 var _shop_manager: ShopManager
+var _shop_render_pending: bool = false
 
 ## 玩家请求跳过昼（继续下一夜）；World 监听后关店并进夜
 signal skip_requested()
@@ -217,10 +218,10 @@ func _on_purchase_made(_item: Dictionary) -> void:
 
 
 ## 在售列表变化（售出下架 / 达上限）：只重绘，不抢焦点
-func _on_shop_items_changed(items: Array[Dictionary]) -> void:
+func _on_shop_items_changed(_items: Array[Dictionary]) -> void:
 	if not visible:
 		return
-	_render(items)  # _render 收无类型 Array：Array[Dictionary] 向上转型安全，shop_opened 路径不变
+	_schedule_shop_render()
 	_refresh_coins()
 	_refresh_fusion()
 
@@ -231,18 +232,74 @@ func _on_purchase_failed(_reason: String) -> void:
 
 func _render(items: Array) -> void:
 	_clear_dynamic_rows()
+	var visit_capped: bool = _is_visit_capped()
 	for item in items:
 		var btn: Button = Button.new()
 		_UI.style_button(btn)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		btn.text = _item_row_text(item)
+		# 2026-10-23 用户反馈「商店限制购买的应该在购买之后不能再交互了，而不是点击没有反应」：
+		# 渲染时就地判定「买了也没用」的行（达上限/潮币不足/槽满/已满级）并置灰，
+		# 而不是等点击后静默失败
+		var blocked: String = _item_blocked_reason(item, visit_capped)
+		btn.text = _item_row_text(item, blocked)
+		btn.disabled = blocked != ""
 		btn.pressed.connect(_on_item_pressed.bind(item))
 		_vbox.add_child(btn)
 	_place_tail_controls()
 
 
-func _item_row_text(item: Dictionary) -> String:
+## 本次开店是否已达购买上限（ ShopManager.get_max_purchases；0=不限制）
+func _is_visit_capped() -> bool:
+	if _shop_manager == null:
+		return false
+	var cap: int = _shop_manager.get_max_purchases()
+	return cap > 0 and _shop_manager.get_purchases_this_visit() >= cap
+
+
+## 商品行禁用原因（"" = 可购买）。与 ShopManager.buy() 的失败分支一一对应：
+## visit_limit / insufficient_funds / weapon_slots_full / passive_slots_full / max_level
+func _item_blocked_reason(item: Dictionary, visit_capped: bool) -> String:
+	if visit_capped:
+		return "visit_limit"
+	var cost: int = int(item.get("cost", 0))
+	if GameState.tidecoins < cost:
+		return "insufficient_funds"
+	var kind: String = String(item.get("kind", ""))
+	var item_id: String = String(item.get("id", ""))
+	if kind == "weapon":
+		if item_id in GameState.weapon_slots:
+			# 已持有武器=买来升级；满级后再买会被 add_weapon 拒（slot_full）
+			if GameState.get_weapon_level(item_id) >= GameState.max_weapon_level:
+				return "max_level"
+		elif GameState.weapon_slots.size() >= GameState.MAX_WEAPON_SLOTS:
+			return "weapon_slots_full"
+	elif kind == "passive":
+		if item_id in GameState.passive_slots:
+			if GameState.get_passive_level(item_id) >= GameState.max_passive_level:
+				return "max_level"
+		elif GameState.passive_slots.size() >= GameState.MAX_PASSIVE_SLOTS:
+			return "passive_slots_full"
+	return ""
+
+
+## 禁用原因的本语文案（字面量 key，供校验器扫描）
+func _blocked_reason_text(reason: String) -> String:
+	match reason:
+		"visit_limit":
+			return LanguageSystem.localize("ui.shop.blocked_visit_limit")
+		"insufficient_funds":
+			return LanguageSystem.localize("ui.shop.blocked_insufficient_funds")
+		"weapon_slots_full":
+			return LanguageSystem.localize("ui.shop.blocked_weapon_slots_full")
+		"passive_slots_full":
+			return LanguageSystem.localize("ui.shop.blocked_passive_slots_full")
+		"max_level":
+			return LanguageSystem.localize("ui.shop.blocked_max_level")
+	return ""
+
+
+func _item_row_text(item: Dictionary, blocked_reason: String = "") -> String:
 	var kind: String = String(item.get("kind", ""))
 	var kind_key: String = (
 		"ui.shop.kind_weapon" if kind == "weapon" else "ui.shop.kind_passive"
@@ -254,11 +311,16 @@ func _item_row_text(item: Dictionary) -> String:
 		display = LanguageSystem.localize_config_name("weapon", item_id, fallback)
 	elif kind == "passive" and item_id != "":
 		display = LanguageSystem.localize_config_name("passive", item_id, fallback)
-	return LanguageSystem.localizef("ui.shop.item_row", [
+	var base: String = LanguageSystem.localizef("ui.shop.item_row", [
 		display,
 		LanguageSystem.localize(kind_key),
 		int(item.get("cost", 0)),
 	])
+	if blocked_reason != "":
+		var reason_text: String = _blocked_reason_text(blocked_reason)
+		if reason_text != "":
+			return LanguageSystem.localizef("ui.shop.item_row_blocked", [base, reason_text])
+	return base
 
 
 ## 仅清空尾部按钮引用；实际释放由树上 remove_child + queue_free 单次完成
@@ -454,6 +516,24 @@ func _on_item_pressed(item: Dictionary) -> void:
 
 func _on_tidecoins_changed(_total: int) -> void:
 	_refresh_coins()
+	# 潮币变化（购买扣款/重铸退款）会影响商品行「买不买得起」→ 重绘置灰状态。
+	# 与 shop_items_changed 合并到一次延迟重绘，使用届时的最新在售列表。
+	if visible and _shop_manager != null:
+		_schedule_shop_render()
+
+
+func _schedule_shop_render() -> void:
+	if _shop_render_pending:
+		return
+	_shop_render_pending = true
+	call_deferred("_flush_shop_render")
+
+
+func _flush_shop_render() -> void:
+	_shop_render_pending = false
+	if not visible or _shop_manager == null:
+		return
+	_render(_shop_manager.get_current_items())
 
 
 func _on_evo_items_changed(_total: int) -> void:

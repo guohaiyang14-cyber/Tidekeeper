@@ -16,15 +16,15 @@
     "beam": {
       "enabled": true,
       "length_units": 14.0,
-      "half_angle_deg": 20.0,
+      "half_angle_deg": 40.0,
       "rotation_speed_deg": 26.0,
       "color": [
         1.0,
-        0.93,
-        0.7
+        1.0,
+        1.0
       ],
       "alpha": 0.5,
-      "beam_note": "夜间旋转光束：length_units×60=840px；half_angle_deg 为半角（2026-10-23：10→20，用户反馈「光束需要加宽一倍左右」）；rotation_speed_deg 度/秒（0=不旋转）；光束穿雾照明（见 night.json vision）"
+      "beam_note": "夜间旋转光束：length_units×60=840px；half_angle_deg 为半角（2026-10-23 第一轮 10→20「加宽一倍左右」；第二轮 20→40「光束还是太窄了」，总张角 80°）；rotation_speed_deg 度/秒（0=不旋转）；光束穿雾照明（见 night.json vision）。2026-10-23 用户反馈「光束不需要有颜色，光束本来的目的是为了看清下面内容，加了颜色又看不清了」：color 由暖白 [1.0,0.93,0.7] 改为**中性白 [1,1,1]**——光效层是加色混合，暖色会把地面/敌人染成一片奶黄、细节发糊；中性白只提亮不染色，下方内容保持原色可读；alpha 维持 0.5。"
     }
   },
   "arena": {

@@ -12,6 +12,12 @@ ui.shop.retire_confirm_cancel,取消,Cancel
 ui.shop.kind_weapon,武器,Weapon
 ui.shop.kind_passive,被动,Passive
 ui.shop.item_row,%s · %s  (潮币 %d),%s · %s  (Coins %d)
+ui.shop.item_row_blocked,%s（%s）,%s (%s)
+ui.shop.blocked_visit_limit,已达本晚购买上限,Visit limit reached
+ui.shop.blocked_insufficient_funds,潮币不足,Not enough coins
+ui.shop.blocked_weapon_slots_full,武器槽已满,Weapon slots full
+ui.shop.blocked_passive_slots_full,被动槽已满,Passive slots full
+ui.shop.blocked_max_level,已满级,Max level
 ui.shop.coins,潮币：%d,Coins: %d
 ui.shop.evo_items,进化道具：%d,Evolution items: %d
 ui.shop.refine_essence,淬炼精华：%d（II 上限 %d）,Refine essence: %d (II cap %d)

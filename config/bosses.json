@@ -38,7 +38,8 @@
       "danger": 5,
       "update_group": 1,
       "coin_drop_mult": 2.0,
-      "visual_size": 48.0,
+      "visual_size": 200.0,
+      "visual_note": "2026-10-23 用户反馈「boss可以比主角大5倍左右」：主角 40px → Boss 200/210/220px（≈5×）；碰撞半径仍用 contact_radius 与视觉解耦（Boss 威胁在阶段技而非接触）",
       "tint": [0.45, 0.85, 0.95],
       "exam_point": "弹幕环 + 分裂小水母，考验转火",
       "mechanics": [
@@ -67,7 +68,7 @@
       "danger": 5,
       "update_group": 1,
       "coin_drop_mult": 2.0,
-      "visual_size": 52.0,
+      "visual_size": 210.0,
       "tint": [0.25, 0.55, 0.85],
       "exam_point": "传送 + 全屏潮汐波（躲进灯塔光晕）",
       "mechanics": [
@@ -94,7 +95,7 @@
       "danger": 5,
       "update_group": 1,
       "coin_drop_mult": 2.0,
-      "visual_size": 56.0,
+      "visual_size": 220.0,
       "tint": [0.55, 0.15, 0.65],
       "exam_point": "多阶段（护盾 → 狂暴 → 分身）",
       "mechanics": [

@@ -8,6 +8,8 @@
 class_name WeaponBase
 extends Node
 
+signal enemy_projectiles_cleared(weapon_id: String, count: int)
+
 # 显式预加载 EnemyBase，确保 headless 下 class_name 注册（fire 参数类型依赖）
 const _ENEMY_BASE = preload("res://scripts/core/enemy_base.gd")
 
@@ -19,6 +21,9 @@ var attack_timer: float = 0.0
 ## 注入：索敌（返回最近 EnemyBase 或 null）/ 玩家位置
 var get_target: Callable = Callable()
 var get_owner_pos: Callable = Callable()
+
+## 敌方弹道池缓存（clear_enemy_projectiles 用；失效后按需重查）
+var _enemy_proj_pool: ObjectPool = null
 
 
 func configure(data: Dictionary, lv: int) -> void:
@@ -93,6 +98,56 @@ func get_behavior_int(key: String, default_value: int) -> int:
 	if beh is Dictionary:
 		return int((beh as Dictionary).get(key, default_value))
 	return default_value
+
+
+## 读取 behavior 子表布尔值（缺省回退 default）
+func get_behavior_bool(key: String, default_value: bool) -> bool:
+	var beh: Variant = weapon_data.get("behavior", {})
+	if beh is Dictionary:
+		return bool((beh as Dictionary).get(key, default_value))
+	return default_value
+
+
+## 近战武器销毁敌方弹幕（2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」）：
+## 攻击时把打击范围内的敌方弹道全部回收（走 enemy_projectile_pool 的 release，
+## 与敌人超时/命中回收同路径，不 instantiate、不进 SpatialHash）。
+## 哪些武器生效由 weapons.json behavior.clear_enemy_projectiles 数据驱动（默认关）。
+## 返回被销毁弹道的位置列表（供视觉反馈；数量=列表长度，机检同用）。
+func clear_enemy_projectiles(origin: Vector2, radius: float) -> Array[Vector2]:
+	var cleared: Array[Vector2] = []
+	if radius <= 0.001:
+		return cleared
+	var pool: ObjectPool = _find_enemy_projectile_pool()
+	if pool == null:
+		return cleared
+	var r2: float = radius * radius
+	# 倒序按索引读取：release 会从 active 数组移除当前节点，但较低索引保持稳定。
+	for i in range(pool.active_count() - 1, -1, -1):
+		var node: Node = pool.get_active_at(i)
+		if not (node is Node2D):
+			continue
+		var proj: Node2D = node as Node2D
+		if origin.distance_squared_to(proj.global_position) > r2:
+			continue
+		# 先记位置再回收：release 会失活节点（global_position 仍有效，但先取更稳）
+		cleared.append(proj.global_position)
+		# release 幂等：与弹道自身命中/超时回收同帧竞态时不会二次告警
+		pool.release(proj)
+	if not cleared.is_empty():
+		enemy_projectiles_cleared.emit(weapon_id, cleared.size())
+	return cleared
+
+
+## 查找敌方弹道池（与 EnemyBase._ensure_enemy_projectile_pool 同 group 口径）；
+## 缓存失效（场景切换/池释放）后按需重查
+func _find_enemy_projectile_pool() -> ObjectPool:
+	if _enemy_proj_pool != null and is_instance_valid(_enemy_proj_pool):
+		return _enemy_proj_pool
+	_enemy_proj_pool = null
+	var pools: Array = get_tree().get_nodes_in_group("enemy_projectile_pool")
+	if not pools.is_empty():
+		_enemy_proj_pool = pools[0] as ObjectPool
+	return _enemy_proj_pool
 
 
 ## 读取 behavior 子表颜色（十六进制串如 "ff7a1a" 或 "#ff7a1a"），解析失败回退 default_hex

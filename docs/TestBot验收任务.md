@@ -1,8 +1,8 @@
 # TestBot 验收任务（对齐原型验证验收清单）
 
-> **版本**：v1.2  
-> **日期**：2026-09-16  
-> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.11 · [`开发进度总览.md`](开发进度总览.md) · [`A2_首局试玩记录.md`](A2_首局试玩记录.md) · `AGENTS.md`  
+> **版本**：v1.3  
+> **日期**：2026-10-26  
+> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.29 · [`开发进度总览.md`](开发进度总览.md) · [`A2_首局试玩记录.md`](A2_首局试玩记录.md) · `AGENTS.md`  
 > **Skill**：新功能同步 Bot → [`tools/SKILL_testbot-coverage.md`](../tools/SKILL_testbot-coverage.md)（`tidekeeper-testbot-coverage`）
 
 ---
@@ -25,11 +25,11 @@
 
 | suite | 默认角色 | 难度 | 灯塔 | max_night | max_runs | 主要清单 id |
 |-------|----------|------|------|-----------|----------|-------------|
-| `smoke` | watcher | lighthouse | none | 10 | 3 | 1.1.1 / 1.1.2 / 1.2.3 / 3.3 / 5.2 / **2.4.2·2.4.3 / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2** |
+| `smoke` | watcher | lighthouse | none | 10 | 3 | 1.1.1 / 1.1.2 / 1.2.3 / 3.3 / 5.2 / **2.1.6 / 2.4.2·2.4.3 / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2** |
 | `crash` | watcher | lighthouse | none | 8 | 3 | 5.2 / 3.3 / 2.4.2 / 4.3.12 / 4.8.2 |
-| `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2 |
+| `full` | watcher | lighthouse | random | 20 | 5 | 3.3 / 2.5.3 / 4.10.1 / 5.2 / **2.1.6** / 2.4.* / 4.3.12 / 4.5.4 / 4.9.1 / 4.8.6·4.8.2 |
 | `meta` | cycle×3 角色 | cycle 难度 | cycle 灯塔 | 12 | 9 | 4.6.x / 4.8.1 / 4.8.6 / 4.8.2 / 4.3.12 |
-| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 / 4.11.1 / **4.4.10** |
+| `acceptance` | watcher | lighthouse | sweep×2/档 | 20 | 6 | 上表综合 + 2.1.6 / 4.5.2 / 4.5.3 / 4.2.8 / 4.8.6 / 4.8.2 / 4.11.1 / **4.4.10** |
 
 显式 CLI / 环境变量 **覆盖** suite 默认值。
 
@@ -107,6 +107,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 1.2.5 竞技场边界 | 玩家曾触发 `arena_clamp_count > 0` 且当前位置 ≤ `radius - BODY_RADIUS_PX + 2px`；未触发 → skip（证据不足）；配置禁用 → skip（N/A） | smoke / full / acceptance | soft_push 渐变减速（手感）；arena.radius_units 与 BODY_RADIUS_PX 数值对齐 |
 | 4.8 难度默认 | — | — | 人类默认 **watcher**（A2）；Bot suite 仍可强刷 `lighthouse`（硬档回归，与人类默认解耦） |
 | 4.8.6 Boss 档位倍率 | 采样 Boss `max_health` vs 表底×档位 | smoke / full / meta / acceptance | — |
+| 2.1.6 近战武器清弹 | 锚锤 / 锚链清弹信号且 `count > 0` 才 pass；全程未观察到实际回收 → skip（未装备或范围内无弹道均属证据不足） | smoke / full / acceptance | **2026-10-26 smoke 实跑 PASS**（`weapon=anchor_hammer_cleared=2`，`script_err=0`）；清弹范围与边界见 `w5_weapon_test` |
 | 4.8.2 教学夜演示武器 | 教学窗结束首夜核对 `teaching_demo_grants`：id∈demo 表 / 夜∈[2,nights] / 无空 / ≥1 条；窗内死亡→skip；**demo 武器已被玩家/机器人全部自选持有（无「未拥有」可授）→ skip**（2026-10-22 meta 实测合法路径，非缺陷）（回归 N6 顺位越表致 Debug 中断·非 Debug 脏槽） | smoke / crash / full / meta / acceptance | 授予手感 |
 | 2.4.2 词缀/荆棘 | 6 词缀表齐全；场上词缀采样或荆棘命中且 ≤cap 才 pass；仅配置自检 → skip | smoke / full / acceptance | 全 6 种机制手感；精确 ratio/cap 见 w8 |
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |

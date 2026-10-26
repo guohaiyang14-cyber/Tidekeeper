@@ -37,6 +37,11 @@ func fire(target: EnemyBase) -> void:
 	for aim in swing_aims:
 		mgr.spawn_area_effect(origin, radius, fx_color, get_attack_fx_kind("slam"),
 			(aim - origin).normalized())
+	# 近战销毁敌方弹幕（2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」）：
+	# 挥击范围内敌方弹道全部回收，每个销毁点一枚 deflect 火花（attack_fx.kind=deflect）
+	if get_behavior_bool("clear_enemy_projectiles", false):
+		for hit_pos in clear_enemy_projectiles(origin, radius):
+			mgr.spawn_area_effect(hit_pos, 12.0, fx_color, "deflect")
 
 
 ## 朝 aim_at 方向对前方半球内未命中敌人各造成一次伤害（暴击独立掷骰）

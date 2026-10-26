@@ -192,6 +192,8 @@ var _elite_affix_checked: bool = false
 var _boss_tier_checked: bool = false
 var _teaching_demo_checked: bool = false
 var _chest_hooked_world: World = null
+var _melee_clear_hooked_weapons: Array[WeaponBase] = []
+var _melee_clear_accept_recorded: bool = false
 var _peak_enemies: int = 0
 var _seen_affix_ids: Dictionary = {}
 var _thorns_hits: int = 0
@@ -293,6 +295,7 @@ func _exit_tree() -> void:
 	if GameState.run_started.is_connected(_on_run_started_log):
 		GameState.run_started.disconnect(_on_run_started_log)
 	_disconnect_chest_hook()
+	_disconnect_melee_clear_hooks()
 	if _enabled:
 		MetaSystem.clear_lighthouse_override()
 		MetaSystem.clear_unlock_all_characters_override()
@@ -2385,6 +2388,7 @@ func _accept_affix_night_rules(night: int, world: World) -> void:
 func _accept_sample_enemies(world: World) -> void:
 	if _suite_name == "" or world == null or world.enemy_pool == null:
 		return
+	_ensure_melee_clear_hooks(world)
 	var active: Array = world.enemy_pool.get_active()
 	_peak_enemies = maxi(_peak_enemies, active.size())
 	var rules: Dictionary = ConfigLoader.get_affix_rules()
@@ -2483,6 +2487,36 @@ func _record_accept_keep_fail(id: String, status: String, detail: String = "") -
 	if status == "pass" and _accept_fail.has(id):
 		return
 	_record_accept(id, status, detail)
+
+
+## 2.1.6：仅挂接真实局内武器；ACCEPT pass 必须观察到至少一枚敌方弹道已回收
+func _ensure_melee_clear_hooks(world: World) -> void:
+	if _suite_name == "" or not _suite_checklist.has("2.1.6") or world.weapon_manager == null:
+		return
+	for i in range(_melee_clear_hooked_weapons.size() - 1, -1, -1):
+		if not is_instance_valid(_melee_clear_hooked_weapons[i]):
+			_melee_clear_hooked_weapons.remove_at(i)
+	for weapon in world.weapon_manager.get_weapons():
+		if not is_instance_valid(weapon) or not weapon.get_behavior_bool("clear_enemy_projectiles", false):
+			continue
+		if weapon.enemy_projectiles_cleared.is_connected(_on_melee_projectiles_cleared):
+			continue
+		weapon.enemy_projectiles_cleared.connect(_on_melee_projectiles_cleared)
+		_melee_clear_hooked_weapons.append(weapon)
+
+
+func _disconnect_melee_clear_hooks() -> void:
+	for weapon in _melee_clear_hooked_weapons:
+		if is_instance_valid(weapon) and weapon.enemy_projectiles_cleared.is_connected(_on_melee_projectiles_cleared):
+			weapon.enemy_projectiles_cleared.disconnect(_on_melee_projectiles_cleared)
+	_melee_clear_hooked_weapons.clear()
+
+
+func _on_melee_projectiles_cleared(weapon_id: String, count: int) -> void:
+	if _suite_name == "" or not _suite_checklist.has("2.1.6") or count <= 0 or _melee_clear_accept_recorded:
+		return
+	_melee_clear_accept_recorded = true
+	_record_accept_keep_fail("2.1.6", "pass", "weapon=%s_cleared=%d" % [weapon_id, count])
 
 
 func _on_player_damaged_accept(_amount: int) -> void:
@@ -2737,6 +2771,8 @@ func _print_accept_summary() -> void:
 		return
 	_summary_printed = true
 	_poll_script_errors()
+	if _suite_checklist.has("2.1.6") and not _accept_pass.has("2.1.6") and not _accept_fail.has("2.1.6"):
+		_record_accept("2.1.6", "skip", "no_projectile_clear_observed")
 	var prev_pass_52: bool = _accept_pass.has("5.2")
 	_reconcile_accept_5_2()
 	# 仅在汇总时从 pass 打回 fail 才补打一行，避免噪音

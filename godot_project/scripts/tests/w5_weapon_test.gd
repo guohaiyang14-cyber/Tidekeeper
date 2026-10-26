@@ -9,6 +9,7 @@
 #   T15-f 索敌返回最近敌人
 #   T15-g 弹道 MAX_LIFE 回收
 #   T16-a~e W6 五武器：锚锤/孢子/雷暴云/水母炮/信天翁均可造成伤害
+#   近战清弹（2026-10-23 反馈）：锚锤/锚链销毁范围内敌方弹道；鱼叉不清（数据驱动默认关）
 # 红线：仅走对象池 / SpatialHash；不 instantiate；断言不依赖渲染
 # 运行：godot --headless --fixed-fps 60 --path godot_project res://scenes/tests/w5_weapon_test.tscn
 #       退出码 0=全过 / 1=有失败
@@ -26,6 +27,7 @@ const _OBJECT_POOL = preload("res://scripts/core/object_pool.gd")
 @onready var projectile_pool: ProjectilePool = $ProjectilePool
 @onready var particle_pool: ObjectPool = $ParticlePool
 @onready var enemy_pool: EnemyPool = $EnemyPool
+@onready var eproj_pool: EnemyProjectilePool = $EnemyProjectilePool
 
 var _pass_count: int = 0
 var _fail_count: int = 0
@@ -39,6 +41,9 @@ func _ready() -> void:
 		return
 	# 注册空间哈希 group（敌人/投射物通过 group 查找）
 	spatial_hash_holder.add_to_group("spatial_hash")
+	# 敌方弹道池 group（近战清弹/敌人远程弹幕经 group 查找；tscn groups 属性在本版本不生效，
+	# 与 w2w3/w9 一致在代码里注册）
+	eproj_pool.add_to_group("enemy_projectile_pool")
 	weapon_manager.setup(player, spatial_hash_holder.get_hash(), projectile_pool, particle_pool)
 	await _run_all()
 	_finish()
@@ -59,6 +64,7 @@ func _reset_arena() -> void:
 	enemy_pool.release_all()
 	projectile_pool.release_all()
 	particle_pool.release_all()
+	eproj_pool.release_all()
 	spatial_hash_holder.get_hash().clear()
 	weapon_manager.sync_from_game_state()
 
@@ -98,6 +104,7 @@ func _run_all() -> void:
 	await _test_behavior_color_from_config()
 	await _test_area_weapons_visual_feedback()
 	await _test_multi_weapon_contribute()
+	await _test_melee_clears_enemy_projectiles()
 
 
 ## 在玩家附近刷一只敌人，等待武器造成掉血
@@ -434,6 +441,73 @@ func _test_multi_weapon_contribute() -> void:
 	_assert(peak_fx > 0, "满槽同场时范围/近战武器生成打击特效")
 	if enemy_pool.get_active().find(e) != -1:
 		enemy_pool.release(e)
+
+
+# ---- 近战武器销毁敌方弹幕（2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」）----
+# 锚锤/锚链（behavior.clear_enemy_projectiles=true）挥击时回收范围内的敌方弹道；
+# 鱼叉（无标记）不清——数据驱动默认关
+func _test_melee_clears_enemy_projectiles() -> void:
+	print("[近战清弹]")
+	# ① 锚锤：挥击半径 70×1.6=112px；界内回收、界外保留
+	_setup_weapon("anchor_hammer")
+	var dummy: EnemyBase = enemy_pool.acquire() as EnemyBase
+	dummy.spawn_at(player.global_position + Vector2(50.0, 0.0), player)
+	dummy.move_speed = 0.0
+	dummy.max_health = 5000
+	dummy.health = 5000
+	var inside: EnemyProjectile = eproj_pool.acquire() as EnemyProjectile
+	inside.launch(player.global_position + Vector2(60.0, 0.0), Vector2.LEFT, 5)
+	var outside: EnemyProjectile = eproj_pool.acquire() as EnemyProjectile
+	outside.launch(player.global_position + Vector2(400.0, 0.0), Vector2.LEFT, 5)
+	await get_tree().process_frame
+	var before_hammer: int = eproj_pool.active_count()
+	var hammer: WeaponBase = _weapon_by_id("anchor_hammer")
+	_assert(hammer != null, "锚锤实例存在（清弹前置）")
+	if hammer != null:
+		hammer.fire(dummy)
+	_assert(eproj_pool.active_count() == before_hammer - 1,
+		"锚锤挥击销毁半径内敌方弹道（%d→%d）" % [before_hammer, eproj_pool.active_count()])
+	_assert(eproj_pool.get_active().has(outside), "半径外敌方弹道不被销毁")
+	# ② 锚链：环绕半径 60px 内清弹
+	_setup_weapon("anchor_chain")
+	var dummy2: EnemyBase = enemy_pool.acquire() as EnemyBase
+	dummy2.spawn_at(player.global_position + Vector2(50.0, 0.0), player)
+	dummy2.move_speed = 0.0
+	dummy2.max_health = 5000
+	dummy2.health = 5000
+	var inside2: EnemyProjectile = eproj_pool.acquire() as EnemyProjectile
+	inside2.launch(player.global_position + Vector2(40.0, 0.0), Vector2.LEFT, 5)
+	await get_tree().process_frame
+	var before_chain: int = eproj_pool.active_count()
+	var chain: WeaponBase = _weapon_by_id("anchor_chain")
+	_assert(chain != null, "锚链实例存在（清弹前置）")
+	if chain != null:
+		chain.fire(dummy2)
+	_assert(eproj_pool.active_count() == before_chain - 1,
+		"锚链 tick 销毁环绕半径内敌方弹道（%d→%d）" % [before_chain, eproj_pool.active_count()])
+	# ③ 数据驱动默认关：鱼叉不清弹
+	_setup_weapon("harpoon")
+	var dummy3: EnemyBase = enemy_pool.acquire() as EnemyBase
+	dummy3.spawn_at(player.global_position + Vector2(200.0, 0.0), player)
+	dummy3.move_speed = 0.0
+	dummy3.max_health = 5000
+	dummy3.health = 5000
+	var keep: EnemyProjectile = eproj_pool.acquire() as EnemyProjectile
+	keep.launch(player.global_position + Vector2(60.0, 0.0), Vector2.LEFT, 5)
+	await get_tree().process_frame
+	var before_harpoon: int = eproj_pool.active_count()
+	var harpoon: WeaponBase = _weapon_by_id("harpoon")
+	if harpoon != null:
+		harpoon.fire(dummy3)
+	_assert(eproj_pool.active_count() == before_harpoon,
+		"鱼叉（无 clear 标记）不销毁敌方弹道（数据驱动默认关）")
+	# 清理（含界外残留）
+	for p in eproj_pool.get_active():
+		eproj_pool.release(p)
+	for e in [dummy, dummy2, dummy3]:
+		if e != null and enemy_pool.get_active().find(e) != -1:
+			enemy_pool.release(e)
+	particle_pool.release_all()
 
 
 func _weapon_by_id(id: String) -> WeaponBase:

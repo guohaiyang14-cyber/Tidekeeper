@@ -34,6 +34,11 @@ func fire(_target: EnemyBase) -> void:
 	_sync_orbit_visual(radius, spacing, rings)
 	if _orbit_vis != null:
 		_orbit_vis.pulse()
+	# 近战销毁敌方弹幕（2026-10-23 用户反馈「近身类武器应该有销毁敌方子弹的功能」）：
+	# 环绕半径内的敌方弹道全部回收，每个销毁点一枚 deflect 火花
+	if get_behavior_bool("clear_enemy_projectiles", false):
+		for hit_pos in clear_enemy_projectiles(origin, radius):
+			mgr.spawn_area_effect(hit_pos, 12.0, get_behavior_color("chain_color", "b8c4d4"), "deflect")
 
 
 ## 确保环绕链视觉存在且参数同步（首次 fire 时创建；挂武器下随武器回收）
