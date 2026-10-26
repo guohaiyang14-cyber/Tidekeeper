@@ -67,8 +67,9 @@ func _build_layout() -> void:
 
 	_panel = _UI.make_panel()
 	_panel.name = "ShopPanel"
-	_panel.position = Vector2(_UI.VIEW_W - 460.0, 72.0)
-	_panel.size = Vector2(440.0, _UI.VIEW_H - 100.0)
+	# 2026-10-26 用户反馈「这个列表太窄了，可以铺满页面」：右侧窄栏改为铺满整屏
+	_panel.position = Vector2(_UI.MARGIN, 60.0)
+	_panel.size = Vector2(_UI.VIEW_W - _UI.MARGIN * 2.0, _UI.VIEW_H - 84.0)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_panel)
 

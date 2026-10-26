@@ -18,11 +18,19 @@ const _SPRITE_LIB := preload("res://scripts/core/sprite_lib.gd")
 
 var _passed: int = 0
 var _failed: int = 0
+## 视野系统总开关（night.json vision.enabled）。
+## 2026-10-26 用户反馈「黑夜遮挡视线实际游戏体验影响不大，去掉所有发光，视线限制设定」：
+## 总开关置 false → 本测试走「关停态」断言；改回 true 则自动走回原来的「生效态」断言，
+## 两种口径都要全绿，防止关停期间参数被悄悄改坏。
+var _vision_on: bool = true
 
 
 func _ready() -> void:
 	print("============================================================")
 	print("W22 Map & Vision Test (tower/beam/night vision/boundary/arena)")
+	_vision_on = bool(ConfigLoader.get_night_vision_config().get("enabled", true))
+	print("视野系统总开关 vision.enabled=%s → 按「%s」口径断言"
+		% [str(_vision_on), "生效态" if _vision_on else "关停态"])
 	print("============================================================")
 	_test_config_values()
 	_test_sprites()
@@ -74,7 +82,13 @@ func _num_sci(v: float) -> String:
 func _test_config_values() -> void:
 	print("[配置表值]")
 	var vis: Dictionary = ConfigLoader.get_night_vision_config()
-	_assert(bool(vis.get("night_restricted", false)), "night.json vision.night_restricted=true")
+	if _vision_on:
+		_assert(bool(vis.get("enabled", true)), "night.json vision.enabled=true（视野系统开启）")
+		_assert(bool(vis.get("night_restricted", false)), "night.json vision.night_restricted=true")
+	else:
+		_assert(not bool(vis.get("enabled", true)), "night.json vision.enabled=false（视野系统已关停）")
+		_assert(not bool(vis.get("night_restricted", true)), "night_restricted 同步=false（进夜不再起雾）")
+	# 以下参数无论开关都必须保留（关停期间也不许被改坏，改回 true 即原样恢复）
 	_assert(float(vis.get("radius_px", 0.0)) > 0.0, "灯塔灯室辉光半径 >0（%.0fpx）" % float(vis.get("radius_px", 0.0)))
 	_assert(float(vis.get("fog_alpha", 0.0)) > 0.0 and float(vis.get("fog_alpha", 0.0)) <= 1.0, "雾透明度 ∈(0,1]")
 	# W23：人物默认无视野，视野只能来自外部光源
@@ -92,7 +106,10 @@ func _test_config_values() -> void:
 	_assert(fc.r < 0.02 and fc.g < 0.03 and fc.b < 0.06, "雾色足够暗（边缘极致漆黑）")
 
 	var beam: Dictionary = ConfigLoader.get_lighthouse_beam_config()
-	_assert(bool(beam.get("enabled", false)), "lighthouse.beam.enabled=true")
+	if _vision_on:
+		_assert(bool(beam.get("enabled", false)), "lighthouse.beam.enabled=true")
+	else:
+		_assert(not bool(beam.get("enabled", true)), "lighthouse.beam.enabled=false（光束不再绘制）")
 	_assert(float(beam.get("length_px", 0.0)) > 0.0, "光束长度 >0（%.0fpx）" % float(beam.get("length_px", 0.0)))
 	_assert(float(beam.get("half_angle_rad", 0.0)) > 0.0, "光束半角 >0")
 	# 2026-10-23 用户反馈：光束需要加宽（10°→20°→40°，第二轮「还是太窄了」）
@@ -115,7 +132,10 @@ func _test_config_values() -> void:
 
 	# 散落光源（荧光藻/贝类/夜明珠）——2026-10-23 改为按区块程序化生成
 	var sl: Dictionary = ConfigLoader.get_scattered_lights_config()
-	_assert(bool(sl.get("enabled", false)), "scattered_lights.enabled=true")
+	if _vision_on:
+		_assert(bool(sl.get("enabled", false)), "scattered_lights.enabled=true")
+	else:
+		_assert(not bool(sl.get("enabled", true)), "scattered_lights.enabled=false（散落光源不再生成）")
 	_assert(int(sl.get("lights_per_chunk", 0)) > 0, "每区块光源数 >0（%d）" % int(sl.get("lights_per_chunk", 0)))
 	_assert(float(sl.get("chunk_px", 0.0)) >= 240.0, "区块边长 ≥240px（%.0f）" % float(sl.get("chunk_px", 0.0)))
 	_assert(int(sl.get("chunk_radius", 0)) >= 2, "区块半径 ≥2（覆盖视口：%d）" % int(sl.get("chunk_radius", 0)))
@@ -159,25 +179,40 @@ func _test_vision_overlay() -> void:
 	# 进夜：set_night(true) + refresh → 夜视限制生效
 	overlay.call("set_night", true)
 	overlay.call("refresh_from_event")
-	_assert(bool(overlay.call("is_vision_restricted")), "进夜 set_night+刷新 → 遮罩激活（夜视限制生效）")
-	var got: float = float(overlay.call("get_vision_radius"))
-	var mult: float = EventSystem.get_vision_mult()
-	_assert(absf(got - float(vis.get("radius_px", 0.0)) * mult) < 0.01, "视野半径=表值×事件倍率（%.0fpx）" % got)
+	if _vision_on:
+		_assert(bool(overlay.call("is_vision_restricted")), "进夜 set_night+刷新 → 遮罩激活（夜视限制生效）")
+		var got: float = float(overlay.call("get_vision_radius"))
+		var mult: float = EventSystem.get_vision_mult()
+		_assert(absf(got - float(vis.get("radius_px", 0.0)) * mult) < 0.01, "视野半径=表值×事件倍率（%.0fpx）" % got)
+	else:
+		_assert(not bool(overlay.call("is_vision_restricted")), "进夜 set_night+刷新 → 遮罩仍不激活（视野系统关停）")
+		_assert(not overlay.visible, "遮罩节点不可见（全图可见，无雾）")
+		_assert(absf(float(overlay.call("get_vision_radius")) - float(vis.get("radius_px", 0.0))) < 0.01,
+			"半径参数保留（%.0fpx，改回 true 即恢复）" % float(overlay.call("get_vision_radius")))
 
 	# 光束注入 + 穿雾判定（机检直接验证几何，无需渲染）
 	var beam: Dictionary = ConfigLoader.get_lighthouse_beam_config()
 	var center := Vector2(667.0, 334.0)
 	overlay.call("set_light_source", center, beam)
 	var st: Dictionary = overlay.call("get_beam_state")
-	_assert(bool(st.get("enabled", false)) and float(st.get("length", 0.0)) > 0.0, "光束状态已注入（len=%.0f）" % float(st.get("length", 0.0)))
+	if _vision_on:
+		_assert(bool(st.get("enabled", false)) and float(st.get("length", 0.0)) > 0.0, "光束状态已注入（len=%.0f）" % float(st.get("length", 0.0)))
+	else:
+		_assert(not bool(st.get("enabled", true)) and float(st.get("length", 0.0)) > 0.0,
+			"光束配置已注入但处于关闭态（len=%.0f 保留）" % float(st.get("length", 0.0)))
 	var lamp := center + Vector2(0.0, -ConfigLoader.get_lighthouse_lamp_height_px())
 	var angle: float = float(st.get("angle", 0.0))
 	var lit_pos: Vector2 = lamp + Vector2(cos(angle), sin(angle)) * float(st.get("length", 0.0)) * 0.8
 	var dark_pos: Vector2 = lamp + Vector2(cos(angle + PI), sin(angle + PI)) * float(st.get("length", 0.0)) * 0.8
-	_assert(bool(overlay.call("is_point_lit", lit_pos)), "光束方向上的点被照亮（穿雾）")
-	_assert(not bool(overlay.call("is_point_lit", dark_pos)), "反方向的点不被照亮")
 	var far_pos: Vector2 = lamp + Vector2(cos(angle), sin(angle)) * (float(st.get("length", 0.0)) + 500.0)
-	_assert(not bool(overlay.call("is_point_lit", far_pos)), "超出光束长度的点不被照亮")
+	if _vision_on:
+		_assert(bool(overlay.call("is_point_lit", lit_pos)), "光束方向上的点被照亮（穿雾）")
+		_assert(not bool(overlay.call("is_point_lit", dark_pos)), "反方向的点不被照亮")
+		_assert(not bool(overlay.call("is_point_lit", far_pos)), "超出光束长度的点不被照亮")
+	else:
+		_assert(bool(overlay.call("is_point_lit", lit_pos)), "视野关停 → 光束方向点可见（全图可见）")
+		_assert(bool(overlay.call("is_point_lit", dark_pos)), "视野关停 → 反方向点同样可见（无黑区）")
+		_assert(bool(overlay.call("is_point_lit", far_pos)), "视野关停 → 光束长度外也可见（无距离限制）")
 
 	# 2026-10-23 用户反馈「灯塔附近一圈应该是亮的」：核心亮区全亮 + 外圈渐变
 	# 取正下方（90°）避开光束初始方向，确保只测辉光
@@ -195,7 +230,10 @@ func _test_vision_overlay() -> void:
 	var outside_glow: Vector2 = lamp + Vector2(0.0, glow_r + 50.0)
 	player.global_position = outside_glow
 	await get_tree().process_frame
-	_assert(not bool(overlay.call("is_point_lit", outside_glow)), "辉光外无玩家视野 → 不被照亮（完全黑暗）")
+	if _vision_on:
+		_assert(not bool(overlay.call("is_point_lit", outside_glow)), "辉光外无玩家视野 → 不被照亮（完全黑暗）")
+	else:
+		_assert(bool(overlay.call("is_point_lit", outside_glow)), "视野关停 → 辉光外同样可见（无暗角）")
 
 	# 设置随身视野后，玩家周围被照亮
 	overlay.call("set_player_vision_radius", 120.0)
@@ -260,11 +298,21 @@ func _test_beacon_and_boundary() -> void:
 	var per: int = int(cfg.get("lights_per_chunk", 0))
 	var cr: int = int(cfg.get("chunk_radius", 0))
 	var max_n: int = per * (2 * cr + 1) * (2 * cr + 1)
-	_assert(n > 0, "散落光源已生成（%d 个）" % n)
-	_assert(n <= max_n, "光源数不超过区块容量（%d ≤ %d）" % [n, max_n])
 	var chunk_px: float = float(cfg.get("chunk_px", 480.0))
 	var data: Array = scatter.call("get_light_data") as Array
 	var gap: float = float(cfg.get("min_gap_px", 0.0))
+	if not _vision_on:
+		# 关停态：一个都不生成（否则等于还在发光），但区块参数必须保留
+		_assert(n == 0, "散落光源不生成（%d 个，scattered_lights.enabled=false）" % n)
+		_assert(data.is_empty(), "无光源数据可注入 VisionOverlay（%d 条）" % data.size())
+		var moved_off: bool = bool(scatter.call("update_around", center + Vector2(chunk_px * 3.0, 0.0)))
+		_assert(not moved_off, "跨区块也不重建光源（光源系统关停）")
+		_assert(per > 0 and float(chunk_px) >= 240.0 and gap > 0.0,
+			"区块参数保留（每块 %d 个 / %.0fpx / 间距 %.0fpx，改回 true 即恢复）" % [per, chunk_px, gap])
+		host.queue_free()
+		return
+	_assert(n > 0, "散落光源已生成（%d 个）" % n)
+	_assert(n <= max_n, "光源数不超过区块容量（%d ≤ %d）" % [n, max_n])
 	# 覆盖范围：全部落在「玩家所在区块 ±chunk_radius」的矩形内
 	var cc: Vector2i = scatter.call("get_chunk_coord") as Vector2i
 	var lo := Vector2(float(cc.x - cr) * chunk_px, float(cc.y - cr) * chunk_px)
@@ -342,7 +390,10 @@ func _test_light_appearance() -> void:
 
 	# 光晕半径由素材尺寸决定，紧贴素材边缘；且明显小于旧版（照明半径×1.6 的大盘）
 	var data: Array = scatter.call("get_light_data") as Array
-	_assert(not data.is_empty(), "有光源数据可校验")
+	if _vision_on:
+		_assert(not data.is_empty(), "有光源数据可校验")
+	else:
+		_assert(data.is_empty(), "光源系统关停 → 无光源数据（外观参数保留）")
 	# 半径取素材半边长 × halo_scale：最大光晕半径下每段弧长也须 < 8px（否则又是棱角/扇形感）
 	var min_halo_r: float = 1e9
 	var max_halo_r: float = 0.0
@@ -448,12 +499,24 @@ func _test_light_appearance() -> void:
 			var far_pos: Vector2 = lh + Vector2(stay_r * 2.5, 0.0)
 			var out_dir: Vector2 = Vector2.RIGHT  # 净外向：还在往外跑
 			var biased: Vector2 = bot.call("_bias_toward_light", out_dir, pl, far_pos) as Vector2
-			_assert(biased.dot(Vector2.RIGHT) < 0.0,
-				"光圈外且方向朝外 → 被钳成朝灯塔（dot=%.2f ≤0）" % biased.dot(Vector2.RIGHT))
 			var near_pos: Vector2 = lh + Vector2(stay_r * 0.3, 0.0)
 			var kept: Vector2 = bot.call("_bias_toward_light", Vector2.UP, pl, near_pos) as Vector2
-			_assert(absf(kept.angle_to(Vector2.UP)) < 0.01,
-				"光圈内不受约束（方向原样保留）")
+			if _vision_on:
+				_assert(biased.dot(Vector2.RIGHT) < 0.0,
+					"光圈外且方向朝外 → 被钳成朝灯塔（dot=%.2f ≤0）" % biased.dot(Vector2.RIGHT))
+				_assert(absf(kept.angle_to(Vector2.UP)) < 0.01,
+					"光圈内不受约束（方向原样保留）")
+			else:
+				# 视野关停：雾罩不存在，「只有亮圈内看得见」的前提消失 → 驻留约束须同步停用，
+				# 否则机器人仍按盲打窝在灯塔旁，测出的难度/胜率与全图可见的真人脱节
+				_assert(biased.dot(Vector2.RIGHT) > 0.99,
+					"视野关停 → 亮圈驻留约束停用（方向原样，dot=%.2f）" % biased.dot(Vector2.RIGHT))
+				_assert(absf(kept.angle_to(Vector2.UP)) < 0.01,
+					"视野关停 → 圈内同样原样保留")
+			# 宝箱寻路（2026-10-26 宝箱改动态刷新后新增）：机器人不能整局 0 开箱
+			_assert(float(bmap.get("CHEST_SEEK_RADIUS", 0.0)) > 0.0,
+				"机器人有寻箱半径 CHEST_SEEK_RADIUS=%.0f" % float(bmap.get("CHEST_SEEK_RADIUS", 0.0)))
+			_assert(bot.has_method("_bias_toward_chest"), "机器人实现 _bias_toward_chest（动态宝箱可达性）")
 			# 注意：TestBot 实例从未入树，直接 free() 会在退出清理阶段段错误，
 			# 用 queue_free + 等一帧让引用安全释放
 			bot.queue_free()
@@ -531,7 +594,10 @@ func _test_spawn_clamp_and_leash() -> void:
 		var _cr: int = int(sl_cfg.get("chunk_radius", 0))
 		var _cap: int = _per * (2 * _cr + 1) * (2 * _cr + 1)
 		var _cnt: int = int(scatter.call("get_light_count"))
-		_assert(_cnt > 0 and _cnt <= _cap, "World 散落光源已按区块生成（%d ≤ 容量 %d）" % [_cnt, _cap])
+		if _vision_on:
+			_assert(_cnt > 0 and _cnt <= _cap, "World 散落光源已按区块生成（%d ≤ 容量 %d）" % [_cnt, _cap])
+		else:
+			_assert(_cnt == 0, "World 散落光源不生成（%d 个，enabled=false）" % _cnt)
 	var vis: Node = world.get("vision_overlay")
 	_assert(vis != null, "World 有 vision_overlay")
 	if vis != null and scatter != null:
@@ -622,6 +688,25 @@ func _test_spawn_clamp_and_leash() -> void:
 		vis.call("set_night", true)
 		vis.call("refresh_from_event")
 		var hit_pt: Vector2 = (world.get("player") as Node2D).global_position + Vector2(600.0, 0.0)
+		if not _vision_on:
+			# 关停态：雾没了，不需要开洞 → 命中闪光一律不登记（连数组都不该增长）
+			vis.call("add_hit_flash", hit_pt)
+			_assert(int(vis.call("get_hit_flash_count")) == 0,
+				"视野关停 → add_hit_flash 不登记（%d 个）" % int(vis.call("get_hit_flash_count")))
+			for _i in h_max + 3:
+				vis.call("add_hit_flash", hit_pt + Vector2(float(_i) * 12.0, 0.0))
+			_assert(int(vis.call("get_hit_flash_count")) == 0,
+				"连加也不登记（%d 个，无雾可开）" % int(vis.call("get_hit_flash_count")))
+			# 端到端：敌人受伤同样不触发（接线仍在，但被总开关拦住）
+			var e2o: Node = spawner.call("spawn_enemy", {"id": "small_goblin"},
+				player.global_position + Vector2(300.0, 0.0), no_affix, false)
+			if e2o != null:
+				e2o.call("take_damage", 1)
+				_assert(int(vis.call("get_hit_flash_count")) == 0,
+					"敌人受伤也不触发闪光（%d 个，视野关停）" % int(vis.call("get_hit_flash_count")))
+			vis.call("clear_overlay")
+			world.queue_free()
+			return
 		var before_illum: float = vis.call("_compute_illumination", hit_pt, hit_pt)
 		vis.call("add_hit_flash", hit_pt)
 		var after_illum: float = vis.call("_compute_illumination", hit_pt, hit_pt)

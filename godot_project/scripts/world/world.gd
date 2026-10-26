@@ -217,12 +217,14 @@ func _on_phase_changed(phase: DayNightStateMachine.Phase) -> void:
 				enemy_spawner.start_night(day_night.get_current_night())
 				# 教学夜武器展示（成功时 GameState 发 loadout_changed → 同步 WeaponManager + HUD）
 				GameState.grant_teaching_demo_weapon(day_night.get_current_night())
-				# 夜场宝箱：灯塔外环 0~2（× 事件宝箱倍率）；主动触碰开启
+				# 夜场宝箱：按 pickups.json chest.spawn.mode 决定一次性刷 / 夜间动态刷
 				if pickup_system != null:
 					# 保证灯塔圆心已写入 spawner（避免 ZERO 哨兵误判合法原点）
 					if enemy_spawner.lighthouse_position == Vector2.ZERO and player != null:
 						enemy_spawner.lighthouse_position = player.global_position
-					pickup_system.spawn_night_chests(enemy_spawner.lighthouse_position)
+					pickup_system.begin_night_chests(
+						enemy_spawner.lighthouse_position,
+						DayNightStateMachine.duration_for_night(day_night.get_current_night()))
 					if not pickup_system.chest_opened.is_connected(_on_chest_opened):
 						pickup_system.chest_opened.connect(_on_chest_opened)
 		DayNightStateMachine.Phase.DAY:

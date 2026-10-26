@@ -651,6 +651,76 @@ for must in ("ui.game_over", "ui.victory", "difficulty.tier.lighthouse", "diffic
     ok(must in csv_keys, "i18n 关键 key 存在: %s" % must)
 
 # ---------------------------------------------------------------------------
+# 2026-10-26 检查补：升级三选一卡片 meta 的中文原值必须有 i18n 映射
+# 卡片 meta 直接取自 config 中文取值——weapons.json 的 attack_type、
+# passives.json 的 series/category。upgrade_ui.gd 若漏一个，英文界面就会
+# 残留中文（曾漏 attack_type → 显示「[Weapon] 定向弹幕」）。
+# ---------------------------------------------------------------------------
+_up_ui_path = os.path.join(SCRIPTS_DIR, "ui", "upgrade_ui.gd")
+_up_ui = ""
+if os.path.isfile(_up_ui_path):
+    with open(_up_ui_path, "r", encoding="utf-8") as _fh:
+        _up_ui = _fh.read()
+ok(bool(_up_ui), "upgrade_ui.gd 可读取（卡片 meta 映射检查前提）")
+
+
+def _mapped_keys(src: str, const_name: str):
+    """抽出 const _X := { "中文": "key", ... } 里的中文键集合（粗略但够用）"""
+    import re as _re
+    m = _re.search(r"const\s+%s\s*:=\s*\{(.*?)\n\}" % const_name, src, _re.S)
+    if not m:
+        return set()
+    return set(_re.findall(r'"([^"]+)"\s*:', m.group(1)))
+
+
+def _entries(section):
+    """config 的段既可能是 id→对象 的字典，也可能是数组；统一取出对象列表"""
+    if isinstance(section, dict):
+        return [v for v in section.values() if isinstance(v, dict)]
+    if isinstance(section, list):
+        return [v for v in section if isinstance(v, dict)]
+    return []
+
+
+_attack_vals = {str(x.get("attack_type", "")) for x in _entries(weapons.get("weapons"))}
+_attack_vals.discard("")
+_mapped_attack = _mapped_keys(_up_ui, "_ATTACK_KEYS")
+ok(_attack_vals and _attack_vals <= _mapped_attack,
+   "武器卡 attack_type 全部有 i18n 映射 (缺失=%s)" % sorted(_attack_vals - _mapped_attack))
+
+_passive_entries = _entries(passives.get("passives"))
+_series_vals = {str(x.get("series", "")) for x in _passive_entries}
+_series_vals.discard("")
+_mapped_series = _mapped_keys(_up_ui, "_SERIES_KEYS")
+ok(_series_vals <= _mapped_series,
+   "被动卡 series 全部有 i18n 映射 (缺失=%s)" % sorted(_series_vals - _mapped_series))
+
+_cat_vals = {str(x.get("category", "")) for x in _passive_entries}
+_cat_vals.discard("")
+# 溢出奖励（潮币/血包）的 category 同样是 config 中文原值
+_overflow_entries = _entries(upgrade.get("overflow_offers"))
+_cat_vals |= {str(x.get("category", "")) for x in _overflow_entries}
+_cat_vals.discard("")
+_mapped_cat = _mapped_keys(_up_ui, "_CAT_KEYS")
+ok(_cat_vals <= _mapped_cat,
+   "被动卡 category 全部有 i18n 映射 (缺失=%s)" % sorted(_cat_vals - _mapped_cat))
+
+# 溢出奖励卡的 name / desc 走 localize_config_name/desc("upgrade_offer", id, ...)，
+# 是动态 key（校验器扫不到字面量）→ 这里按 config 里的 id 逐个反查
+_missing_offer_keys = []
+for _o in _overflow_entries:
+    _oid = str(_o.get("id", ""))
+    if not _oid:
+        continue
+    for _suffix in ("name", "desc"):
+        _k = "upgrade_offer.%s.%s" % (_oid, _suffix)
+        if _k not in csv_keys:
+            _missing_offer_keys.append(_k)
+ok(not _missing_offer_keys,
+   "溢出奖励卡 name/desc 均有 i18n key (缺失=%s)" % (_missing_offer_keys or "无"))
+ok("ui.upgrade.cat_overflow" in csv_keys, "溢出奖励分类 i18n key 存在")
+
+# ---------------------------------------------------------------------------
 # 2026-10-23 第二轮：光不遮挡 + 机器人视野受限（源码级断言）
 # 用户反馈：「灯塔的光束不能挡住下面视野，所有的光都不应该会挡住下面内容」
 #          「机器人测试的时候大多数时间都是灯塔范围外，这不符合实际玩家视野受限的情况」
@@ -717,6 +787,15 @@ ok("_compute_raw_move_direction" in bot_src,
    "机器人走位经 _compute_move_direction → _compute_raw_move_direction → _bias_toward_light 包装")
 ok("is_struggling" in bot_src and "return dir" in bot_src,
    "挣扎窗口（无敌凑杀）不受亮圈约束")
+# 2026-10-26 视野总开关关停：亮圈驻留前提消失，机器人必须同步停用该约束，
+# 否则仍按盲打窝在灯塔旁，测出的难度/胜率与全图可见的真人脱节
+ok("_vision_enabled" in bot_src and "if not _vision_enabled()" in bot_src,
+   "亮圈驻留受 vision.enabled 总开关门控（关停即停用）")
+# 2026-10-26 宝箱改夜间动态刷新：机器人必须有寻箱行为，否则整局 0 开箱
+ok("CHEST_SEEK_RADIUS" in bot_src and "_bias_toward_chest" in bot_src,
+   "机器人有寻箱行为（CHEST_SEEK_RADIUS + _bias_toward_chest）")
+ok("_bias_toward_chest" in bot_src and "try_nearest_chest_position" in bot_src,
+   "寻箱走 PickupSystem.try_nearest_chest_position（不自己遍历场景树）")
 
 # ---------------------------------------------------------------------------
 print("------------------------------------------------------------")

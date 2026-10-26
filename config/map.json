@@ -12,9 +12,10 @@
     "lamp_height_px": 138.0,
     "lamp_height_note": "灯室距塔基高度（像素，≈塔高 168×0.82）；光束原点与辉光位置共用此值",
     "lamp_glow_radius_px": 60.0,
-    "lamp_glow_note": "夜间灯室辉光半径（像素）；脉冲呼吸（2026-10-23：46→60，用户反馈「灯塔附近一圈应该是亮的」）",
+    "lamp_glow_note": "夜间灯室辉光半径（像素）；脉冲呼吸（2026-10-23：46→60，用户反馈「灯塔附近一圈应该是亮的」）。2026-10-26「去掉所有发光」由 night.json vision.enabled=false 统一关停（本值保留，改回 true 即恢复）",
     "beam": {
-      "enabled": true,
+      "enabled": false,
+      "enabled_note": "2026-10-26 用户反馈「去掉所有发光」→ 关闭旋转光束（参数全保留，改回 true 即恢复）",
       "length_units": 14.0,
       "half_angle_deg": 40.0,
       "rotation_speed_deg": 26.0,
@@ -79,7 +80,8 @@
     "cover_note": "单次铺开范围（像素），跟随玩家；须大于视口对角线"
   },
   "scattered_lights": {
-    "enabled": true,
+    "enabled": false,
+    "enabled_note": "2026-10-26 用户反馈「去掉所有发光」→ 关闭散落光源生成（参数全保留，改回 true 即恢复）",
     "chunk_px": 560.0,
     "lights_per_chunk": 2,
     "chunk_radius": 2,

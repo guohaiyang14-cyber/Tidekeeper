@@ -167,3 +167,60 @@ boss.tide_archon.name,潮汐执政官,Tide Archon
 boss.devouring_star.name,吞噬之星,Devouring Star
 ui.struggle.title,你已倒下！,You are down!
 ui.struggle.body,挣扎求生中 · 击杀 %d/%d 敌可复活 · %.1f 秒后结算,Struggling · kill %d/%d to revive · settle in %.1fs
+ui.upgrade.title,升级！选择一项强化,Level Up! Choose an upgrade
+ui.upgrade.hint,建议用时 20 秒 · 可随时跳过 (Q) · 快捷键 1/2/3 选择，R 重铸,Suggested 20s · skip anytime (Q) · keys 1/2/3 to choose · R to reroll
+ui.upgrade.reroll_free,重铸 (免费),Reroll (free)
+ui.upgrade.reroll_cost,重铸 (%d 潮币),Reroll (%d coins)
+ui.upgrade.skip,跳过 (Q),Skip (Q)
+ui.upgrade.no_coins,潮币不足，无法重铸（需要 %d）,Not enough coins to reroll (need %d)
+ui.upgrade.kind_weapon,武器,Weapon
+ui.upgrade.kind_passive,被动,Passive
+ui.upgrade.kind_tidecoins,潮币,Coins
+ui.upgrade.kind_heal,血包,Health pack
+ui.upgrade.cat_generic,通用被动,Generic passive
+ui.upgrade.cat_evolution_key,进化钥被动,Evolution key
+ui.upgrade.series_nightwind,夜风,Night Wind
+ui.upgrade.series_tide,潮汐,Tide
+ui.upgrade.series_lighthouse,灯塔,Lighthouse
+ui.upgrade.series_reef,礁石,Reef
+ui.chest.rarity_0,普通,Common
+ui.chest.rarity_1,精良,Fine
+ui.chest.rarity_2,稀有,Rare
+ui.chest.rarity_3,史诗,Epic
+ui.chest.kind_tidecoins,潮币,Coins
+ui.chest.kind_heal,生命,Health
+ui.chest.kind_evolution,进化道具,Evolution item
+ui.chest.kind_refine_essence,淬炼精华,Refine essence
+ui.chest.kind_weapon,武器,Weapon
+ui.chest.kind_passive,被动,Passive
+ui.chest.kind_none,无,None
+weapon.harpoon.desc,5 弹道、穿透 2,"5 projectiles, pierce 2"
+weapon.holy_fire.desc,范围 +80%,Area +80%
+weapon.anchor_hammer.desc,命中范围 +60%,Hit area +60%
+weapon.spore.desc,3 个召唤物,3 summons
+weapon.storm_cloud.desc,3 秒一道落雷,One strike every 3 seconds
+weapon.jellyfish_cannon.desc,4 道环形弹幕、命中减速 20%,4 ring shots; hits slow by 20%
+weapon.anchor_chain.desc,3 圈环绕锚链、中等伤害,"3 orbiting chains, moderate damage"
+weapon.albatross.desc,2 只信天翁跟随、俯冲,2 albatrosses follow and dive
+passive.pearl.desc,拾取半径 +15%，夜间视野 +1.5 单位（每级 +15%/+1.5）,"Pickup radius +15%, night vision +1.5 units (per level: +15% / +1.5)"
+passive.amulet.desc,受到伤害 -6%（每级 -6%）,Damage taken -6% (per level: -6%)
+passive.tide_bell.desc,攻速 +8%（每级 +8%）,Attack speed +8% (per level: +8%)
+passive.lamp_core.desc,伤害 +8%（每级 +8%）,Damage +8% (per level: +8%)
+passive.tide_compass.desc,攻速（进化钥：鱼叉枪 → 深渊鱼叉）,Attack speed (evolution key: Harpoon to Abyss Harpoon)
+passive.lamp_oil.desc,燃烧（进化钥：灯塔圣火 → 永昼圣火）,Burning (evolution key: Lighthouse Holy Fire to Eternal Dayfire)
+passive.iron_chain.desc,范围（进化钥：锚锤 → 风暴之锚）,Area (evolution key: Anchor Hammer to Storm Anchor)
+passive.humus.desc,持续伤（进化钥：水母孢子 → 水母巢）,Damage over time (evolution key: Jelly Spore to Jelly Nest)
+passive.storm_flask.desc,减 CD（进化钥：雷暴云 → 湮灭雷暴）,Cooldown reduction (evolution key: Storm Cloud to Annihilating Tempest)
+passive.abyss_eye.desc,暴击率（进化钥：水母炮 → 深渊水母王）,Critical chance (evolution key: Jelly Cannon to Abyss Jelly King)
+passive.coral_barrier.desc,伤害反弹（进化钥：锚链 → 永恒锚轮）,Damage reflection (evolution key: Anchor Chain to Eternal Anchor Wheel)
+passive.exp_sac.desc,经验获取（进化钥：信天翁 → 永恒鸥群）,Experience gain (evolution key: Albatross to Eternal Albatross Flock)
+ui.upgrade.attack_projectile,定向弹幕,Projectile
+ui.upgrade.attack_area,范围型,Area
+ui.upgrade.attack_melee,爆发近战,Melee burst
+ui.upgrade.attack_summon,召唤型,Summon
+ui.upgrade.attack_orbit,环绕型,Orbit
+ui.upgrade.cat_overflow,溢出奖励,Overflow reward
+upgrade_offer.tidecoins.name,潮币补给,Coin Cache
+upgrade_offer.tidecoins.desc,获得 20 潮币,Gain 20 coins
+upgrade_offer.heal.name,急救血包,First-Aid Kit
+upgrade_offer.heal.desc,回复 30 生命,Restore 30 HP

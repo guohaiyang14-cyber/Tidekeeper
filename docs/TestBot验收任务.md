@@ -2,7 +2,7 @@
 
 > **版本**：v1.3  
 > **日期**：2026-10-26  
-> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.29 · [`开发进度总览.md`](开发进度总览.md) · [`A2_首局试玩记录.md`](A2_首局试玩记录.md) · `AGENTS.md`  
+> **对齐**：[`原型验证验收清单.md`](原型验证验收清单.md) v3.30 · [`开发进度总览.md`](开发进度总览.md) · [`A2_首局试玩记录.md`](A2_首局试玩记录.md) · `AGENTS.md`  
 > **Skill**：新功能同步 Bot → [`tools/SKILL_testbot-coverage.md`](../tools/SKILL_testbot-coverage.md)（`tidekeeper-testbot-coverage`）
 
 ---
@@ -113,7 +113,7 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 2.4.3 词缀夜规 | 教学夜全场词缀空；天灾 `bonus==1`；精英 2~3 | smoke / full / acceptance | — |
 | 3.3 到 8~10 夜 | peak / cutoff / 夜结束 **≥8** | smoke / crash / acceptance | — |
 | 4.3.12 软上限 | `soft_caps` 公式自检 + 减伤 ≤cap | smoke+ | — |
-| 4.5.4 宝箱奖励 | `chest_opened` 且 kind∈{tidecoins,heal,evolution,refine_essence} | smoke / full / acceptance | UI；分支表见 pickup 机检 |
+| 4.5.4 宝箱奖励 | `chest_opened` 且 kind∈{tidecoins,heal,evolution,refine_essence,weapon,passive}（2026-10-26 奖励池扩到 6 类，白名单同步扩表） | smoke / full / acceptance | UI；分支表见 pickup 机检 |
 | 4.9.1 同屏峰值 | 活跃敌峰值 ≥ max(100, max_enemies/4) | smoke / full / acceptance | 5.1 帧率 |
 | 5.2 连续 3 局无崩 | ≥3 局 peak≥8 **且** 本会话 `godot.log` 无新增 `SCRIPT ERROR`/`Error at:`；`fail` 可覆盖先前 `pass`；汇总前重算 | crash / acceptance | 硬崩溃仍可能来不及写日志；日志轮转时只重锚定 EOF、不重扫文件头 |
 | 4.5.2 N15 排除反转 | 事件 id | full / acceptance | — |
@@ -125,7 +125,8 @@ python tools/check_bot_acceptance.py --suite acceptance --json
 | 4.4.10 商店限购/售出即下架 | 开店后 `buy()` 返回 false 且 `purchases_this_visit ≥ get_shop_max_purchases()` → pass（visit_limit 归因：buy 先查上限）；失败但购买数未达上限且该项已不在在售列表 → pass（sold_out 过期句柄被拒）；整店未触发购买 → skip（证据不足） | acceptance | 限购件数/是否恢复「可回购」属平衡决策 |
 | 5.1 / 5.3 | — | — | Profiler |
 | 4.1.4 / 4.4.9 / 4.5.9 / 4.6.13 / 4.7.11 / 4.13.1–4.13.6 | — | — | 视觉（4.13 武器特效/弹道/召唤物/系色 HUD 为纯视觉，无局内行为变更；观感见 4.13.6 人工试玩，机检 `w21_weapon_fx_test` 105 断言） |
-| W22/W23 地图·灯塔·视线·散落光源·命中闪光（1.2.6–1.2.9 / 4.14.x） | — | — | **N/A（纯视觉+配置驱动，无局内行为变更）**：视野/光晕/层级/命中闪光均不改变战斗数值与胜负路径，观感见 `docs/人工验收清单.md` F 组（F.1–F.25），机检 `w22_map_vision_test` 128 断言；Bot 走位约束 `_bias_toward_light` 为 Debug 机器人策略（非玩法规则），其行为量化见 CombatLog 位置采样 |
+| **机器人行为（2026-10-26 两项）** | `_bias_toward_light` 按 `night.json vision.enabled` 门控（视野关停时停用亮圈驻留，避免「盲打」口径失真）；新增 `_bias_toward_chest`（620px 内最近箱软牵引，解决动态刷箱后整局 0 开箱） | smoke / full / acceptance | w22 断言 `CHEST_SEEK_RADIUS>0` + `_bias_toward_chest` 存在；smoke 实测 `chests=3/4`、`ACCEPT 4.5.4 PASS` |
+| W22/W23 地图·灯塔·视线·散落光源·命中闪光（1.2.6–1.2.9 / 4.14.x） | — | — | **N/A（纯视觉+配置驱动，无局内行为变更）**：视野/光晕/层级/命中闪光均不改变战斗数值与胜负路径，观感见 `docs/人工验收清单.md` F 组（F.1–F.25），机检 `w22_map_vision_test` 123 断言；Bot 走位约束 `_bias_toward_light` 为 Debug 机器人策略（非玩法规则），其行为量化见 CombatLog 位置采样 |
 
 ---
 

@@ -1,6 +1,54 @@
 {
   "metadata": {
-    "formula": "E(n) = floor(42 * 1.11^(n-1) + 6*(n-1))",
+    "formula": "night_targets: 每夜收入 [35,70,390,...] × 目标等级 [3,5,7,...]",
+    "model": "night_targets",
+    "params": {
+      "income_per_night": [
+        35,
+        70,
+        390,
+        660,
+        1000,
+        1450,
+        2000,
+        2700,
+        3500,
+        4500,
+        5700,
+        7200,
+        9000,
+        11000,
+        13500,
+        16500,
+        20000,
+        24000,
+        29000,
+        35000
+      ],
+      "target_level_by_night": [
+        3,
+        5,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        18,
+        19,
+        19,
+        20,
+        20,
+        21
+      ],
+      "tail_growth": 1.45
+    },
     "max_level": 30,
     "generated_by": "generate_exp_table.py",
     "note": "Do not edit by hand; regenerate via this script"
@@ -8,153 +56,153 @@
   "levels": {
     "1": {
       "level": 1,
-      "exp_required": 42,
-      "cumulative_exp": 42
+      "exp_required": 18,
+      "cumulative_exp": 18
     },
     "2": {
       "level": 2,
-      "exp_required": 52,
-      "cumulative_exp": 94
+      "exp_required": 17,
+      "cumulative_exp": 35
     },
     "3": {
       "level": 3,
-      "exp_required": 63,
-      "cumulative_exp": 157
+      "exp_required": 35,
+      "cumulative_exp": 70
     },
     "4": {
       "level": 4,
-      "exp_required": 75,
-      "cumulative_exp": 232
+      "exp_required": 35,
+      "cumulative_exp": 105
     },
     "5": {
       "level": 5,
-      "exp_required": 87,
-      "cumulative_exp": 319
+      "exp_required": 195,
+      "cumulative_exp": 300
     },
     "6": {
       "level": 6,
-      "exp_required": 100,
-      "cumulative_exp": 419
+      "exp_required": 195,
+      "cumulative_exp": 495
     },
     "7": {
       "level": 7,
-      "exp_required": 114,
-      "cumulative_exp": 533
+      "exp_required": 660,
+      "cumulative_exp": 1155
     },
     "8": {
       "level": 8,
-      "exp_required": 129,
-      "cumulative_exp": 662
+      "exp_required": 1000,
+      "cumulative_exp": 2155
     },
     "9": {
       "level": 9,
-      "exp_required": 144,
-      "cumulative_exp": 806
+      "exp_required": 1450,
+      "cumulative_exp": 3605
     },
     "10": {
       "level": 10,
-      "exp_required": 161,
-      "cumulative_exp": 967
+      "exp_required": 2000,
+      "cumulative_exp": 5605
     },
     "11": {
       "level": 11,
-      "exp_required": 179,
-      "cumulative_exp": 1146
+      "exp_required": 2700,
+      "cumulative_exp": 8305
     },
     "12": {
       "level": 12,
-      "exp_required": 198,
-      "cumulative_exp": 1344
+      "exp_required": 3500,
+      "cumulative_exp": 11805
     },
     "13": {
       "level": 13,
-      "exp_required": 218,
-      "cumulative_exp": 1562
+      "exp_required": 4500,
+      "cumulative_exp": 16305
     },
     "14": {
       "level": 14,
-      "exp_required": 241,
-      "cumulative_exp": 1803
+      "exp_required": 5700,
+      "cumulative_exp": 22005
     },
     "15": {
       "level": 15,
-      "exp_required": 265,
-      "cumulative_exp": 2068
+      "exp_required": 7200,
+      "cumulative_exp": 29205
     },
     "16": {
       "level": 16,
-      "exp_required": 290,
-      "cumulative_exp": 2358
+      "exp_required": 9000,
+      "cumulative_exp": 38205
     },
     "17": {
       "level": 17,
-      "exp_required": 319,
-      "cumulative_exp": 2677
+      "exp_required": 11000,
+      "cumulative_exp": 49205
     },
     "18": {
       "level": 18,
-      "exp_required": 349,
-      "cumulative_exp": 3026
+      "exp_required": 30000,
+      "cumulative_exp": 79205
     },
     "19": {
       "level": 19,
-      "exp_required": 382,
-      "cumulative_exp": 3408
+      "exp_required": 44000,
+      "cumulative_exp": 123205
     },
     "20": {
       "level": 20,
-      "exp_required": 419,
-      "cumulative_exp": 3827
+      "exp_required": 64000,
+      "cumulative_exp": 187205
     },
     "21": {
       "level": 21,
-      "exp_required": 458,
-      "cumulative_exp": 4285
+      "exp_required": 92800,
+      "cumulative_exp": 280005
     },
     "22": {
       "level": 22,
-      "exp_required": 501,
-      "cumulative_exp": 4786
+      "exp_required": 134560,
+      "cumulative_exp": 414565
     },
     "23": {
       "level": 23,
-      "exp_required": 549,
-      "cumulative_exp": 5335
+      "exp_required": 195112,
+      "cumulative_exp": 609677
     },
     "24": {
       "level": 24,
-      "exp_required": 601,
-      "cumulative_exp": 5936
+      "exp_required": 282912,
+      "cumulative_exp": 892589
     },
     "25": {
       "level": 25,
-      "exp_required": 658,
-      "cumulative_exp": 6594
+      "exp_required": 410222,
+      "cumulative_exp": 1302811
     },
     "26": {
       "level": 26,
-      "exp_required": 720,
-      "cumulative_exp": 7314
+      "exp_required": 594822,
+      "cumulative_exp": 1897633
     },
     "27": {
       "level": 27,
-      "exp_required": 789,
-      "cumulative_exp": 8103
+      "exp_required": 862492,
+      "cumulative_exp": 2760125
     },
     "28": {
       "level": 28,
-      "exp_required": 865,
-      "cumulative_exp": 8968
+      "exp_required": 1250613,
+      "cumulative_exp": 4010738
     },
     "29": {
       "level": 29,
-      "exp_required": 948,
-      "cumulative_exp": 9916
+      "exp_required": 1813389,
+      "cumulative_exp": 5824127
     },
     "30": {
       "level": 30,
-      "exp_required": 1040,
-      "cumulative_exp": 10956
+      "exp_required": 2629414,
+      "cumulative_exp": 8453541
     }
   }
 }

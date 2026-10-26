@@ -42,6 +42,8 @@ var _fog_color := Color(0.01, 0.02, 0.05, 0.98)
 var _base_alpha: float = 0.98
 var _active: bool = false
 var _night_on: bool = false
+## 视野限制总开关（night.json vision.enabled；false = 全图可见、无雾、无发光）
+var _vision_enabled: bool = true
 
 # ---- 网格缓存（以 Player 为中心的极坐标网格）----
 var _radial_segments: int = 8
@@ -144,6 +146,8 @@ func _request_redraw() -> void:
 
 func _apply_night_vision_config() -> void:
 	var cfg: Dictionary = ConfigLoader.get_night_vision_config()
+	# 总开关：false 时整个视野限制系统停用（雾罩不画、事件惩罚不生效、命中闪光不触发）
+	_vision_enabled = bool(cfg.get("enabled", true))
 	_fog_color = cfg.get("fog_color", Color(0.01, 0.02, 0.05)) as Color
 	_base_alpha = clampf(float(cfg.get("fog_alpha", 0.98)), 0.0, 1.0)
 	_fog_color.a = _base_alpha
@@ -163,21 +167,27 @@ func _apply_night_vision_config() -> void:
 
 
 ## 进夜 / 进昼（World 调）：夜视线限制激活源
+## 2026-10-26 用户反馈「黑夜遮挡视线实际游戏体验影响不大，去掉所有发光、视线限制设定」：
+## night.json vision.enabled=false 为总开关——关掉后进夜/事件惩罚/命中闪光全部不生效
 func set_night(on: bool) -> void:
 	var cfg: Dictionary = ConfigLoader.get_night_vision_config()
-	_night_on = bool(on) and bool(cfg.get("night_restricted", true))
+	_night_on = _vision_enabled and bool(on) and bool(cfg.get("night_restricted", true))
 	_refresh_active()
 
 
 ## 按当前事件倍率刷新半径与激活态（World 进夜 begin_night 后调用）
 func refresh_from_event() -> void:
+	if not _vision_enabled:
+		_event_vision_mult = 1.0
+		_refresh_active()
+		return
 	_event_vision_mult = EventSystem.get_vision_mult()
 	_refresh_active()
 
 
 ## 两个激活源合成：进夜（night_restricted 开启）或事件视野惩罚（月食等）
 func _refresh_active() -> void:
-	_active = _night_on or _event_vision_mult < 0.999
+	_active = _vision_enabled and (_night_on or _event_vision_mult < 0.999)
 	visible = _active
 	if _active:
 		_rebuild_grid_if_needed()

@@ -22,7 +22,7 @@
     "note_pool_pressure": "相对 pickup_hard_cap（非预分配 pool_size）：活跃≥offscreen_ratio 时仅缩短屏外超时；活跃≥attract_ratio，或硬顶已满且 available=0 时全图强制吸附（预分配抽干只 soft_expand，不真空）；触顶生成失败按 relief_batch 强制入账最远掉落腾槽（工程兜底，稀有打日志）"
   },
   "chest": {
-    "doc_source": "主设计文档 v0.3.5 §5.2 / §9.3：每夜 0~2，灯塔外环，主动触碰；事件宝箱翻倍走 EventSystem.get_chest_mult",
+    "doc_source": "主设计文档 v0.3.5 §5.2 / §9.3：每夜 0~2，主动触碰；事件宝箱翻倍走 EventSystem.get_chest_mult。2026-10-26 用户反馈「宝箱应该是动态刷新的，不应该是开局就刷新到任务附近」「宝箱道具应该包括所有」：改为夜间动态刷新（spawn 段），奖励池覆盖全部 6 类（潮币/治疗/进化/淬炼/武器/被动）",
     "per_night_min": 0,
     "per_night_max": 2,
     "ring_radius_min": 180.0,
@@ -30,21 +30,36 @@
     "touch_radius": 28.0,
     "rarity_weights": [50.0, 30.0, 15.0, 5.0],
     "rarity_names": ["普通", "精良", "稀有", "史诗"],
+    "spawn": {
+      "mode": "timed",
+      "first_delay_sec": 12.0,
+      "interval_sec": 22.0,
+      "max_active": 2,
+      "min_distance_from_player": 320.0,
+      "max_distance_from_player": 760.0,
+      "schedule_tail_sec": 3.0,
+      "note": "mode=timed 夜间过程中按间隔在玩家外围距离带动态落箱（默认）；mode=night_start 恢复旧行为（进夜一次性刷在灯塔外环，ring_radius_* 生效）。interval_sec 是默认节奏，进夜时会按「夜长 - first_delay_sec - schedule_tail_sec」与预算只数拟合出更短的有效间隔（只压缩不放大），保证事件翻倍后的宝箱预算也能在本夜内全部刷出"
+    },
     "rewards": [
       {"kind": "tidecoins", "amount": 15},
       {"alternatives": [
         {"kind": "tidecoins", "amount": 35},
-        {"kind": "heal", "amount": 20}
+        {"kind": "heal", "amount": 20},
+        {"kind": "passive", "fallback_tidecoins": 30}
       ]},
       {"alternatives": [
         {"kind": "tidecoins", "amount": 60},
         {"kind": "heal", "amount": 35},
-        {"kind": "evolution", "amount": 1, "fallback_tidecoins": 55}
+        {"kind": "evolution", "amount": 1, "fallback_tidecoins": 55},
+        {"kind": "weapon", "fallback_tidecoins": 55}
       ]},
       {"alternatives": [
         {"kind": "evolution", "amount": 1, "fallback_tidecoins": 80},
         {"kind": "refine_essence", "amount": 2, "fallback_tidecoins": 70},
-        {"kind": "heal", "amount": 50}
+        {"kind": "heal", "amount": 50},
+        {"kind": "weapon", "fallback_tidecoins": 90},
+        {"kind": "passive", "fallback_tidecoins": 80},
+        {"kind": "tidecoins", "amount": 100}
       ]}
     ]
   }

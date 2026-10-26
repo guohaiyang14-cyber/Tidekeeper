@@ -17,14 +17,72 @@ var _card_buttons: Array[Button] = []
 var _reroll_button: Button
 var _skip_button: Button
 var _hint: Label
+var _title: Label
+
+## 2026-10-26 用户反馈「提示信息应该跟所选的语言相同」：本界面原为硬编码中文，
+## 现全部走 i18n；config 里的分类/系别是中文取值，用稳定 key 映射（字面量 key 供校验器扫描）
+const _CAT_KEYS := {
+	"通用被动": "ui.upgrade.cat_generic",
+	"进化钥被动": "ui.upgrade.cat_evolution_key",
+	# 2026-10-26 code-review 补：溢出奖励（潮币/血包）的 category 也是中文原值
+	"溢出奖励": "ui.upgrade.cat_overflow",
+}
+const _SERIES_KEYS := {
+	"夜风": "ui.upgrade.series_nightwind",
+	"潮汐": "ui.upgrade.series_tide",
+	"灯塔": "ui.upgrade.series_lighthouse",
+	"礁石": "ui.upgrade.series_reef",
+}
+## 武器卡的 meta 取自 weapons.json 的 attack_type（中文原值）——
+## 2026-10-26 检查发现：不映射时英文界面会显示「[Weapon] 定向弹幕」这种中文残留
+const _ATTACK_KEYS := {
+	"定向弹幕": "ui.upgrade.attack_projectile",
+	"范围型": "ui.upgrade.attack_area",
+	"爆发近战": "ui.upgrade.attack_melee",
+	"召唤型": "ui.upgrade.attack_summon",
+	"环绕型": "ui.upgrade.attack_orbit",
+}
 
 
 func _ready() -> void:
 	_build_ui()
 	UpgradeManager.upgrade_offered.connect(_show)
 	UpgradeManager.upgrade_resolved.connect(_on_resolved)
+	if not LanguageSystem.language_changed.is_connected(_on_language_changed):
+		LanguageSystem.language_changed.connect(_on_language_changed)
 	visible = false
 	print("[UpgradeUI] 就绪")
+
+
+## 语言切换：刷新静态文案；若正在展示三选一则整屏重绘
+func _on_language_changed(_lang: String) -> void:
+	_refresh_static_texts()
+	if visible:
+		for i in _offers.size():
+			_populate_card(i, _offers[i])
+
+
+func _refresh_static_texts() -> void:
+	if _title != null:
+		_title.text = LanguageSystem.localize("ui.upgrade.title")
+	if _hint != null:
+		_hint.text = LanguageSystem.localize("ui.upgrade.hint")
+		_hint.add_theme_color_override("font_color", Color(0.7, 0.8, 0.95))
+	if _skip_button != null:
+		_skip_button.text = LanguageSystem.localize("ui.upgrade.skip")
+	if _reroll_button != null:
+		_reroll_button.text = LanguageSystem.localize("ui.upgrade.reroll_free")
+
+
+## config 中文取值 → i18n；无映射时原样返回（未知取值不至于显示成 key）
+func _localize_mapped(map: Dictionary, raw: String) -> String:
+	if raw == "":
+		return raw
+	var key: String = String(map.get(raw, ""))
+	if key == "":
+		return raw
+	var text: String = LanguageSystem.localize(key)
+	return text if text != key else raw
 
 
 # ============================================================================
@@ -64,8 +122,11 @@ func _show(offers: Array, can_free_reroll: bool) -> void:
 		else:
 			_card_buttons[i].visible = false
 	var cost: int = UpgradeManager.get_reroll_cost()
-	_reroll_button.text = "重铸 (免费)" if can_free_reroll else "重铸 (%d 潮币)" % cost
-	_hint.text = "建议用时 20 秒 · 可随时跳过 (Q) · 快捷键 1/2/3 选择，R 重铸"
+	if can_free_reroll:
+		_reroll_button.text = LanguageSystem.localize("ui.upgrade.reroll_free")
+	else:
+		_reroll_button.text = LanguageSystem.localizef("ui.upgrade.reroll_cost", [cost])
+	_hint.text = LanguageSystem.localize("ui.upgrade.hint")
 	_hint.add_theme_color_override("font_color", Color(0.7, 0.8, 0.95))
 	visible = true
 	print("[UpgradeUI] 展示三选一 (共 %d 项)" % offers.size())
@@ -90,7 +151,7 @@ func _do_reroll() -> void:
 		return
 	if UpgradeManager.reroll():
 		return
-	_hint.text = "潮币不足，无法重铸（需要 %d）" % UpgradeManager.get_reroll_cost()
+	_hint.text = LanguageSystem.localizef("ui.upgrade.no_coins", [UpgradeManager.get_reroll_cost()])
 	_hint.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 
 
@@ -115,7 +176,8 @@ func _build_ui() -> void:
 	add_child(backdrop)
 
 	var title := Label.new()
-	title.text = "升级！选择一项强化"
+	_title = title
+	title.text = LanguageSystem.localize("ui.upgrade.title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	title.offset_top = 40.0
@@ -124,7 +186,7 @@ func _build_ui() -> void:
 	add_child(title)
 
 	_hint = Label.new()
-	_hint.text = "建议用时 20 秒 · 可随时跳过 (Q) · 快捷键 1/2/3 选择，R 重铸"
+	_hint.text = LanguageSystem.localize("ui.upgrade.hint")
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	_hint.offset_top = 90.0
@@ -147,14 +209,14 @@ func _build_ui() -> void:
 
 	var btn_y := card_y + card_h + 30.0
 	_reroll_button = Button.new()
-	_reroll_button.text = "重铸 (免费)"
+	_reroll_button.text = LanguageSystem.localize("ui.upgrade.reroll_free")
 	_reroll_button.size = Vector2(200.0, 48.0)
 	_reroll_button.position = Vector2(VIEW_W / 2.0 - 220.0, btn_y)
 	_reroll_button.pressed.connect(_do_reroll)
 	add_child(_reroll_button)
 
 	_skip_button = Button.new()
-	_skip_button.text = "跳过 (Q)"
+	_skip_button.text = LanguageSystem.localize("ui.upgrade.skip")
 	_skip_button.size = Vector2(200.0, 48.0)
 	_skip_button.position = Vector2(VIEW_W / 2.0 + 20.0, btn_y)
 	_skip_button.pressed.connect(_do_skip)
@@ -202,19 +264,52 @@ func _make_card(index: int) -> Panel:
 
 func _populate_card(i: int, offer: Dictionary) -> void:
 	var otype: String = str(offer.get("type", ""))
-	var kind: String = "武器"
+	var kind: String = LanguageSystem.localize("ui.upgrade.kind_weapon")
 	match otype:
 		"passive":
-			kind = "被动"
+			kind = LanguageSystem.localize("ui.upgrade.kind_passive")
 		"tidecoins":
-			kind = "潮币"
+			kind = LanguageSystem.localize("ui.upgrade.kind_tidecoins")
 		"heal":
-			kind = "血包"
-	var meta: String = ""
+			kind = LanguageSystem.localize("ui.upgrade.kind_heal")
+	var raw_meta: String = ""
 	if otype == "passive":
-		meta = str(offer.get("series", ""))
+		# 被动：series（夜风/潮汐/灯塔/礁石）；无 series 时退回分类（通用被动/进化钥被动）
+		var s_raw: String = str(offer.get("series", ""))
+		if s_raw != "":
+			raw_meta = _localize_mapped(_SERIES_KEYS, s_raw)
+		else:
+			raw_meta = _localize_mapped(_CAT_KEYS, str(offer.get("category", "")))
+	elif otype == "weapon":
+		# 2026-10-26 补：UpgradeManager 给武器填的 category 实际是 weapons.json attack_type
+		# （定向弹幕/范围型/爆发近战/召唤型/环绕型，中文原值）——不映射就会在英文界面残留中文
+		raw_meta = _localize_mapped(_ATTACK_KEYS, str(offer.get("category", "")))
 	else:
-		meta = str(offer.get("category", ""))
-	_card_name[i].text = "%d. %s" % [i + 1, offer.get("name", "?")]
-	_card_meta[i].text = "[%s] %s" % [kind, meta]
-	_card_desc[i].text = offer.get("description", "")
+		raw_meta = _localize_mapped(_CAT_KEYS, str(offer.get("category", "")))
+	# 名称按 id 走 config 名 i18n（config 里是中文名）
+	var oid: String = str(offer.get("id", ""))
+	var raw_name: String = str(offer.get("name", "?"))
+	var display_name: String = raw_name
+	if oid != "":
+		if otype == "weapon":
+			display_name = LanguageSystem.localize_config_name("weapon", oid, raw_name)
+			_card_desc[i].text = LanguageSystem.localize_config_desc(
+				"weapon", oid, str(offer.get("description", "")))
+		elif otype == "passive":
+			display_name = LanguageSystem.localize_config_name("passive", oid, raw_name)
+			_card_desc[i].text = LanguageSystem.localize_config_desc(
+				"passive", oid, str(offer.get("description", "")))
+		else:
+			# 溢出奖励（潮币 / 血包）：id/name/description 全来自 config/upgrade.json 中文原值，
+			# 不映射的话英文界面会整卡中文（2026-10-26 code-review 实测发现）
+			display_name = LanguageSystem.localize_config_name("upgrade_offer", oid, raw_name)
+			_card_desc[i].text = LanguageSystem.localize_config_desc(
+				"upgrade_offer", oid, str(offer.get("description", "")))
+	else:
+		_card_desc[i].text = str(offer.get("description", ""))
+	_card_name[i].text = "%d. %s" % [i + 1, display_name]
+	# 潮币/治疗类 offer 没有 category/series → raw_meta 为空，别渲染成 "[Coins] " 带尾随空格
+	if raw_meta != "":
+		_card_meta[i].text = "[%s] %s" % [kind, raw_meta]
+	else:
+		_card_meta[i].text = "[%s]" % kind

@@ -69,9 +69,31 @@ func notify_chest(kind: String, amount: int, rarity_name: String) -> void:
 	if kind == "none" or amount <= 0:
 		_toast_label.text = LanguageSystem.localizef("ui.hud.chest_toast_struggle", [rarity_name])
 	else:
-		_toast_label.text = LanguageSystem.localizef("ui.hud.chest_toast", [rarity_name, kind, amount])
+		_toast_label.text = LanguageSystem.localizef("ui.hud.chest_toast", [
+			rarity_name, _chest_kind_text(kind), amount,
+		])
 	_toast_label.visible = true
 	_toast_left = 2.2
+
+
+## 宝箱奖励类型文案（跟随语言；字面量 key 供校验器扫描，未知类型原样返回）
+func _chest_kind_text(kind: String) -> String:
+	match kind:
+		"tidecoins":
+			return LanguageSystem.localize("ui.chest.kind_tidecoins")
+		"heal":
+			return LanguageSystem.localize("ui.chest.kind_heal")
+		"evolution":
+			return LanguageSystem.localize("ui.chest.kind_evolution")
+		"refine_essence":
+			return LanguageSystem.localize("ui.chest.kind_refine_essence")
+		"weapon":
+			return LanguageSystem.localize("ui.chest.kind_weapon")
+		"passive":
+			return LanguageSystem.localize("ui.chest.kind_passive")
+		"none":
+			return LanguageSystem.localize("ui.chest.kind_none")
+	return kind
 
 
 func _process(delta: float) -> void:

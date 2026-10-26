@@ -67,7 +67,10 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	# 2026-10-23 用户反馈「灯塔底部不需要光圈」→ 移除塔基 draw_circle/draw_arc，
 	# 仅保留塔顶灯室辉光（夜间呼吸脉冲），避免与 VisionOverlay 的照明亮圈叠加成双圈。
-	if not _night or _sprite == null or _sprite.texture == null:
+	# 2026-10-26 用户反馈「去掉所有发光」→ night.json vision.enabled=false 时灯室辉光一并关停
+	if not _night or _sprite == null or _sprite.texture == null or _glow_radius <= 0.001:
+		return
+	if not bool(ConfigLoader.get_night_vision_config().get("enabled", true)):
 		return
 	# 灯室辉光：位于塔顶灯室高度（config lamp_height_px），呼吸脉冲
 	var tex_h: float = float(_sprite.texture.get_height())  # 入口已保证 _sprite/texture 非空

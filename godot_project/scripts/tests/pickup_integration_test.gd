@@ -58,6 +58,28 @@ var _expected_exp_near: int = 0  # 近距离珠子总经验（品质随机，运
 var _expected_exp_far: int = 0   # 远距离珠子经验
 
 
+## 2026-10-26 经验表改为「按每夜收入反推目标等级」模型（E1=18，20 夜目标 Lv3~Lv21），
+## 不再是原来的 E1=42。收集 21 点就会升到 Lv2 且余 3，所以不能再直接断言
+## player_exp == 累计值——改为按 ExpTable 把累计经验折算成「预期等级 + 预期余量」再比对。
+func _expected_progress(total_exp: int) -> Vector2i:
+	var lv: int = 1
+	var rem: int = total_exp
+	while true:
+		var need: int = ExpTable.get_exp(lv)
+		if need <= 0 or rem < need:
+			break
+		rem -= need
+		lv += 1
+	return Vector2i(lv, rem)
+
+
+func _assert_exp_state(total_exp: int, label: String) -> void:
+	var want: Vector2i = _expected_progress(total_exp)
+	var ok: bool = GameState.player_level == want.x and GameState.player_exp == want.y
+	_assert(ok, "%s（累计 %d → 期望 Lv%d+%d，实际 Lv%d+%d）" % [
+		label, total_exp, want.x, want.y, GameState.player_level, GameState.player_exp])
+
+
 func _test_spawn_and_collect() -> void:
 	print("[Test] === 阶段1：生成经验珠（品质随机）===")
 
@@ -84,7 +106,7 @@ func _test_spawn_and_collect() -> void:
 		await get_tree().process_frame
 
 	_assert(_pickup_system.active_gem_count() == 0, "3 颗珠全部被收集")
-	_assert(GameState.player_exp == _expected_exp_near, "经验总计 %d (含品质倍率)" % _expected_exp_near)
+	_assert_exp_state(_expected_exp_near, "经验总计 %d（含品质倍率）" % _expected_exp_near)
 
 	print("[Test] === 阶段3：远距离珠子不吸附 ===")
 	# 在远处生成 1 颗（超出拾取半径 60）
@@ -97,7 +119,7 @@ func _test_spawn_and_collect() -> void:
 		await get_tree().process_frame
 
 	_assert(_pickup_system.active_gem_count() == 1, "远珠仍在场")
-	_assert(GameState.player_exp == _expected_exp_near, "远珠未被收集，经验不变")
+	_assert_exp_state(_expected_exp_near, "远珠未被收集，经验不变")
 
 	print("[Test] === 阶段4：玩家移动靠近后收集 ===")
 	# 移动玩家靠近远珠
@@ -106,7 +128,7 @@ func _test_spawn_and_collect() -> void:
 		await get_tree().process_frame
 
 	_assert(_pickup_system.active_gem_count() == 0, "移动后远珠被收集")
-	_assert(GameState.player_exp == _expected_exp_near + _expected_exp_far, "经验总计 %d" % (_expected_exp_near + _expected_exp_far))
+	_assert_exp_state(_expected_exp_near + _expected_exp_far, "经验总计 %d" % (_expected_exp_near + _expected_exp_far))
 
 	print("[Test] === 阶段4b：全速远离时珠子仍吸完（不跟跑）===")
 	_pickup_system.clear_all()
@@ -340,9 +362,80 @@ func _test_spawn_and_collect() -> void:
 	_assert(GameState.evolution_items == evo_s, "挣扎中开箱不发进化道具")
 	MetaSystem.end_run()
 
+	_test_chest_schedule()
+
 	_print_result()
 	await get_tree().process_frame
 	get_tree().quit(0 if _failed == 0 else 1)
+
+
+## 宝箱夜间动态刷新的排期拟合（2026-10-26 code-review P1）
+## 原缺陷：事件把预算翻倍（2→4）后，固定 22s 间隔在常规 45s 夜里只够刷 2 只
+## （12s / 34s），第 3、4 只排到夜后 → 倍率形同无效。
+## 这条路径此前零覆盖，所以断言直接锁「预算能否塞进本夜」。
+func _test_chest_schedule() -> void:
+	print("[Test] === 宝箱动态刷新排期拟合（事件翻倍预算必须能刷完）===")
+	const FIRST := 12.0
+	const NOMINAL := 22.0
+	const TAIL := 3.0
+	const NIGHT := 45.0
+
+	# ① 常规夜 + 事件翻倍（4 只）：间隔必须被压缩到能把 4 只都排进本夜
+	var iv4: float = PickupSystem.fit_chest_interval(4, FIRST, NOMINAL, NIGHT, TAIL)
+	_assert(iv4 < NOMINAL, "4 只塞进 45s 夜 → 间隔压缩（%.2f < %.1f）" % [iv4, NOMINAL])
+	_assert(FIRST + iv4 * 3.0 <= NIGHT,
+		"第 4 只落地 %.1fs ≤ 夜长 %.0fs" % [FIRST + iv4 * 3.0, NIGHT])
+
+	# ② 预算没翻倍时不压缩——常规手感必须不变
+	_assert(is_equal_approx(PickupSystem.fit_chest_interval(2, FIRST, NOMINAL, NIGHT, TAIL), NOMINAL),
+		"2 只时不压缩（默认 22s 本就够）")
+
+	# ③ 长夜（天灾 90s）不压缩
+	_assert(is_equal_approx(PickupSystem.fit_chest_interval(4, FIRST, NOMINAL, 90.0, TAIL), NOMINAL),
+		"天灾 90s 夜 4 只仍用 22s")
+
+	# ④ 极端预算也不会退化成一帧连刷
+	var iv_many: float = PickupSystem.fit_chest_interval(20, FIRST, NOMINAL, NIGHT, TAIL)
+	_assert(iv_many >= PickupSystem.MIN_CHEST_INTERVAL,
+		"极端预算间隔 ≥ 下限 %.1fs（实际 %.2f）" % [PickupSystem.MIN_CHEST_INTERVAL, iv_many])
+
+	# ⑤ 单只 / 夜长未知：原样返回（不制造奇怪节奏）
+	_assert(is_equal_approx(PickupSystem.fit_chest_interval(1, FIRST, NOMINAL, NIGHT, TAIL), NOMINAL),
+		"单只箱不压缩")
+	_assert(is_equal_approx(PickupSystem.fit_chest_interval(4, FIRST, NOMINAL, 0.0, TAIL), NOMINAL),
+		"夜长未知（0）时不压缩")
+
+	# ⑥ 端到端：真事件「潮汐反转」把预算翻倍（2→4），排期必须跟着压缩
+	#    种子扫描让 base_count 抽到上限（per_night_max=2），避免测试依赖运气
+	EventSystem.apply_event("tidal_reversal")
+	_assert(is_equal_approx(EventSystem.get_chest_mult(), 2.0), "潮汐反转给出 2 倍宝箱预算")
+	var budget: int = 0
+	var iv_eff: float = 0.0
+	for s in range(1, 400):
+		RNG.set_seed(s)
+		_pickup_system.begin_night_chests(_player.global_position, NIGHT)
+		budget = _pickup_system.chest_budget_left()
+		if budget >= 3:
+			break
+	iv_eff = _pickup_system.chest_spawn_interval_eff()
+	_assert(budget >= 3, "翻倍后预算 ≥3（实际 %d 只）" % budget)
+	_assert(iv_eff < NOMINAL, "翻倍预算触发间隔压缩（%.2f < %.1f）" % [iv_eff, NOMINAL])
+	var last_at: float = _pickup_system.chest_first_delay() + iv_eff * float(maxi(0, budget - 1))
+	_assert(last_at <= NIGHT,
+		"翻倍预算 %d 只全部排进本夜（最后一只 %.1fs ≤ %.0fs）" % [budget, last_at, NIGHT])
+	EventSystem.reset()
+	_pickup_system.clear_all()
+
+	# ⑦ 单参调用（不传夜长）也能拟合：按 GameState.current_night 查表
+	_pickup_system.begin_night_chests(_player.global_position)
+	_assert(_pickup_system.chest_spawn_interval_eff() > 0.0
+		and _pickup_system.chest_spawn_interval_eff() <= NOMINAL,
+		"单参调用按当前夜次查表拟合（%.2f）" % _pickup_system.chest_spawn_interval_eff())
+
+	# ⑧ 清场后回落默认节奏（下一夜重新拟合）
+	_pickup_system.clear_all()
+	_assert(is_equal_approx(_pickup_system.chest_spawn_interval_eff(), NOMINAL),
+		"清场后有效间隔回落默认 22s")
 
 
 func _assert(cond: bool, label: String) -> void:

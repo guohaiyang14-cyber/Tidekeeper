@@ -9,6 +9,7 @@ extends Node
 
 const _SHOP = preload("res://scripts/core/shop_manager.gd")
 const _SHOP_UI = preload("res://scripts/core/shop_ui.gd")
+const _UI = preload("res://scripts/ui/ui_chrome.gd")
 
 var _passed: int = 0
 var _failed: int = 0
@@ -34,6 +35,7 @@ func _ready() -> void:
 	_test_rest_try_apply()
 	_test_economy_no_exploit()
 	await _test_shop_ui_disabled_rows()
+	await _test_shop_panel_layout()
 	print("------------------------------------------------------------")
 	print("W13 机检通过=%d 失败=%d" % [_passed, _failed])
 	print("============================================================")
@@ -392,3 +394,49 @@ func _item_row_buttons(ui: ShopUI) -> Array[Button]:
 		if child is Button and not child.has_meta("shop_tail"):
 			rows.append(child as Button)
 	return rows
+
+
+## 商店面板铺满整屏（2026-10-26 用户反馈「这个列表太窄了，可以铺满页面」）
+## 机检口径：面板宽 ≥ 视口宽 - 2×MARGIN，高 ≥ 视口高 - 120（顶部 HUD 让位），
+## 且商品 VBox 的内容宽与面板内宽一致（否则行仍会缩成窄条）
+func _test_shop_panel_layout() -> void:
+	print("[商店面板铺满]")
+	_reset_run()
+	var shop: ShopManager = _SHOP.new()
+	add_child(shop)
+	var ui: ShopUI = _SHOP_UI.new()
+	add_child(ui)
+	await get_tree().process_frame
+	ui.setup(shop)
+	shop.setup(ui)
+	shop.open_shop()
+	await get_tree().process_frame
+	var panel: Panel = ui.find_child("ShopPanel", false, false) as Panel
+	_assert(panel != null, "商店面板节点存在（ShopPanel）")
+	if panel == null:
+		ui.queue_free()
+		shop.queue_free()
+		await get_tree().process_frame
+		return
+	var want_w: float = _UI.VIEW_W - _UI.MARGIN * 2.0
+	_assert(absf(panel.size.x - want_w) < 1.0,
+		"面板宽铺满（%.0f ≈ 视口 %.0f - 2×%.0f）" % [panel.size.x, _UI.VIEW_W, _UI.MARGIN])
+	_assert(panel.size.y >= _UI.VIEW_H - 120.0,
+		"面板高占满（%.0f ≥ %.0f）" % [panel.size.y, _UI.VIEW_H - 120.0])
+	_assert(panel.size.x / _UI.VIEW_W >= 0.95,
+		"面板占视口宽 ≥95%%（实际 %.1f%%）" % (panel.size.x / _UI.VIEW_W * 100.0))
+	_assert(absf(panel.position.x - _UI.MARGIN) < 0.01 and panel.position.y <= 60.01,
+		"面板左边距 = %.0f、顶部让位 HUD（y=%.0f）" % [panel.position.x, panel.position.y])
+	var vbox: VBoxContainer = ui.get("_vbox") as VBoxContainer
+	_assert(vbox != null, "商品 VBox 存在")
+	if vbox != null:
+		_assert(vbox.custom_minimum_size.x >= want_w - _UI.MARGIN * 2.0 - 1.0,
+			"商品行内容宽 ≥ 面板内宽（%.0f ≥ %.0f）" % [vbox.custom_minimum_size.x, want_w - _UI.MARGIN * 2.0])
+	var rows: Array[Button] = _item_row_buttons(ui)
+	_assert(rows.size() > 0, "商品行已渲染（%d 行）" % rows.size())
+	if not rows.is_empty():
+		var wide: bool = rows[0].size.x >= want_w - _UI.MARGIN * 4.0
+		_assert(wide, "商品行铺满（首行宽 %.0f ≥ %.0f）" % [rows[0].size.x, want_w - _UI.MARGIN * 4.0])
+	ui.queue_free()
+	shop.queue_free()
+	await get_tree().process_frame

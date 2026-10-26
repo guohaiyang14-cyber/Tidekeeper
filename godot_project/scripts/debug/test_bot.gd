@@ -53,6 +53,10 @@ const LIGHT_STAY_RATIO: float = 0.85
 const LIGHT_PULL_WEIGHT: float = 2.6
 ## 出圈后被钳方向里的切向权重（保留走位能力，不会站桩）
 const LIGHT_TANGENT_WEIGHT: float = 1.6
+## 宝箱寻路（2026-10-26 宝箱改动态刷新后新增）：视野关停/开箱率过低时主动走向最近的箱
+## 扫描半径内存在宝箱时叠加朝箱权重；超过 CHEST_SEEK_DROP 视为太远、不追
+const CHEST_SEEK_RADIUS: float = 620.0
+const CHEST_SEEK_WEIGHT: float = 1.8
 const STRUGGLE_HUNT_RADIUS: float = 520.0
 const STRUGGLE_SAFE_ELITE: float = 420.0
 const STRUGGLE_SAFE_THORNS: float = 140.0
@@ -206,8 +210,10 @@ var _accept_last_emit: Dictionary = {}
 const ACCEPT_ENEMY_PEAK_FLOOR: int = 100
 ## 敌人/词缀采样间隔（秒，游戏时间）
 const ACCEPT_ENEMY_SAMPLE_INTERVAL: float = 0.5
-## 宝箱开箱视为有效奖励的 kind（对齐 pickups.json.chest.rewards）
-const ACCEPT_CHEST_KINDS: Array[String] = ["tidecoins", "heal", "evolution", "refine_essence"]
+## 宝箱开箱视为有效奖励的 kind（对齐 pickups.json.chest.rewards；
+## 2026-10-26 奖励池扩展到 6 类，新增 weapon / passive）
+const ACCEPT_CHEST_KINDS: Array[String] = [
+	"tidecoins", "heal", "evolution", "refine_essence", "weapon", "passive"]
 
 
 func _ready() -> void:
@@ -1377,7 +1383,40 @@ func _tick_night_movement(world: World, delta: float) -> void:
 
 func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector2:
 	var dir: Vector2 = _compute_raw_move_direction(world, pos, delta)
+	dir = _bias_toward_chest(dir, world, pos)
 	return _bias_toward_light(dir, world, pos)
+
+
+## 视野系统总开关（night.json vision.enabled）懒缓存：-1 未计算 / 0 关 / 1 开
+var _vision_enabled_cache: int = -1
+
+
+func _vision_enabled() -> bool:
+	if _vision_enabled_cache < 0:
+		_vision_enabled_cache = 1 if bool(
+			ConfigLoader.get_night_vision_config().get("enabled", true)) else 0
+	return _vision_enabled_cache == 1
+
+
+## 宝箱寻路：视野受限时玩家得靠「探索」才碰得到箱；视野关停后箱会刷在玩家外围距离带，
+## 机器人若只绕圈风筝会整局 0 开箱（2026-10-26 smoke 实测 3 局 chests=0），
+## 宝箱机制因此完全没有端到端覆盖。这里加一条软约束：扫描半径内最近一只箱 → 叠加朝箱权重。
+func _bias_toward_chest(dir: Vector2, world: World, pos: Vector2) -> Vector2:
+	if GameState.is_struggling():
+		return dir
+	var ps: PickupSystem = world.pickup_system
+	if ps == null:
+		return dir
+	var out: Array[Vector2] = [Vector2.ZERO]
+	if not ps.try_nearest_chest_position(pos, out, CHEST_SEEK_RADIUS):
+		return dir
+	var to_chest: Vector2 = out[0] - pos
+	if to_chest.length_squared() < 1.0:
+		return dir
+	var want: Vector2 = to_chest.normalized()
+	# 已经在往箱走就只补一点力，避免来回摆
+	var base: Vector2 = dir if dir.length_squared() > 0.0001 else want
+	return (base.normalized() + want * CHEST_SEEK_WEIGHT).normalized()
 
 
 ## 视野受限约束：**所有夜通用**（不止 N15 执政官）。
@@ -1386,6 +1425,11 @@ func _compute_move_direction(world: World, pos: Vector2, delta: float) -> Vector
 func _bias_toward_light(dir: Vector2, world: World, pos: Vector2) -> Vector2:
 	# 挣扎窗口是无敌期凑杀，与视野无关，不约束
 	if GameState.is_struggling():
+		return dir
+	# 2026-10-26 用户反馈「去掉所有发光，视线限制设定」→ night.json vision.enabled=false：
+	# 雾罩不再存在，「只有亮圈内看得见」的前提消失 → 亮圈驻留约束同步停用。
+	# 否则机器人仍按「盲打」走位窝在灯塔旁，测出来的难度/胜率与真实（全图可见）玩家脱节。
+	if not _vision_enabled():
 		return dir
 	var light: Vector2 = _lighthouse_position(world)
 	if light == Vector2.INF:

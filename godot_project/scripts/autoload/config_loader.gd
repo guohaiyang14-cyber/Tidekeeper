@@ -691,6 +691,7 @@ func get_night_vision_config() -> Dictionary:
 	var glow_units: float = float(v.get("lighthouse_glow_units", 2.0))
 	var glow_px: float = maxf(60.0, glow_units * 60.0)
 	return {
+		"enabled": bool(v.get("enabled", true)),
 		"night_restricted": bool(v.get("night_restricted", true)),
 		"radius_px": glow_px,
 		"fog_color": fog,

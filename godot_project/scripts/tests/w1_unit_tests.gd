@@ -220,19 +220,60 @@ func _test_exp_table() -> void:
 	_assert(ExpTable.get_max_level() == 30, "table_max/plateau 30")
 	_assert(ExpTable.get_plateau_level() == 30, "plateau 30")
 	_assert(not ExpTable.has_player_level_cap(), "人物无硬顶")
-	_assert(ExpTable.get_exp(1) == 42, "E(1)=42")
-	_assert(ExpTable.get_exp(10) == 161, "E(10)=161")
-	_assert(ExpTable.get_exp(20) == 419, "E(20)=419")
-	_assert(ExpTable.get_exp(30) == 1040, "E(30)=1040")
-	_assert(ExpTable.get_exp(31) == 1040, "E(31)=E(30) 曲线封顶")
-	_assert(ExpTable.get_exp(40) == 1040, "E(40)=E(30)")
+	# 2026-10-26 用户反馈「等级提升的快了，前面6级一夜两级即可，后面一夜一级然后递减」：
+	# 经验表模型由「公式外推 E(n)=42×1.11^(n-1)+6(n-1)」改为「按每夜收入反推目标等级」
+	# （tools/generate_exp_table.py MODEL=night_targets）。以下锚点取自 config/exp_table.json，
+	# 该文件由脚本生成、禁止手改；若重跑生成器，需同步更新这里的锚点。
+	_assert(ExpTable.get_exp(1) == 18, "E(1)=18")
+	_assert(ExpTable.get_exp(10) == 2000, "E(10)=2000")
+	_assert(ExpTable.get_exp(20) == 64000, "E(20)=64000")
+	_assert(ExpTable.get_exp(30) == 2629414, "E(30)=2629414")
+	_assert(ExpTable.get_exp(31) == ExpTable.get_exp(30), "E(31)=E(30) 曲线封顶")
+	_assert(ExpTable.get_exp(40) == ExpTable.get_exp(30), "E(40)=E(30)")
 	_assert(ExpTable.get_exp_to_reach(1) == 0, "reach Lv1 costs 0")
-	_assert(ExpTable.get_exp_to_reach(2) == 42, "reach Lv2 costs 42")
-	_assert(ExpTable.get_exp_to_reach(3) == 94, "reach Lv3 costs 94")
+	_assert(ExpTable.get_exp_to_reach(2) == 18, "reach Lv2 costs 18")
+	_assert(ExpTable.get_exp_to_reach(3) == 35, "reach Lv3 costs 35")
+	_assert(ExpTable.get_exp_to_reach(3) == ExpTable.get_exp(1) + ExpTable.get_exp(2),
+		"reach 口径 = ΣE(1..n-1)")
 	_assert(ExpTable.get_level_from_exp(0) == 1, "0 exp -> Lv1")
-	_assert(ExpTable.get_level_from_exp(41) == 1, "41 exp -> Lv1")
-	_assert(ExpTable.get_level_from_exp(42) == 2, "42 exp -> Lv2")
-	_assert(ExpTable.get_level_from_exp(94) == 3, "94 exp -> Lv3")
+	_assert(ExpTable.get_level_from_exp(17) == 1, "17 exp -> Lv1（差 1 点）")
+	_assert(ExpTable.get_level_from_exp(18) == 2, "18 exp -> Lv2")
+	_assert(ExpTable.get_level_from_exp(35) == 3, "35 exp -> Lv3")
+	# 累计经验曲线必须严格递增（段内线性插值可能让相邻 E(n) 有 1~2 点回落，
+	# 但累计值不许回退，否则「打得多反而掉级」）
+	var cum_ok: bool = true
+	for lv in range(2, 31):
+		if ExpTable.get_cumulative_exp(lv) <= ExpTable.get_cumulative_exp(lv - 1):
+			cum_ok = false
+	_assert(cum_ok, "累计经验曲线严格递增（Lv1→Lv30）")
+	# 升级节奏：按 generate_exp_table.py 的 INCOME_PER_NIGHT / TARGET_LEVEL_BY_NIGHT 回放 20 夜
+	# → 前 3 夜各 +2 级，夜 4~14 每夜 +1，夜 15 起递减（Lv18 停两夜）
+	var income: Array = [35, 70, 390, 660, 1000, 1450, 2000, 2700, 3500, 4500,
+		5700, 7200, 9000, 11000, 13500, 16500, 20000, 24000, 29000, 35000]
+	var want_lv: Array = [3, 5, 7, 8, 9, 10, 11, 12, 13, 14,
+		15, 16, 17, 18, 18, 19, 19, 20, 20, 21]
+	var total: int = 0
+	var pacing_ok: bool = true
+	var first3_double: bool = true
+	var prev_lv: int = 1
+	var got_lv: Array = []
+	for i in income.size():
+		total += int(income[i])
+		var lv: int = ExpTable.get_level_from_exp(total)
+		got_lv.append(lv)
+		if lv != int(want_lv[i]):
+			pacing_ok = false
+		if i < 3 and lv - prev_lv != 2:
+			first3_double = false
+		prev_lv = lv
+	_assert(pacing_ok, "20 夜目标等级逐夜命中（%s）" % str(got_lv))
+	_assert(first3_double, "前 3 夜各升 2 级（一夜两级）")
+	# 递减：夜 15 起单夜增幅 ≤1，且出现「一整夜不升级」的滞涨段
+	var decel_ok: bool = false
+	for i in range(14, income.size()):
+		if int(got_lv[i]) == int(got_lv[i - 1]):
+			decel_ok = true
+	_assert(decel_ok, "后段出现滞涨夜（增幅递减）")
 
 
 func _test_game_state_leveling() -> void:
@@ -241,12 +282,12 @@ func _test_game_state_leveling() -> void:
 	_assert(GameState.player_level == 1 and GameState.player_exp == 0, "fresh run Lv1")
 	_assert(GameState.player_max_health == 100, "watcher HP 100")
 	_assert(GameState.run_seed == 12345, "seed applied")
-	GameState.add_exp(41)
-	_assert(GameState.player_level == 1 and GameState.player_exp == 41, "41 < E(1)")
+	GameState.add_exp(17)
+	_assert(GameState.player_level == 1 and GameState.player_exp == 17, "17 < E(1)")
 	GameState.add_exp(1)
-	_assert(GameState.player_level == 2 and GameState.player_exp == 0, "42 -> Lv2")
-	GameState.add_exp(52)
-	_assert(GameState.player_level == 3 and GameState.player_exp == 0, "E(2)=52 -> Lv3")
+	_assert(GameState.player_level == 2 and GameState.player_exp == 0, "18 -> Lv2")
+	GameState.add_exp(17)
+	_assert(GameState.player_level == 3 and GameState.player_exp == 0, "E(2)=17 -> Lv3")
 	# 普通局重开须重抽种子；合法种子 ∈ [0, 2^32)，可用日志 seed 回放
 	GameState.start_new_run("watcher")
 	var seed_a: int = GameState.run_seed

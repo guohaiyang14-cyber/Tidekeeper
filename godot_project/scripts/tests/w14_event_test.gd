@@ -376,6 +376,22 @@ func _test_vision_overlay() -> void:
 	vo.refresh_from_event()
 	_assert(not vo.is_vision_restricted(), "无视野惩罚时遮罩关闭")
 	_assert(abs(vo.get_vision_radius() - base) < 0.01, "暴风雨视野=基准")
+	# 2026-10-26 用户反馈「黑夜遮挡视线实际游戏体验影响不大，去掉所有发光，视线限制设定」：
+	# night.json vision.enabled=false 为总开关 → 月食的视野惩罚不再生效（遮罩不激活、半径不缩放），
+	# 但 EventSystem 的倍率与 config 参数全部保留，改回 true 即自动走下面的原口径。
+	if not bool(ConfigLoader.get_night_vision_config().get("enabled", true)):
+		EventSystem.reset()
+		EventSystem.apply_event("eclipse")
+		vo.refresh_from_event()
+		_assert(not vo.is_vision_restricted(), "视野关停 → 月食不激活遮罩")
+		_assert(abs(EventSystem.get_vision_mult() - eclipse_mult) < 0.01,
+			"EventSystem 视野倍率仍=config（参数保留）")
+		_assert(abs(vo.get_vision_radius() - base) < 0.01, "视野关停 → 半径不缩放（=基准）")
+		vo.clear_overlay()
+		_assert(not vo.is_vision_restricted(), "clear_overlay 后未激活")
+		_assert(vo.visible == false, "clear_overlay 后不可见")
+		vo.queue_free()
+		return
 	EventSystem.reset()
 	EventSystem.apply_event("eclipse")
 	vo.refresh_from_event()

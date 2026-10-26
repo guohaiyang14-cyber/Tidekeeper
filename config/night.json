@@ -19,7 +19,9 @@
     "note": "夜次→夜型映射：命中 elite_nights=精英夜、calamity_nights=天灾夜、final_night=终局夜；其余按 default_type。天灾夜判定含终局夜（与 enemies.json affix_rules.calamity_nights + final 一致）；Boss 夜 = calamity_nights + final_night"
   },
   "vision": {
-    "night_restricted": true,
+    "enabled": false,
+    "enabled_note": "2026-10-26 用户反馈「黑夜遮挡视线实际游戏体验影响不大，去掉所有发光，视线限制设定」：总开关置 false → 雾罩不绘制、事件视野惩罚不生效、命中闪光不触发、灯塔光束/灯室辉光/散落光源全部关闭，全图可见。改回 true 即恢复整套多光源视野系统（参数全部保留）",
+    "night_restricted": false,
     "fog_color": [0.01, 0.02, 0.05],
     "fog_alpha": 0.98,
     "player_base_vision_units": 0.0,

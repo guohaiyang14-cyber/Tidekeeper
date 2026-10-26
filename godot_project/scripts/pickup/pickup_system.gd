@@ -80,6 +80,29 @@ var _chest_rarity_weights: Array[float] = [50.0, 30.0, 15.0, 5.0]
 var _chest_rarity_names: Array[String] = ["普通", "精良", "稀有", "史诗"]
 var _chest_rewards: Array = []
 
+## 宝箱刷新模式（2026-10-26 用户反馈「宝箱应该是动态刷新的，不应该是开局就刷新到任务附近」）
+## timed = 夜间过程中按间隔动态刷（默认）；night_start = 旧行为（进夜一次性刷在灯塔外环）
+var _chest_spawn_mode: String = "timed"
+var _chest_first_delay: float = 12.0
+var _chest_interval: float = 22.0
+var _chest_max_active: int = 2
+var _chest_min_dist: float = 320.0
+var _chest_max_dist: float = 760.0
+## 排期拟合（2026-10-26 code-review 修）：事件把宝箱预算翻倍后，固定 22s 间隔在 45s 夜里
+## 只够刷 2 只（12s / 34s），第 3、4 只排到夜后 → 倍率形同无效。改为按夜长拟合有效间隔。
+## schedule_tail_sec = 末尾留量（最后一只要在夜结束前这么久落地，留出被看见/够得着的时间）
+var _chest_schedule_tail: float = 3.0
+## 本夜实际生效的刷新间隔（≤ _chest_interval；预算翻倍时自动压缩）
+var _chest_interval_eff: float = 22.0
+## 间隔下限：避免极端预算下退化成一帧连刷
+const MIN_CHEST_INTERVAL: float = 0.5
+## 夜长来源（config/night.json）——用 preload 而非 class_name，干净环境无编辑器导入也能解析
+const _DNSM = preload("res://scripts/core/day_night_state_machine.gd")
+## 本夜剩余可刷数量 / 下次刷新倒计时 / 是否处于动态刷新窗口
+var _chest_budget: int = 0
+var _chest_timer: float = 0.0
+var _chest_night_active: bool = false
+
 ## 测试注入：覆盖相机可见区（enabled=false 时改用相机/假想区）
 var _test_view_rect: Rect2 = Rect2()
 var _has_test_view: bool = false
@@ -132,6 +155,7 @@ func _process(delta: float) -> void:
 		_process_coins(delta, player_pos, pickup_radius, view_rect)
 	if not _active_chests.is_empty():
 		_process_chests(player_pos)
+	_process_chest_spawn(delta, player_pos)
 
 
 func _process_gems(delta: float, player_pos: Vector2, pickup_radius: float, view_rect: Rect2) -> void:
@@ -309,7 +333,90 @@ func try_nearest_chest_position(from: Vector2, out_pos: Array[Vector2], max_rang
 	return true
 
 
-## 本夜在灯塔外环刷宝箱（数量 = [min,max] × EventSystem.get_chest_mult，至少 0）
+## 进夜入口：按 spawn.mode 决定「进夜一次性刷」还是「夜间动态刷」
+## timed 模式只布防不立刻刷——箱子在夜里陆续出现在玩家周边远处，不再开局堆在灯塔附近
+## night_seconds：本夜时长（World 传 day_night 的表值）。<=0 时自行按当前夜次查表，
+##   保证只被测试或旧调用方单参调用时也能算对排期。
+func begin_night_chests(lighthouse_pos: Vector2, night_seconds: float = 0.0) -> void:
+	if _chest_spawn_mode == "night_start":
+		spawn_night_chests(lighthouse_pos)
+		return
+	_clear_chests()
+	var base_count: int = RNG.randi_range(_chest_per_night_min, _chest_per_night_max)
+	var total: int = maxi(0, int(round(float(base_count) * EventSystem.get_chest_mult())))
+	_chest_budget = total
+	_chest_timer = _chest_first_delay
+	_chest_night_active = total > 0
+	# 排期拟合：让 total 只箱全部落在本夜内（事件翻倍预算不再被夜长吃掉）
+	var night_len: float = night_seconds
+	if night_len <= 0.0:
+		night_len = _DNSM.duration_for_night(maxi(1, GameState.current_night))
+	_chest_interval_eff = fit_chest_interval(
+		total, _chest_first_delay, _chest_interval, night_len, _chest_schedule_tail)
+	if total > 0:
+		print("[PickupSystem] 宝箱动态刷新布防：本夜 %d 只（夜长 %.0fs / 首刷 %.1fs / 间隔 %.1fs / 场上上限 %d）" % [
+			total, night_len, _chest_first_delay, _chest_interval_eff, _chest_max_active,
+		])
+
+
+## 把 total 只箱塞进 night_len 秒所需的间隔（纯函数，便于机检）
+## 规则：间隔只压缩不放大——默认节奏够用时原样返回，保证常规夜的手感不变。
+static func fit_chest_interval(total: int, first_delay: float, interval: float,
+		night_len: float, tail: float) -> float:
+	if total <= 1 or night_len <= 0.0:
+		return interval
+	var span: float = maxf(0.0, night_len - first_delay - tail)
+	var fit: float = span / float(total - 1)
+	return clampf(minf(interval, fit), MIN_CHEST_INTERVAL, interval)
+
+
+## 本夜实际生效的刷新间隔（调试 / 机检）
+func chest_spawn_interval_eff() -> float:
+	return _chest_interval_eff
+
+
+## 本夜首刷延迟（调试 / 机检）
+func chest_first_delay() -> float:
+	return _chest_first_delay
+
+
+## 动态刷新：到点且场上未达上限时，在玩家外围 [min,max] 距离随机落箱
+func _process_chest_spawn(delta: float, player_pos: Vector2) -> void:
+	if not _chest_night_active or _chest_budget <= 0:
+		return
+	if _active_chests.size() >= _chest_max_active:
+		return
+	_chest_timer -= delta
+	if _chest_timer > 0.0:
+		return
+	var pos: Vector2 = _roll_chest_spawn_pos(player_pos)
+	var chest: Chest = _spawn_chest(pos)
+	if chest == null:
+		# 池不可用时下次再试，不消耗预算
+		_chest_timer = _chest_interval_eff
+		return
+	_chest_budget -= 1
+	_chest_timer = _chest_interval_eff
+	print("[PickupSystem] 动态刷新宝箱 rarity=%s @ (%.0f, %.0f) 距玩家 %.0fpx（本夜剩 %d）" % [
+		_rarity_display(int(chest.rarity)), pos.x, pos.y,
+		player_pos.distance_to(pos), _chest_budget,
+	])
+
+
+## 落箱点：随机方位 + 玩家外围距离带（避免贴脸刷出，也不至于远到找不到）
+func _roll_chest_spawn_pos(player_pos: Vector2) -> Vector2:
+	var angle: float = RNG.randf_range(0.0, TAU)
+	var dist: float = RNG.randf_range(_chest_min_dist, maxf(_chest_min_dist, _chest_max_dist))
+	return player_pos + Vector2(cos(angle), sin(angle)) * dist
+
+
+## 本夜动态刷新剩余数量（调试 / 机检）
+func chest_budget_left() -> int:
+	return _chest_budget
+
+
+## 本夜一次性刷宝箱（旧行为；night_start 模式与机检用）
+## 数量 = [min,max] × EventSystem.get_chest_mult，至少 0
 ## 每次调用先清掉场上残留箱，避免同夜重复刷叠箱。
 func spawn_night_chests(lighthouse_pos: Vector2) -> int:
 	if _chest_pool == null:
@@ -357,6 +464,11 @@ func _clear_chests() -> void:
 			if is_instance_valid(chest):
 				_chest_pool.release(chest)
 	_active_chests.clear()
+	# 清场即停表：进昼/新局/重开时不再继续动态刷新
+	_chest_night_active = false
+	_chest_budget = 0
+	_chest_timer = 0.0
+	_chest_interval_eff = _chest_interval
 
 
 func _spawn_chest(pos: Vector2) -> Chest:
@@ -387,7 +499,9 @@ func _process_chests(player_pos: Vector2) -> void:
 
 func _open_chest(chest: Chest, index: int) -> void:
 	var rarity: int = clampi(int(chest.rarity), 0, maxi(0, _chest_rarity_names.size() - 1))
-	var rarity_name: String = _chest_rarity_names[rarity]
+	# 2026-10-26 用户反馈「提示信息应该跟所选的语言相同」：稀有度名随语言本地化，
+	# config rarity_names 仅作兜底（未翻译时仍显示中文而非 key）
+	var rarity_name: String = _rarity_display(rarity)
 	var reward: Dictionary = {}
 	if rarity < _chest_rewards.size() and _chest_rewards[rarity] is Dictionary:
 		reward = _chest_rewards[rarity]
@@ -438,6 +552,25 @@ func _open_chest(chest: Chest, index: int) -> void:
 			else:
 				granted_kind = "tidecoins"
 				granted_amount = int(reward.get("fallback_tidecoins", 40))
+				GameState.add_tidecoins(granted_amount)
+		"weapon":
+			# 2026-10-26 用户反馈「宝箱道具应该包括所有」：新增武器奖励（未持有优先，其次已持有升级）
+			var got_w: String = _grant_random_weapon()
+			if got_w != "":
+				granted_kind = "weapon"
+				granted_amount = 1
+			else:
+				granted_kind = "tidecoins"
+				granted_amount = int(reward.get("fallback_tidecoins", 60))
+				GameState.add_tidecoins(granted_amount)
+		"passive":
+			var got_p: String = _grant_random_passive()
+			if got_p != "":
+				granted_kind = "passive"
+				granted_amount = 1
+			else:
+				granted_kind = "tidecoins"
+				granted_amount = int(reward.get("fallback_tidecoins", 50))
 				GameState.add_tidecoins(granted_amount)
 		_:
 			granted_kind = "tidecoins"
@@ -578,6 +711,26 @@ func _load_chest_config() -> void:
 	_chest_ring_max = float(cfg.get("ring_radius_max", _chest_ring_max))
 	_chest_per_night_min = int(cfg.get("per_night_min", _chest_per_night_min))
 	_chest_per_night_max = int(cfg.get("per_night_max", _chest_per_night_max))
+	# 动态刷新参数（spawn 段）；缺省沿用 timed + 内置节奏
+	var spawn: Variant = cfg.get("spawn", {})
+	if spawn is Dictionary:
+		var sp: Dictionary = spawn as Dictionary
+		_chest_spawn_mode = String(sp.get("mode", _chest_spawn_mode))
+		_chest_first_delay = float(sp.get("first_delay_sec", _chest_first_delay))
+		_chest_interval = float(sp.get("interval_sec", _chest_interval))
+		_chest_max_active = maxi(1, int(sp.get("max_active", _chest_max_active)))
+		_chest_min_dist = float(sp.get("min_distance_from_player", _chest_min_dist))
+		_chest_max_dist = float(sp.get("max_distance_from_player", _chest_max_dist))
+		_chest_schedule_tail = maxf(0.0, float(sp.get("schedule_tail_sec", _chest_schedule_tail)))
+	if _chest_spawn_mode != "timed" and _chest_spawn_mode != "night_start":
+		push_warning("[PickupSystem] chest.spawn.mode=%s 非法，回落 timed" % _chest_spawn_mode)
+		_chest_spawn_mode = "timed"
+	if _chest_max_dist < _chest_min_dist:
+		_chest_max_dist = _chest_min_dist
+	if _chest_interval < 1.0:
+		_chest_interval = 1.0
+	# 未进夜时有效间隔跟表值一致；进夜后由 begin_night_chests 按夜长拟合
+	_chest_interval_eff = _chest_interval
 	_chest_rarity_weights = _to_float_array(cfg.get("rarity_weights", _chest_rarity_weights), _chest_rarity_weights)
 	_chest_rewards = cfg.get("rewards", _chest_rewards)
 	if not (_chest_rewards is Array):
@@ -599,6 +752,74 @@ func _load_chest_config() -> void:
 		_chest_ring_max = _chest_ring_min
 	if _chest_per_night_max < _chest_per_night_min:
 		_chest_per_night_max = _chest_per_night_min
+
+
+## 宝箱发武器：未持有的优先（需有空槽），其次已持有未满级的升级；都不可用时返回 ""
+func _grant_random_weapon() -> String:
+	var fresh: Array[String] = []
+	var upgradable: Array[String] = []
+	var has_free_slot: bool = GameState.weapon_slots.size() < GameState.MAX_WEAPON_SLOTS
+	for raw in ConfigLoader.get_all_weapon_ids():
+		var wid: String = String(raw)
+		if wid == "":
+			continue
+		if wid in GameState.weapon_slots:
+			if GameState.get_weapon_level(wid) < GameState.max_weapon_level:
+				upgradable.append(wid)
+		elif has_free_slot:
+			fresh.append(wid)
+	var pool: Array[String] = []
+	pool.append_array(fresh)
+	pool.append_array(upgradable)
+	if pool.is_empty():
+		return ""
+	var pick: String = pool[RNG.randi_range(0, pool.size() - 1)]
+	return pick if GameState.add_weapon(pick) else ""
+
+
+## 宝箱发被动：同武器口径（未持有优先，其次升级）
+func _grant_random_passive() -> String:
+	var fresh: Array[String] = []
+	var upgradable: Array[String] = []
+	var has_free_slot: bool = GameState.passive_slots.size() < GameState.MAX_PASSIVE_SLOTS
+	for raw in ConfigLoader.get_all_passive_ids():
+		var pid: String = String(raw)
+		if pid == "":
+			continue
+		if pid in GameState.passive_slots:
+			if GameState.get_passive_level(pid) < GameState.max_passive_level:
+				upgradable.append(pid)
+		elif has_free_slot:
+			fresh.append(pid)
+	var pool: Array[String] = []
+	pool.append_array(fresh)
+	pool.append_array(upgradable)
+	if pool.is_empty():
+		return ""
+	var pick: String = pool[RNG.randi_range(0, pool.size() - 1)]
+	return pick if GameState.add_passive(pick) else ""
+
+
+## 稀有度显示名（跟随当前语言；config rarity_names 为中文兜底，未翻译时不会露出 key）
+func _rarity_display(rarity: int) -> String:
+	var idx: int = clampi(rarity, 0, maxi(0, _chest_rarity_names.size() - 1))
+	var fallback: String = _chest_rarity_names[idx] if idx < _chest_rarity_names.size() else ""
+	match idx:
+		0:
+			return _loc_or("ui.chest.rarity_0", fallback)
+		1:
+			return _loc_or("ui.chest.rarity_1", fallback)
+		2:
+			return _loc_or("ui.chest.rarity_2", fallback)
+		3:
+			return _loc_or("ui.chest.rarity_3", fallback)
+	return fallback
+
+
+## 本地化取值；缺 key 时回退 fallback（不把 key 直接显示给玩家）
+func _loc_or(key: String, fallback: String) -> String:
+	var text: String = LanguageSystem.localize(key)
+	return text if text != key else fallback
 
 
 func _roll_chest_rarity() -> Chest.Rarity:
